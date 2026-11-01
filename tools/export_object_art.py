@@ -19,6 +19,7 @@ import export_course_art as A
 from build_player_art import build, _pack
 import numpy as np
 import art_repair
+import swf_bitmap_fix
 
 ZOOM = 1.6
 BLANKS = {839, 896}
@@ -182,15 +183,16 @@ def export(source, jar, out_dir):
     strip = {}
     for name, ident, frames, step, place, depths in SPEC:
         if depths: strip.setdefault(ident, set()).update(depths)
-    patched = strip_blanks(raw, start, strip)
+    patched = swf_bitmap_fix.fix_body(strip_blanks(raw, start, strip), start)  # FFDec half-texel offset
     swf_path = work / 'objects.swf'
     swf_path.write_bytes(b'FWS' + swf[3:4] + struct.pack('<I', len(patched) + 8) + bytes(patched))
     ids = sorted({s[1] for s in SPEC})
     cmd = ['java', '-Xmx3g', '-Djava.awt.headless=true', f'-Duser.home={work.resolve()}/ffdec-home', '-jar',
            str(jar.resolve())]
     with (work / 'export.log').open('a') as log:  # every frame (PNG), first frame registration (SVG)
-        subprocess.run(cmd + ['-zoom', str(ZOOM), '-onerror', 'abort', '-selectid', ','.join(map(str, ids)),
-                              '-export', 'sprite', str(work / 'png'), str(swf_path)], check=True, stdout=log, stderr=log)
+        subprocess.run(cmd + swf_bitmap_fix.FFDEC_RENDER + ['-zoom', str(ZOOM), '-onerror', 'abort', '-selectid',
+                              ','.join(map(str, ids)), '-export', 'sprite', str(work / 'png'), str(swf_path)],
+                       check=True, stdout=log, stderr=log)
         subprocess.run(cmd + ['-onerror', 'abort', '-selectid', ','.join(map(str, ids)), '-select',
                               ','.join(f'{i}:1' for i in ids), '-format', 'sprite:svg', '-export', 'sprite',
                               str(work / 'svg'), str(swf_path)], check=True, stdout=log, stderr=log)

@@ -26,6 +26,7 @@ import swf_states as S
 import xfl
 import export_course as C
 import art_repair
+import swf_bitmap_fix
 
 ZOOM = 1.6
 TILE = 1024
@@ -152,7 +153,8 @@ def patched(swf, plan, tints, second, sprites):
             elif ident in parents:
                 data = rewrite_sprite(raw, pos, length, ident, None, set(), tints, self_tinted)
         out += tag(code, data)
-    return b'FWS' + swf[3:4] + struct.pack('<I', len(out) + 8) + bytes(out)
+    # FFDec draws non-smoothed bitmap fills half a texel off (swf_bitmap_fix.py).
+    return swf_bitmap_fix.fix_swf(b'FWS' + swf[3:4] + struct.pack('<I', len(out) + 8) + bytes(out))
 
 
 def rgb5a3(image):
@@ -172,7 +174,8 @@ def render(jar, swf_path, work, ids, zoom):
            str(jar.resolve())]
     sel = ['-selectid', ','.join(map(str, ids)), '-select', ','.join(f'{i}:1' for i in ids)]
     with (work / 'export.log').open('a') as log:
-        subprocess.run(cmd + ['-zoom', str(zoom), '-onerror', 'abort'] + sel + ['-export', 'sprite', str(work / 'png'),
+        subprocess.run(cmd + swf_bitmap_fix.FFDEC_RENDER + ['-zoom', str(zoom), '-onerror', 'abort'] + sel +
+                       ['-export', 'sprite', str(work / 'png'),
                        str(swf_path)], check=True, stdout=log, stderr=log)
         subprocess.run(cmd + ['-onerror', 'abort'] + sel + ['-format', 'sprite:svg', '-export', 'sprite',
                        str(work / 'svg'), str(swf_path)], check=True, stdout=log, stderr=log)
@@ -279,10 +282,12 @@ def export(source, jar, output, areas):
     if len(pic) != 1:
         raise ValueError(f'Picture sprite not unique: {pic}')
     pages = work / 'pictures'
+    pictures_swf = work / 'pictures.swf'
+    pictures_swf.write_bytes(swf_bitmap_fix.fix_swf(swf))
     cmd = ['java', '-Xmx3g', '-Djava.awt.headless=true', f'-Duser.home={work.resolve()}/ffdec-home', '-jar',
-           str(jar.resolve()), '-zoom', str(ZOOM), '-onerror', 'abort', '-selectid', str(pic[0]), '-select',
+           str(jar.resolve())] + swf_bitmap_fix.FFDEC_RENDER + ['-zoom', str(ZOOM), '-onerror', 'abort', '-selectid', str(pic[0]), '-select',
            ','.join(f'{pic[0]}:{sprites[pic[0]]["labels"][l] + 1}' for l in labels), '-export', 'sprite', str(pages),
-           str(swf_file)]
+           str(pictures_swf)]
     with (work / 'export.log').open('a') as log:
         subprocess.run(cmd, check=True, stdout=log, stderr=log)
     count = struct.unpack_from('>I', out, 12)[0]

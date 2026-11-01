@@ -14,6 +14,8 @@ import lz4.block
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'tools'))
 import art_repair as R
+import swf_bitmap_fix as F
+from swf_states import Bits
 
 GEN = ROOT / 'assets' / 'generated'
 
@@ -104,6 +106,20 @@ class RepairUnitTests(unittest.TestCase):
         b, _ = R.repair(a)
         self.assertTrue((b[2:30, 20:23, 3] == 255).all())
 
+    def test_diagonal_crack_is_filled(self):
+        a = self.solid()
+        for k in range(25):              # pieces meeting on a slope (8-E1-1 Background hill)
+            a[5 + k, 8 + k, 3] = 0
+        b, _ = R.repair(a)
+        self.assertTrue((b[..., 3] == 255).all())
+
+    def test_seam_across_pieces_is_filled(self):
+        a = self.solid(40, 40, (168, 152, 72))
+        a[:12] = (0, 0, 0, 255)          # outline rows, then ground: the seam crosses both
+        a[:, 20, :3] = (123, 113, 80)    # colour of the art behind leaking through
+        b, _ = R.repair(a)
+        self.assertTrue((b[:, 20] == b[:, 19]).all())
+
     def test_full_width_stray_line_is_removed(self):
         a = self.solid(200, 300, (188, 196, 248))
         a[100, :, :3] = (248, 248, 248)  # CastleColoredFarBG row 173
@@ -130,6 +146,35 @@ class RepairUnitTests(unittest.TestCase):
         self.assertTrue((b[2:6, 2:6] == a[2:6, 2:6]).all())
         self.assertTrue((b[1, 1, :3] == (200, 100, 50)).all())   # no black fringe for bilinear
         self.assertTrue((b[0, 0, :3] == (200, 100, 50)).all())
+
+
+class BitmapFillOffsetTests(unittest.TestCase):
+    """FFDec shows texel floor(u - 1/2) of a non-smoothed bitmap fill; the fill
+    matrix is moved half a texel so it shows floor(u) like the Flash Player."""
+    def test_half_texel(self):
+        # CastleColoredFarBG band 2139: scale 20 twips per texel, at (-4500, -840)
+        m = F.half_texel({'sx': 20 << 16, 'sy': 20 << 16, 'tx': -4500, 'ty': -840})
+        self.assertEqual((m['tx'], m['ty']), (-4510, -850))
+        # sign board 982: rotated (r0 = 20, r1 = -20) at (1212, -1118)
+        m = F.half_texel({'sx': 0, 'sy': 0, 'r0': 20 << 16, 'r1': -20 << 16, 'tx': 1212, 'ty': -1118})
+        self.assertEqual((m['tx'], m['ty']), (1222, -1128))
+
+    def test_matrix_round_trip(self):
+        for m in ({'tx': 0, 'ty': 0}, {'sx': 20 << 16, 'sy': 20 << 16, 'tx': -4510, 'ty': 7},
+                  {'sx': 3, 'sy': -5, 'r0': 20 << 16, 'r1': -20 << 16, 'tx': 1222, 'ty': -1128}):
+            self.assertEqual(F._read_matrix(Bits(F._write_matrix(m))), m)
+
+    def test_only_non_smoothed_fills_move(self):
+        def shape(kind):
+            fills = bytes([1, kind]) + struct.pack('<H', 7) + F._write_matrix({'sx': 20 << 16, 'sy': 20 << 16,
+                                                                               'tx': 100, 'ty': 100})
+            rect = F._write_matrix({'tx': 0, 'ty': 0})[:1]  # RECT with 0-bit fields: one zero byte
+            return struct.pack('<H', 1) + rect + fills + bytes([0, 0x11, 0])  # no lines, 1/1 bits, end
+        for kind, moved in ((0x40, 0), (0x41, 0), (0x42, 1), (0x43, 1)):
+            data, n = F.fix_shape(22, shape(kind))
+            self.assertEqual(n, moved)
+            m = F._read_matrix(Bits(data, 2 + 1 + 1 + 1 + 2))
+            self.assertEqual(m['tx'], 100 - 10 * moved)
 
 
 class GeneratedArtTests(unittest.TestCase):

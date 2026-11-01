@@ -18,7 +18,7 @@ jobs:
           python-version: '3.12'
       - name: Verify original sprite conversion
         run: |
-          python -m pip install Pillow==11.3.0 "numpy>=2,<3" "lz4>=4,<5"
+          python -m pip install Pillow==11.3.0 "numpy>=2,<3" "lz4>=4,<5" "scipy>=1.13,<2"
           python tools/build_mario_atlas.py --check
           python tests/test_atlas.py
           python tests/test_player_art.py
