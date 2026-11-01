@@ -122,7 +122,10 @@ void player_step(Player *p, const World *world, GameInput input)
     }
     if(p->submerged) p->animation=p->spin_time>0 ? PLAYER_SPIN : PLAYER_SWIM;
     else if(p->action==ACTION_BONK) p->animation=PLAYER_BONK;
-    else if(p->action==ACTION_DIVE) p->animation=fabsf(p->vx)<44 && p->grounded ? PLAYER_CROUCH : PLAYER_DIVE;
+    else if(p->action==ACTION_DIVE && p->grounded)
+        /* Dive.xml bitmap layer: frames 1..5 Slide, frames 0 and 6..9 Air - 2. */
+        p->animation=p->dive_frame>=1 && p->dive_frame<=5 ? PLAYER_CROUCH : PLAYER_DIVE_RECOVER;
+    else if(p->action==ACTION_DIVE) p->animation=PLAYER_DIVE;
     else if(p->action==ACTION_BACKFLIP) p->animation=PLAYER_BACKFLIP;
     else if(p->action==ACTION_ROLL) p->animation=PLAYER_ROLL;
     else if(p->rocket_boost>0) p->animation=PLAYER_ROCKET;

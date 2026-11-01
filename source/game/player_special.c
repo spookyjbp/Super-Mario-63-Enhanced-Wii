@@ -54,6 +54,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
     }
     if(in.crouch_held && p->spin_time==0 && !p->pounding && p->landing_time==0 && p->action==ACTION_NONE) {
         p->action=ACTION_DIVE;p->action_time=0;p->spin_time=0;p->dashing=false;
+        p->dive_frame=0;p->dive_recovering=false;
         if(!grounded) {
             float target=(p->facing_left ? -1 : 1)*35*ORIGINAL_VELOCITY;
             p->vx+=(target-p->vx)/5;p->vy+=3*ORIGINAL_VELOCITY;
@@ -63,24 +64,28 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
         if(player_height(p)!=26) resize(p,26);
         const float speed=fabsf(p->vx);
         const bool backwards=(p->facing_left && in.horizontal>0)||(!p->facing_left && in.horizontal<0);
-        if(grounded && in.jump_pressed && player_stand_clear(p,w)) {
-            resize(p,PLAYER_HEIGHT);
+        const bool level=p->ground_slope==0; /* Clip requires |ground rotation|<=15; port slopes are 45. */
+        /* Mario (None) Dive.xml onEnterFrame, lines 136-160. Both checks run on every
+           source frame of the clip, including the recovery frames, and test KeyUP() as
+           a held state. A fresh press is not required: Down, hold Jump, then push away
+           from the facing direction also backflips, as in the original. */
+        if(p->source_step && grounded && in.jump_held && player_stand_clear(p,w)) {
             if(backwards && speed<5*ORIGINAL_VELOCITY) {
+                resize(p,PLAYER_HEIGHT);
                 p->action=ACTION_BACKFLIP;p->action_time=0;p->backflip_facing_left=p->facing_left;
                 p->vx*=0.75f;
                 const float target=(p->facing_left ? 1 : -1)*30*ORIGINAL_VELOCITY;
                 p->vx+=(target-p->vx)/5;p->vy=-12*ORIGINAL_VELOCITY;
-            } else if(speed>3*ORIGINAL_VELOCITY && p->ground_slope==0 && p->action_time>2.0f/32) {
+            } else if(p->dive_frame>=2 && speed>3*ORIGINAL_VELOCITY && level) {
+                resize(p,PLAYER_HEIGHT);
                 p->action=ACTION_ROLL;p->action_time=0;p->backflip_facing_left=p->facing_left;
                 const float target=(p->facing_left ? -1 : 1)*15*ORIGINAL_VELOCITY;
                 p->vx+=(target-p->vx)/5;p->vy=-10*ORIGINAL_VELOCITY/1.5f;
             }
-            if(p->action==ACTION_DIVE) {
-                p->action=ACTION_NONE;p->jump_buffer=p->coyote=0;
-                return true; /* Original slow dive plays its recovery, not a forced roll. */
+            if(p->action!=ACTION_DIVE) {
+                p->grounded=false;p->jump_cut=true;p->jump_buffer=p->coyote=0;
+                return true;
             }
-            p->grounded=false;p->jump_cut=true;p->jump_buffer=p->coyote=0;
-            return true;
         }
         if(grounded) {
             float a=p->material==TILE_ICE ? 0.04f : p->material==TILE_PUDDLE ? 0.1f : 0.2f;
@@ -88,9 +93,25 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
             p->vx=friction(p->vx,a,b);
             p->vx+=p->ground_slope*995.6f*GAME_DT; /* sin(45 degrees) * original acceleration. */
         } else p->vx+=in.horizontal*120*GAME_DT;
-        if(grounded && !in.crouch_held && fabsf(p->vx)<44 && player_stand_clear(p,w)) {
-            resize(p,PLAYER_HEIGHT);p->action=ACTION_NONE;
-        } else return true;
+        if(p->source_step) {
+            /* Timeline: frames 0-1 play, stop() holds frame 2 (the Slide pose).
+               play() runs recovery frames 3..9; frame 9 sets attack=false. */
+            if(p->dive_recovering || p->dive_frame<2) ++p->dive_frame;
+            if(p->dive_frame>=9) {
+                if(player_stand_clear(p,w)) {
+                    resize(p,PLAYER_HEIGHT);p->action=ACTION_NONE;
+                    p->dive_frame=0;p->dive_recovering=false;
+                    p->jump_buffer=p->coyote=0; /* JumpPress has expired by frame 9. */
+                    return false;
+                }
+                p->dive_frame=2;p->dive_recovering=false; /* Ceiling adaptation: stay down. */
+            }
+            const float vx=fabsf(p->vx);
+            if(!p->dive_recovering && p->dive_frame>=2 && grounded && level &&
+               ((in.jump_held && vx<3*ORIGINAL_VELOCITY) || (vx<ORIGINAL_VELOCITY && !in.crouch_held)))
+                p->dive_recovering=true; /* Dive.xml lines 161-168 call play(). */
+        }
+        return true;
     }
     if(player_height(p)<PLAYER_HEIGHT && player_stand_clear(p,w)) resize(p,PLAYER_HEIGHT);
     return false;

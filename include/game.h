@@ -34,6 +34,7 @@ typedef enum {
     PLAYER_SPIN, PLAYER_POUND_WINDUP, PLAYER_POUND, PLAYER_LAND,
     PLAYER_CROUCH, PLAYER_DIVE, PLAYER_BACKFLIP, PLAYER_ROLL, PLAYER_SWIM,
     PLAYER_HOVER, PLAYER_ROCKET_CHARGE, PLAYER_ROCKET, PLAYER_TURBO, PLAYER_BONK,
+    PLAYER_DIVE_RECOVER, /* Dive clip frames 0 and 6..9 show Mario Air (none) - 2. */
     PLAYER_ANIMATION_COUNT
 } PlayerAnimation;
 
@@ -42,6 +43,10 @@ typedef enum { NOZZLE_HOVER, NOZZLE_ROCKET, NOZZLE_TURBO, NOZZLE_COUNT } Nozzle;
 
 typedef struct {
     unsigned source_phase, swim_frames, spin_combo_count;
+    /* Zero-based frame of Mario (None) Dive.xml: 0 entry, stop() at 2,
+       recovery plays 3..9 and frame 9 clears the attack. */
+    unsigned dive_frame;
+    bool dive_recovering;
     bool source_step, swim_stroke, spin_requested, backflip_facing_left;
     int spin_combo_direction;
     float spin_speed, spin_frame, spin_combo_window, jump_time, normal_land_time;

@@ -10,12 +10,14 @@ static void test_backflip_and_down(void)
     for(unsigned left=0;left<2;++left) {
         Player p;player_init(&p,1500,956);player_step(&p,&w,(GameInput){0});
         p.facing_left=left!=0;
-        player_step(&p,&w,(GameInput){.crouch_held=true});
+        for(int i=0;i<3;++i) player_step(&p,&w,(GameInput){.crouch_held=true});
         assert(p.action==ACTION_DIVE && p.vx==0 && p.vy==0);
-        player_step(&p,&w,(GameInput){.crouch_held=true,.jump_pressed=true,.jump_held=true});
-        assert(p.action==ACTION_NONE && p.vx==0 && p.vy==0); /* No invented stationary roll. */
-        player_step(&p,&w,(GameInput){.crouch_held=true});
-        player_step(&p,&w,(GameInput){.crouch_held=true,.jump_pressed=true,.jump_held=true,.horizontal=left?1:-1});
+        for(int i=0;i<20;++i) player_step(&p,&w,(GameInput){.crouch_held=true,.jump_pressed=i==0,.jump_held=true});
+        /* Down+Up alone plays the original recovery; no invented stationary roll or jump. */
+        assert(p.grounded && p.vx==0 && p.vy==0 && p.action!=ACTION_BACKFLIP && p.action!=ACTION_ROLL);
+        for(int i=0;i<3;++i) player_step(&p,&w,(GameInput){.crouch_held=true});
+        for(int i=0;i<2 && p.action!=ACTION_BACKFLIP;++i)
+            player_step(&p,&w,(GameInput){.crouch_held=true,.jump_pressed=i==0,.jump_held=true,.horizontal=left?1:-1});
         assert(p.action==ACTION_BACKFLIP && p.facing_left==(left!=0));
         assert(fabsf(p.vx-(left?264:-264))<0.01f);
         for(int i=0;i<15;++i) player_step(&p,&w,(GameInput){.jump_held=true,.horizontal=left?-1:1});

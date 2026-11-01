@@ -37,6 +37,7 @@ PlayerSprite player_sprite_select(const Player *p)
     case PLAYER_ROCKET: frame=9; break;
     case PLAYER_TURBO: frame=1+(unsigned)(p->animation_time*20)%8; break;
     case PLAYER_BONK: frame=10; break;
+    case PLAYER_DIVE_RECOVER: frame=10; break; /* Mario Air (none) - 2.png */
     case PLAYER_ANIMATION_COUNT:
     case PLAYER_IDLE: break;
     }

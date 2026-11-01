@@ -3,38 +3,18 @@
 #include <math.h>
 #include <wiiuse/wpad.h>
 
-static float stick_axis(float value)
-{
-    const float magnitude = fabsf(value);
-    if (magnitude <= 0.18f) return 0;
-    const float scaled = fminf(1, (magnitude - 0.18f) / 0.82f);
-    return value < 0 ? -scaled : scaled;
-}
+#include "input_map.h"
+
+_Static_assert(GC_LEFT==PAD_BUTTON_LEFT && GC_RIGHT==PAD_BUTTON_RIGHT && GC_DOWN==PAD_BUTTON_DOWN &&
+               GC_UP==PAD_BUTTON_UP && GC_Z==PAD_TRIGGER_Z && GC_R==PAD_TRIGGER_R && GC_L==PAD_TRIGGER_L &&
+               GC_A==PAD_BUTTON_A && GC_B==PAD_BUTTON_B && GC_START==PAD_BUTTON_START,
+               "GameCube mapping constants must match libogc");
 void input_init(void) { PAD_Init(); WPAD_Init(); }
 GameInput input_poll(void)
 {
-    GameInput state = {0};
     WPAD_ScanPads();
     PAD_ScanPads();
-    const u16 gc_held = PAD_ButtonsHeld(0), gc_down = PAD_ButtonsDown(0);
-    state.horizontal = stick_axis(PAD_StickX(0) / 80.0f);
-    state.vertical = -stick_axis(PAD_StickY(0) / 80.0f);
-    state.crouch_held = state.vertical>0.65f || (gc_held & PAD_BUTTON_DOWN)!=0;
-    state.nozzle_held = (gc_held & PAD_TRIGGER_R)!=0;
-    state.nozzle_next_pressed = (gc_down & PAD_TRIGGER_L)!=0;
-    if(gc_held & PAD_BUTTON_UP) state.vertical=-1;
-    if(gc_held & PAD_BUTTON_DOWN) state.vertical=1;
-    state.jump_pressed = (gc_down & PAD_BUTTON_A) != 0;
-    state.jump_held = (gc_held & PAD_BUTTON_A) != 0;
-    state.spin_pressed = (gc_down & PAD_BUTTON_B) != 0;
-    state.spin_held = (gc_held & PAD_BUTTON_B) != 0;
-    state.pound_pressed = (gc_down & PAD_TRIGGER_Z) != 0;
-    state.pause_pressed = (gc_down & PAD_BUTTON_START) != 0;
-    state.confirm_pressed = state.jump_pressed;
-    state.cancel_pressed = state.spin_pressed;
-    state.menu_delta = (gc_down & PAD_BUTTON_DOWN) ? 1 : (gc_down & PAD_BUTTON_UP) ? -1 : 0;
-    if (gc_held & PAD_BUTTON_LEFT) state.horizontal = -1;
-    if (gc_held & PAD_BUTTON_RIGHT) state.horizontal = 1;
+    GameInput state = input_map_gamecube(PAD_ButtonsHeld(0), PAD_ButtonsDown(0), PAD_StickX(0), PAD_StickY(0));
 
     u32 type;
     if (WPAD_Probe(0, &type) == WPAD_ERR_NONE) {
@@ -59,14 +39,14 @@ GameInput input_poll(void)
         const joystick_t *stick = classic ? &expansion.classic.ljs :
             type == WPAD_EXP_NUNCHUK ? &expansion.nunchuk.js : NULL;
         if (stick) {
-            const float axis = stick_axis(stick->mag * sinf(stick->ang * (3.14159265f / 180)));
+            const float axis = input_stick_axis(stick->mag * sinf(stick->ang * (3.14159265f / 180)));
             if (fabsf(axis) > fabsf(state.horizontal)) state.horizontal = axis;
-            const float vertical=-stick_axis(stick->mag*cosf(stick->ang*(3.14159265f/180)));
+            const float vertical=-input_stick_axis(stick->mag*cosf(stick->ang*(3.14159265f/180)));
             if(fabsf(vertical)>fabsf(state.vertical)) state.vertical=vertical;
         }
         if(held & up) state.vertical=-1;
         if(held & below) state.vertical=1;
-        state.crouch_held |= state.vertical>0.65f;
+        state.crouch_held |= state.vertical>=0.5f; /* Same threshold as input_map.c. */
         state.nozzle_held |= (held & nozzle)!=0;
         state.nozzle_next_pressed |= (down & next_nozzle)!=0;
         if (held & left) state.horizontal = -1;

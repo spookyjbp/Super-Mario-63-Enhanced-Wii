@@ -9,13 +9,15 @@ RENDER := $(ROOT)/build/host/render_tests
 MOVEMENT := $(ROOT)/build/host/movement_v04_tests
 CORRECTIONS := $(ROOT)/build/host/corrections_tests
 ART := $(ROOT)/build/host/art_pack_tests
+CONTROLS := $(ROOT)/build/host/controls_tests
 .PHONY: test clean
-test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(ART)
+test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(ART)
 	$(OUTPUT)
 	$(ORIENTATION)
 	$(RENDER)
 	$(MOVEMENT)
 	$(CORRECTIONS)
+	$(CONTROLS)
 	cd $(ROOT)/build/host && ./art_pack_tests
 $(OUTPUT): $(SOURCES) $(HEADERS)
 	mkdir -p $(dir $@)
@@ -35,5 +37,8 @@ $(CORRECTIONS): corrections_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS
 $(ART): art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(HEADERS) stubs/fat.h stubs/graphics.h
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Istubs -I$(ROOT)/include art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(wildcard $(ROOT)/source/game/*.c) -I$(ROOT)/assets/generated -lm -o $@
+$(CONTROLS): controls_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated controls_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
 clean:
-	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(ART)
+	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(ART)

@@ -73,8 +73,13 @@ descends. Spin cannot start during a fast ascent (source vertical speed <= -3),
 and pressing repeatedly does not reset an active spin. Holding it can start
 another when the attack ends and the source restrictions allow it.
 
-Backflip: enter a slow low dive, then Jump while pressing opposite the stored
-facing direction. Jump from a forward dive to recover with a roll. For running,
+Backflip (source: `Mario (None) Dive.xml`): crouch with Down while standing or
+moving slowly, then hold the direction **opposite** the way Mario faces and press
+Jump. Down + Jump alone only stands Mario back up, exactly as in the original.
+Jump may be held before or after pushing away, and the flip is still available
+for the ~0.2 s recovery after releasing Down. Jump from a fast forward slide to
+recover with a roll. Without the private art pack the crouch shows the standing
+fallback pose; see `docs/v0.4.1-down-controls.md`. For running,
 double-tap left or right within 9/32 s. Chain jumps within 0.28 s of landing;
 the third requires horizontal speed above 132 px/s. Hold FLUDD to Hover or Turbo;
 hold Rocket through its charge to launch, release early to cancel. The HUD shows

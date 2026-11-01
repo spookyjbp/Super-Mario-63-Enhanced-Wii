@@ -31,7 +31,8 @@ void user_art_init(void)
 bool user_art_available(void) {return storage!=NULL;}
 static unsigned body_clip(const Player *p)
 {
-    if(p->animation==PLAYER_CROUCH || (p->animation==PLAYER_DIVE && p->grounded)) return ART_DOWN;
+    if(p->animation==PLAYER_CROUCH) return ART_DOWN;
+    if(p->animation==PLAYER_DIVE_RECOVER) return ART_RISE;
     if(p->animation==PLAYER_BACKFLIP) return ART_BACKFLIP;
     if(p->animation==PLAYER_SWIM) return p->swim_stroke ? ART_SWIM_STROKE : ART_SWIM_FLOAT;
     if(p->animation==PLAYER_LAND) return ART_LAND;

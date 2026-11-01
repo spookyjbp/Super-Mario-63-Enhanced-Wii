@@ -13,7 +13,7 @@ static void ticks(Player *p,const World *w,GameInput in,unsigned n)
 static void test_low_dive_and_backflip(void)
 {
     Player p=standing();
-    player_step(&p,&flat,(GameInput){.crouch_held=true});
+    ticks(&p,&flat,(GameInput){.crouch_held=true},3); /* Dive.xml frame 0 is one source frame. */
     assert(p.action==ACTION_DIVE && player_height(&p)==26 && p.y+26==400);
     assert(p.animation==PLAYER_CROUCH);
     player_step(&p,&flat,(GameInput){.jump_pressed=true,.jump_held=true,.horizontal=-1,.crouch_held=true});
@@ -34,8 +34,8 @@ static void test_crouch_ceiling(void)
     ticks(&p,&w,(GameInput){0},30);
     assert(player_height(&p)==26 && !player_stand_clear(&p,&w));
     p.x=250;
-    player_step(&p,&w,(GameInput){0});
-    assert(player_height(&p)==44 && p.y==356);
+    ticks(&p,&w,(GameInput){0},16); /* Recovery frames 3..9 at the 32 Hz source clock. */
+    assert(player_height(&p)==44 && p.y==356 && p.action==ACTION_NONE);
 }
 static void test_dive_and_pound_transition(void)
 {
