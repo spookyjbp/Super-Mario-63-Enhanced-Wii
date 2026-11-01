@@ -6,5 +6,4 @@ void user_art_shutdown(void);
 bool user_art_available(void);
 bool user_art_fludd_available(const Player *p);
 bool user_art_draw_player(const Player *p,float x,float y);
-void user_art_draw_equipment(const Player *p,float x,float y);
 #endif

@@ -46,6 +46,15 @@ typedef struct {
     /* Zero-based frame of Mario (None) Dive.xml: 0 entry, stop() at 2,
        recovery plays 3..9 and frame 9 clears the attack. */
     unsigned dive_frame;
+    /* Zero-based frame of Mario Ground Pound.xml: 0-11 windup, 12-26 fall,
+       27-34 "hit", 35-41 "end", 42 clears the attack. */
+    unsigned pound_frame;
+    /* Presentation counters that the original clip scripts keep (32 Hz):
+       Walk.xml `frame += xspeed` (1..80), Running.xml phase, Wait WaterBlast
+       level 0..4 with its `_yscale *= -1` parity, Dive.xml airborne rotation. */
+    float walk_frame, run_frame, dive_rotation, dive_target;
+    unsigned run_count, blast_level, art_clip;
+    bool blast_parity;
     bool dive_recovering;
     bool source_step, swim_stroke, spin_requested, backflip_facing_left;
     int spin_combo_direction;
@@ -81,6 +90,8 @@ void player_step(Player *player, const World *world, GameInput input);
 float player_height(const Player *player);
 bool player_special_step(Player *player, const World *world, GameInput input, bool was_grounded);
 void player_fludd_step(Player *player, GameInput input);
+/* Advance presentation-only clip counters; call once at the end of player_step. */
+void player_animation_step(Player *player, GameInput input);
 void player_collision_step(Player *player, const World *world);
 bool player_stand_clear(const Player *player, const World *world);
 bool world_water_at(const World *world, float x, float y, float *surface);

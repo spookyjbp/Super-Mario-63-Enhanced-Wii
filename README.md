@@ -111,11 +111,12 @@ docker run --rm -v "$PWD:/project" -w /project \
 Outputs are `boot.dol`, debug `boot.elf` / `boot.elf.map`, and
 `dist/apps/super-mario-63-enhanced-wii/`. Copy the `apps` folder to an SD card or
 supported USB device and launch through the installed Homebrew Channel.
-To use private poses, run `tools/import_source_poses.py` on your local Runouw
-checkout; for the original bare flip tweens, use `tools/export_source_clips.py`
-with FFDec instead. Copy the resulting `player.art` next to `boot.dol`.
-See the [export instructions](docs/private-player-art.md). Public CI packages
-intentionally omit new private artwork. The HUD reports missing art.
+Original Mario movement art (every movement state in all four FLUDD states,
+plus the FLUDD water blasts) is embedded in `boot.dol` from
+`assets/generated/player_art.bin`, built by `tools/export_movement_clips.py`.
+An SD/USB `player.art` next to `boot.dol` overrides it. See
+[movement animation](docs/movement-animation.md) and the
+[export instructions](docs/private-player-art.md).
 `make clean` removes generated build/package outputs. C11/C++17 modules are
 supported; source basenames must be unique across listed source directories.
 

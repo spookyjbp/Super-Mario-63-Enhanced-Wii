@@ -79,8 +79,35 @@ static void test_repeated_spins_are_bounded(void)
     p.nozzle=NOZZLE_HOVER;p.jet_active=false;const float water=p.water;
     player_fludd_step(&p,(GameInput){.nozzle_held=true});assert(!p.jet_active && p.water==water);
 }
+/* Mario Ground Pound.xml: frames 0-11 hang, frame 12 yspeed=8, fall recurrence,
+   "hit" 27-34 (xspeed*=0.8), "end" 35-41, attack cleared at 42. */
+static void test_ground_pound_source_timing(void)
+{
+    const Rect shapes[]={{0,1000,4000,40}};
+    const World w={.solids=shapes,.count=1,.width=4000,.height=2000};
+    Player p;player_init(&p,1500,200);p.vx=300;
+    player_step(&p,&w,(GameInput){0});
+    player_step(&p,&w,(GameInput){.pound_pressed=true});
+    assert(p.pounding && p.pound_frame==0 && p.vx==0 && p.vy==0);
+    const float y=p.y;int ticks=1;Rect hit;
+    while(p.pound_windup>0) {player_step(&p,&w,(GameInput){.horizontal=1});++ticks;assert(p.vx==0 && (p.y==y || p.pound_windup==0));}
+    assert(ticks>=22 && ticks<=24 && fabsf(p.vy-8*44)<0.01f && player_attack_hitbox(&p,&hit));
+    float last=p.vy;
+    for(int i=0;i<300 && !p.grounded;++i) {
+        player_step(&p,&w,(GameInput){0});
+        if(!p.grounded) assert(p.vy>=last-0.01f && p.vy<27*44); /* Accelerates toward ~26.5 units, never past. */
+        if(!p.grounded) last=p.vy;
+    }
+    assert(p.grounded && !p.pounding && p.pound_frame==27 && last>20*44);
+    p.vx=200;int locked=0;float settled=1e9f;
+    while(p.landing_time>0) {
+        player_step(&p,&w,(GameInput){.horizontal=1,.jump_pressed=true,.jump_held=true});++locked;
+        if(p.landing_time>0) {assert(p.grounded);settled=fabsf(p.vx);} /* No jump or walk during the lock. */
+    }
+    assert(locked>=29 && locked<=31 && p.pound_frame==42 && settled<1);
+}
 int main(void)
 {
-    test_backflip_and_down();test_source_clock();test_water_recurrence_and_strokes();test_repeated_spins_are_bounded();
-    puts("4 v0.4.1 source-physics correction groups passed");return 0;
+    test_backflip_and_down();test_source_clock();test_water_recurrence_and_strokes();test_repeated_spins_are_bounded();test_ground_pound_source_timing();
+    puts("5 v0.4.1 source-physics correction groups passed");return 0;
 }

@@ -3,12 +3,20 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#define ART_CLIP_COUNT 64
-#define ART_MAX_FRAMES 256
-/* 0..9: body; 16+body*3+nozzle: fully equipped body variants;
-   48..50: equipment-only fallback; 51..53: nozzle water effects. */
-typedef enum { ART_DOWN,ART_RISE,ART_FALL,ART_DOUBLE,ART_TRIPLE,ART_BACKFLIP,
-               ART_SWIM_FLOAT,ART_SWIM_STROKE,ART_LAND,ART_TAKEOFF } ArtBody;
+#define ART_CLIP_COUNT 192
+#define ART_MAX_FRAMES 4096
+#define ART_PACK_VERSION 2
+/* Clip ids (tools/export_movement_clips.py): body = state*4 + variant, where
+   variant 0 is no FLUDD and 1..3 follow Nozzle (Hover, Rocket, Turbo).
+   ART_BACK_EFFECT/ART_FRONT_EFFECT + body id hold the FLUDD water blast drawn
+   behind/in front of that body clip, as layered in Mario Main. */
+typedef enum { ART_WALK, ART_RISE, ART_FALL, ART_DIVE, ART_DIVEFLIP, ART_BACKFLIP,
+               ART_FRONTFLIP, ART_SPIN, ART_SWIM_FLOAT, ART_SWIM_STROKE, ART_LAND,
+               ART_RUN, ART_GROUND, ART_STATE_COUNT } ArtState;
+#define ART_VARIANTS 4
+#define ART_BACK_EFFECT 64
+#define ART_FRONT_EFFECT 128
+static inline unsigned art_clip(ArtState state, unsigned variant) {return (unsigned)state*ART_VARIANTS+variant;}
 typedef struct {uint16_t first,count,flags;} ArtClip;
 typedef struct {uint16_t x,y,width,height,duration;int16_t offset_x,offset_y;} ArtFrame;
 typedef struct {
@@ -19,4 +27,7 @@ typedef struct {
 } ArtPack;
 bool art_pack_parse(const unsigned char *data,size_t size,ArtPack *pack);
 const ArtFrame *art_pack_frame(const ArtPack *pack,unsigned clip,float seconds);
+/* Frame by zero-based timeline index (clamped), for script-driven clips. */
+const ArtFrame *art_pack_frame_index(const ArtPack *pack,unsigned clip,unsigned index);
+unsigned art_pack_clip_length(const ArtPack *pack,unsigned clip);
 #endif

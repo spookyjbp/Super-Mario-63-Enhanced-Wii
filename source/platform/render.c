@@ -86,7 +86,6 @@ void render_game(const Game *game, const World *world, float interpolation)
     const float x = lerp(p->previous_x, p->x, interpolation) - camera_x;
     const float y = lerp(p->previous_y, p->y, interpolation) - camera_y;
     if(!user_art_draw_player(p,x,y)) draw_player(p, x, y);
-    user_art_draw_equipment(p,x,y);
     if (p->landing_time > 0) {
         const float spread = (0.18f - p->landing_time) * 220;
         graphics_rect(x - spread, y + PLAYER_HEIGHT - 5, 10, 5, white);

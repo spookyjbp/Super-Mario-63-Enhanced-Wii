@@ -97,7 +97,9 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
             /* Timeline: frames 0-1 play, stop() holds frame 2 (the Slide pose).
                play() runs recovery frames 3..9; frame 9 sets attack=false. */
             if(p->dive_recovering || p->dive_frame<2) ++p->dive_frame;
-            if(p->dive_frame>=9) {
+            /* Slide (Hover).xml clears attack at frame 7; None/Turbo/Rocket at 9. */
+            const unsigned end=p->nozzle==NOZZLE_HOVER ? 7 : 9;
+            if(p->dive_frame>=end) {
                 if(player_stand_clear(p,w)) {
                     resize(p,PLAYER_HEIGHT);p->action=ACTION_NONE;
                     p->dive_frame=0;p->dive_recovering=false;

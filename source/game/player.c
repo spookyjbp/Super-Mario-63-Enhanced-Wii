@@ -3,6 +3,10 @@
 #include <math.h>
 #include <string.h>
 
+#define POUND_WINDUP_FRAMES 12u /* Ground Pound.xml frames 0-11. */
+#define POUND_HIT_FRAME 27u
+#define POUND_END_FRAME 42u
+
 static float approach(float value, float target, float change)
 {
     if (value < target) return fminf(value + change, target);
@@ -33,11 +37,12 @@ void player_step(Player *p, const World *world, GameInput input)
     p->jump_buffer = input.jump_pressed ? 0.1f : decay(p->jump_buffer);
 
     p->landing_time = decay(p->landing_time);
+    if (p->landing_time > 0 && p->source_step && p->pound_frame < POUND_END_FRAME) ++p->pound_frame;
     if (was_grounded && p->chain_window == 0) p->jump_stage = 0;
 
     const bool special = player_special_step(p,world,input,was_grounded);
     if(input.pound_pressed && !p->submerged && !was_grounded && p->action!=ACTION_BONK && !p->pounding) {
-        p->action=ACTION_NONE;p->pounding=true;p->pound_windup=0.12f;
+        p->action=ACTION_NONE;p->pounding=true;p->pound_windup=POUND_WINDUP_FRAMES/32.0f;p->pound_frame=0;
         p->spin_time=0;p->vx=p->vy=0;p->coyote=p->jump_buffer=0;
     }
     p->tap_window=decay(p->tap_window);
@@ -74,21 +79,39 @@ void player_step(Player *p, const World *world, GameInput input)
         }
         if (input.pound_pressed && !p->grounded) {
             p->pounding = true;
-            p->pound_windup = 0.12f;
+            p->pound_windup = POUND_WINDUP_FRAMES / 32.0f;
+            p->pound_frame = 0;
             p->spin_time = 0;
             p->vx = p->vy = 0;
             p->jump_buffer = p->coyote = 0;
         }
-    } else if (locked) {
+    } else if (p->landing_time > 0 && p->pound_frame < 35) {
+        if (p->source_step) p->vx *= 0.8f; /* Ground Pound.xml "hit": xspeed *= 0.8. */
+    } else if (locked && !(p->pounding && p->pound_windup == 0)) {
         p->vx = approach(p->vx, 0, 2400 * GAME_DT);
     }
 
     player_spin_prepare(p,input);
     if (p->pounding) {
         if (p->pound_windup > 0) {
-            p->pound_windup = decay(p->pound_windup);
-            p->vy = 0;
-        } else p->vy = fminf(1200, p->vy + 3600 * GAME_DT);
+            /* Frames 0-11: yspeed = -gravity cancels CharCode gravity; xspeed = 0. */
+            p->vx = p->vy = 0;
+            if (p->source_step && ++p->pound_frame >= POUND_WINDUP_FRAMES) {
+                p->pound_windup = 0;
+                p->vy = 8 * 44.0f; /* Frame 12: yspeed = 8. */
+            } else p->pound_windup = (POUND_WINDUP_FRAMES - p->pound_frame) / 32.0f;
+        } else if (p->source_step) {
+            float vx = p->vx / 44, vy = p->vy / 44;
+            vy += 1;                                   /* CharCode gravity in air. */
+            if (vy > 0) vy = fmaxf(0, vy - 0.2f) / 1.05f; /* CharCode fall drag. */
+            vy += 0.5f;                                /* Clip: gravity/2 ... */
+            if (vy < 3) vy += 0.5f;                    /* ... and again while slow. */
+            vx *= 0.95f;
+            if (input.horizontal > 0) vx -= fminf((vx - 5) / 20, 0);
+            if (input.horizontal < 0) vx -= fmaxf((vx + 5) / 20, 0);
+            p->vx = vx * 44; p->vy = vy * 44;
+            if (p->pound_frame < 26) ++p->pound_frame; /* stop() at frame 26 */
+        }
     } else if (!p->submerged && p->action!=ACTION_BONK && p->spin_time==0) {
         if (!input.jump_held && p->vy < 0 && !p->jump_cut) {
             p->vy *= 0.45f;
@@ -112,7 +135,9 @@ void player_step(Player *p, const World *world, GameInput input)
             p->normal_land_time=3.0f/32;
             p->chain_window = p->jump_stage > 0 ? 0.28f : 0;
             if (p->pounding) {
-                p->landing_time = 0.18f;
+                /* "hit" (27) through frame 42: sixteen source frames of attack. */
+                p->landing_time = (POUND_END_FRAME + 1 - POUND_HIT_FRAME) / 32.0f;
+                p->pound_frame = POUND_HIT_FRAME;
                 p->jump_stage = 0;
                 p->chain_window = 0;
             }
@@ -136,6 +161,7 @@ void player_step(Player *p, const World *world, GameInput input)
     else if (p->normal_land_time>0 && p->grounded) p->animation=PLAYER_LAND;
     else if (!p->grounded) p->animation = p->vy<=2*44 ? PLAYER_RISE : PLAYER_FALL;
     else p->animation = fabsf(p->vx) > 8 ? PLAYER_RUN : PLAYER_IDLE;
+    player_animation_step(p, input);
 }
 
 /* Attack geometry is exposed for future targets; this playground has no enemies. */

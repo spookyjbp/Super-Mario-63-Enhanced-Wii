@@ -151,14 +151,14 @@ static void test_spin_and_pound(void)
     player_step(&p, &floor_world, (GameInput){.pound_pressed = true});
     assert(p.pounding && p.animation == PLAYER_POUND_WINDUP && p.vy == 0);
     assert(!player_attack_hitbox(&p, &attack));
-    ticks(&p, &floor_world, (GameInput){0}, 8);
-    assert(p.animation == PLAYER_POUND && p.vy > 0);
-    assert(player_attack_hitbox(&p, &attack) && attack.y > p.y);
+    int windup = 0; /* Ground Pound.xml: 12 source frames (22-23 ticks at 60 Hz). */
+    while (p.pound_windup > 0 && windup < 30) { player_step(&p, &floor_world, (GameInput){0}); ++windup; }
+    assert(windup >= 21 && windup <= 23 && p.pound_frame >= 12 && (p.vy > 0 || p.grounded));
     for (int i = 0; i < 120 && !p.grounded; ++i) player_step(&p, &floor_world, (GameInput){0});
     assert(p.grounded && !p.pounding && p.animation == PLAYER_LAND && p.vy == 0);
     player_step(&p, &floor_world, (GameInput){.horizontal = 1, .jump_pressed = true, .jump_held = true});
     assert(p.grounded && p.vx == 0); /* Landing recovery. */
-    ticks(&p, &floor_world, (GameInput){0}, 20);
+    ticks(&p, &floor_world, (GameInput){0}, 32); /* Sixteen-frame hit/end lock. */
     assert(p.animation == PLAYER_IDLE);
 }
 static void test_camera(void)

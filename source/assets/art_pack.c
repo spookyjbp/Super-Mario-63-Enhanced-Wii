@@ -7,7 +7,7 @@ static int16_t s16(const unsigned char *p) {unsigned v=u16(p);return (int16_t)(v
 bool art_pack_parse(const unsigned char *d,size_t n,ArtPack *p)
 {
     memset(p,0,sizeof(*p));
-    if(n<32 || memcmp(d,"SM63ART1",8) || u32(d+8)!=1) return false;
+    if(n<32 || memcmp(d,"SM63ART1",8) || u32(d+8)!=ART_PACK_VERSION) return false;
     const unsigned width=u32(d+12),height=u32(d+16),clips=u32(d+20),frames=u32(d+24),bytes=u32(d+28);
     if(width<4 || width>1024 || height<4 || height>1024 || (width&(width-1)) ||
        (height&(height-1)) || clips>ART_CLIP_COUNT || !frames || frames>ART_MAX_FRAMES || bytes!=width*height*4) return false;
@@ -25,8 +25,8 @@ bool art_pack_parse(const unsigned char *d,size_t n,ArtPack *p)
         ArtFrame frame={.x=u16(f),.y=u16(f+2),.width=u16(f+4),.height=u16(f+6),
                         .offset_x=s16(f+8),.offset_y=s16(f+10),.duration=u16(f+12)};
         if(!frame.width || !frame.height || frame.x+frame.width>width || frame.y+frame.height>height ||
-           !frame.duration || u16(f+14)!=0 || frame.offset_x<-2048 || frame.offset_x>2048 ||
-           frame.offset_y<-2048 || frame.offset_y>2048) return false;
+           !frame.duration || u16(f+14)!=0 || frame.offset_x<-8192 || frame.offset_x>8192 ||
+           frame.offset_y<-8192 || frame.offset_y>8192) return false;
         p->frames[i]=frame;
     }
     p->texture=d+offset;return true;
@@ -46,4 +46,14 @@ const ArtFrame *art_pack_frame(const ArtPack *p,unsigned id,float seconds)
         ticks-=f->duration;
     }
     return &p->frames[c.first+c.count-1];
+}
+const ArtFrame *art_pack_frame_index(const ArtPack *p,unsigned id,unsigned index)
+{
+    if(!p->texture || id>=ART_CLIP_COUNT || !p->clips[id].count) return NULL;
+    const ArtClip c=p->clips[id];
+    return &p->frames[c.first+(index<c.count ? index : c.count-1u)];
+}
+unsigned art_pack_clip_length(const ArtPack *p,unsigned id)
+{
+    return p->texture && id<ART_CLIP_COUNT ? p->clips[id].count : 0;
 }

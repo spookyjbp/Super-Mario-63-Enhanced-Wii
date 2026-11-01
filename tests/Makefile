@@ -34,9 +34,9 @@ $(MOVEMENT): movement_v04_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 $(CORRECTIONS): corrections_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated corrections_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
-$(ART): art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(HEADERS) stubs/fat.h stubs/graphics.h
+$(ART): art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(ROOT)/source/render/player_art_select.c $(HEADERS) stubs/fat.h stubs/graphics.h
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Istubs -I$(ROOT)/include art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(wildcard $(ROOT)/source/game/*.c) -I$(ROOT)/assets/generated -lm -o $@
+	$(CC) $(CFLAGS) -Istubs -I$(ROOT)/include art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(ROOT)/source/render/player_art_select.c $(wildcard $(ROOT)/source/game/*.c) -I$(ROOT)/assets/generated -lm -o $@
 $(CONTROLS): controls_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated controls_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@

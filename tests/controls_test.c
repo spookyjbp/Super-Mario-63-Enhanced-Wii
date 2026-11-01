@@ -50,6 +50,19 @@ static void test_crouch_holds_with_slide_pose(void)
         assert(p.action==ACTION_NONE && player_height(&p)==44 && p.grounded);
     }
 }
+static int recovery_ticks(Nozzle nozzle)
+{
+    Player p=standing(false);p.nozzle=nozzle;
+    ticks(&p,(GameInput){.crouch_held=true},3);
+    int n=0;while(p.action==ACTION_DIVE && n<60) {player_step(&p,&flat,(GameInput){0});++n;}
+    return n;
+}
+static void test_nozzle_dive_recovery(void)
+{
+    /* Slide (Hover).xml clears attack at frame 7; Turbo/Rocket slides at frame 9. */
+    const int hover=recovery_ticks(NOZZLE_HOVER),turbo=recovery_ticks(NOZZLE_TURBO),rocket=recovery_ticks(NOZZLE_ROCKET);
+    assert(turbo==rocket && turbo-hover>=3 && turbo-hover<=5);
+}
 static void test_backflip_activation_paths(void)
 {
     for(int left=0;left<2;++left) {
@@ -120,6 +133,6 @@ static void test_spin_and_jump_unchanged(void)
 int main(void)
 {
     test_gamecube_down_reaches_gameplay();test_crouch_holds_with_slide_pose();
-    test_backflip_activation_paths();test_not_a_backflip();test_spin_and_jump_unchanged();
-    puts("5 Down/crouch/backflip control regression groups passed");return 0;
+    test_nozzle_dive_recovery();test_backflip_activation_paths();test_not_a_backflip();test_spin_and_jump_unchanged();
+    puts("6 Down/crouch/backflip control regression groups passed");return 0;
 }

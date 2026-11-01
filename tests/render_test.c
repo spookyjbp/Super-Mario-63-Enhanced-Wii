@@ -57,7 +57,6 @@ void user_art_init(void) {}
 bool user_art_available(void) {return false;}
 bool user_art_fludd_available(const Player *p) {(void)p;return false;}
 bool user_art_draw_player(const Player *p,float x,float y) {(void)p;(void)x;(void)y;return false;}
-void user_art_draw_equipment(const Player *p,float x,float y) {(void)p;(void)x;(void)y;}
 static void near(float a, float b) { assert(fabsf(a - b) < 0.001f); }
 static void record(const Game *game, const World *world, float alpha)
 {
