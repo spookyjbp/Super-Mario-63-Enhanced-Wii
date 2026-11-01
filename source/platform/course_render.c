@@ -181,7 +181,7 @@ void course_render(const CourseSession *s, float t)
     const Player *p = &g->player;
     const float px = p->previous_x + (p->x - p->previous_x) * t - camx;
     const float py = p->previous_y + (p->y - p->previous_y) * t - camy;
-    user_art_draw_player(p, px, py);
+    if (!(p->blink > 0 && (p->blink / 2) % 2)) user_art_draw_player(p, px, py); /* MarioHit blink */
     /* Water Code volumes (surface waves still to be ported): flat translucent fill. */
     for (unsigned i = 0; i < c->area->water_count; ++i) {
         const CourseWater *w = &c->area->water[i];

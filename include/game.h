@@ -66,6 +66,8 @@ typedef struct {
     int wall_normal, last_tap, bonk_direction;
     bool submerged, jet_active, dashing, tap_released;
     bool has_fludd;          /* false until the FLUDD box (StartChar Fluddpow "") */
+    int blink, stun;         /* MarioHit: invulnerable blink and stun, 32 Hz frames */
+    bool ejump;              /* attackFrame "EJump": held on a stomped enemy */
     float input_horizontal;  /* held direction this tick, for wall rules */
     TileType material;
     PlayerAction action;

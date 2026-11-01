@@ -17,8 +17,17 @@ BackGFX objects behind Mario and FrontGFX objects in front.
 | Goonie (bird) | GoonieCode 2305 | Fly / dive / ride states, rideable GooniePL platform with carry and wrap |
 | Falling log | Falling Log Code 3317 | Invisible BPlatforms log (SWF 57): fade-in, 10-frame quake, fall, carry, reset after 24; graphic stays, as in the original |
 | YI Arrow | 3410 | Animates; fades out when the barrier opens |
-| Goomba, Cheep Cheep, Bob-omb, Koopa | 2386, 2234, 3311, 3403 | **Drawn only** (idle animation); behaviour next |
+| Goomba | GoombaCode 2386 | Full port: walk/turn at ledges and water, sees Mario (eye box) and hops, chases, hurts on touch (`MarioHit(1,90,-5,+/-7,7)`), stomp with the Squish clip hold and bounce (8, 10 with Jump held on contact, 12 when pressed during the hold), dive and spin knock it tumbling, one bouncing coin per Goomba, respawn when 600 px off camera |
+| Cheep Cheep, Bob-omb, Koopa | 2234, 3311, 3403 | **Drawn only** (idle animation); behaviour next |
 | Breakable box, FLUDD box, Water bottle, platforms | 2808, 972, 3995, 3315, 3476, 3063 | **Drawn only**; behaviour next |
 | Shine Sprite | 977 | Not shown on a new save (frames reached only with Star[39]) |
 
 Random numbers (`random()`, `Math.random()`) use a seeded generator per area.
+
+## Mario damage
+
+`course_mario_hit` follows `_root.MarioHit(a, b, c, d, e)`: lose `a` HP, blink
+`b` frames (invulnerable, drawn every other pair of frames), velocity set to
+(`d`, `c`) as the hurt1 clip does, no control for `e` frames. At 0 HP the
+original plays Faint and restarts the course from a life; the port restarts
+the current area's entry with full health (lives are not modelled yet).

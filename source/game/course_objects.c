@@ -85,6 +85,15 @@ void course_objects_init(CourseObjects *o, const CourseArea *a, const CoursePick
             l->state = 0;                             /* 0 fly, 1 ride, 2 dive */
             break;
         }
+        case LIVE_GOOMBA: { /* GoombaCode frame 1 */
+            float v;
+            CourseString md;
+            if (course_object_param(src, "movedirection", &md)) l->dir = course_string_equals(md, "right") ? 1 : -1;
+            else l->dir = rnd(o, 2) == 0 ? 1 : -1;
+            l->p0 = param_f(src, "WalkDistance", &v) ? v : 100;
+            l->frame_label = GOOMBA_IDLE;
+            break;
+        }
         case LIVE_LOG: { /* Falling Log Code (graphics) */
             float v;
             l->p0 = param_f(src, "fallamount", &v) ? v : 24;
@@ -104,6 +113,28 @@ static void body_box(const Player *p, const CourseRuntime *c, float b[4])
     const float fx = course_cx(c, p->x + PLAYER_WIDTH / 2), fy = course_cy(c, p->y + player_height(p));
     const float tall = p->action == ACTION_DIVE ? 25.0f : p->has_fludd ? 40.0f : 34.0f;
     b[0] = fx - 10; b[1] = fy - tall; b[2] = fx + 10; b[3] = fy;
+}
+/* charClip boxes from Mario Main (canonical facing left; mirrored facing right),
+   Char places Main at y -3. body (-10.3,-31)-(17,3.8), feet (-12.3,-14.4)-(15,0.4). */
+static void mario_box(const Player *p, const CourseRuntime *c, const float local[4], float b[4])
+{
+    const float fx = course_cx(c, p->x + PLAYER_WIDTH / 2), fy = course_cy(c, p->y + player_height(p));
+    if (p->facing_left) { b[0] = fx + local[0]; b[2] = fx + local[2]; }
+    else { b[0] = fx - local[2]; b[2] = fx - local[0]; }
+    b[1] = fy + local[1]; b[3] = fy + local[3];
+}
+static const float MARIO_BODY[4] = {-10.3f, -31.0f, 17.0f, 3.8f};
+static const float MARIO_DIVE_BODY[4] = {-10.3f, -19.2f, 17.1f, -4.2f};
+static const float MARIO_FEET[4] = {-12.3f, -14.4f, 15.0f, 0.4f};
+static bool solid_any(const CourseRuntime *c, float x, float y) { return course_solid(c, x, y) || course_bsolid(c, x, y); }
+void course_mario_hit(Player *p, CourseProgress *g, int hp, int blink, float vy, float vx, int stun)
+{
+    if (p->blink > 0 || g->hp < 1) return; /* _root.MarioHit guard */
+    p->blink = blink; g->hp -= hp; g->hpcoins = 0;
+    p->action = ACTION_NONE; p->spin_time = 0; p->pounding = false; p->ejump = false;
+    /* hurt1: setYspeed/setXspeed replace the velocity */
+    p->vx = vx * 44; p->vy = vy * 44; p->grounded = false;
+    if (stun > 0) p->stun = stun;
 }
 static bool overlap(const float a[4], const float b[4]) { return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]; }
 static bool inside(float x, float y, const float b[4]) { return x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]; }
@@ -153,12 +184,191 @@ static void heal(CourseProgress *g) /* DOMDocument.xml:5151 */
     while (g->coincount >= 100) g->coincount -= 100; /* CharLives++ (lives not shown yet) */
 }
 
+static float cam_cx, cam_cy;
+static bool jump_key;
+static LiveObject *spawn(CourseObjects *o, LiveKind kind, const CourseObject *src, float x, float y)
+{
+    if (o->count >= COURSE_MAX_LIVE) return NULL;
+    LiveObject *l = &o->live[o->count++];
+    *l = (LiveObject){.kind = kind, .src = src, .index = COURSE_MAX_PICKUPS, .x = x, .y = y, .home_x = x, .home_y = y,
+                      .alive = true, .alpha = 100, .scale = 1};
+    return l;
+}
+/* GoldCoin with bounce = true (DoAction_2): falls, bounces, collectable after
+   12 frames, flickers after 288 and vanishes at 384. */
+static void step_bounce_coin(LiveObject *l, const CourseRuntime *c)
+{
+    float b;
+    if (course_area_water(c->area, l->x, l->y, &b)) { l->vy += 1.0f / 3; l->vy *= 0.95f; l->vx *= 0.95f; }
+    else { l->vy += 1; if (l->vy > 0) l->vy *= 0.97f; }
+    l->y += fmaxf(-8, fminf(8, l->vy)); l->x += fmaxf(-7, fminf(7, l->vx));
+    if ((l->vy > 0 && course_solid(c, l->x, l->y + 8)) || course_bsolid(c, l->x, l->y + 8))
+        { l->vy = drag(-l->vy, 0.5f, 1.2f); l->vx = drag(l->vx, 0.3f, 1.1f); }
+    if (l->vx < 0 && course_solid(c, l->x - 7, l->y)) { l->vx = -l->vx * 0.6f; l->vy = drag(l->vy, 0.5f, 1.1f); }
+    if (l->vx > 0 && course_solid(c, l->x + 7, l->y)) { l->vx = -l->vx * 0.6f; l->vy = drag(l->vy, 0.5f, 1.1f); }
+    if (l->vy < 0 && course_solid(c, l->x, l->y - 8)) { l->vy = drag(-l->vy, 0.5f, 1.5f); l->vx *= 0.95f; }
+    for (int n = 0; n < 64 && solid_any(c, l->x, l->y + 8); ++n) l->y -= 1;
+    for (int n = 0; n < 64 && course_solid(c, l->x - 7, l->y); ++n) l->x += 1;
+    for (int n = 0; n < 64 && course_solid(c, l->x + 7, l->y); ++n) l->x -= 1;
+    for (int n = 0; n < 64 && course_solid(c, l->x, l->y - 8); ++n) l->y += 1;
+    ++l->count;
+    if (l->count > 288) l->alpha = (float)((l->count * 37) % 100); /* _alpha = random(100) */
+    if (l->count > 384) l->alive = false;
+}
+/* Goomba Moveright/Moveleft: probe ahead for ground (water first means no). */
+static bool ground_ahead(const CourseRuntime *c, const LiveObject *l, int dir)
+{
+    for (float xs2 = 15; xs2 < 30; xs2 += 10) {
+        const float xs = dir * xs2 + l->vx * 7;
+        float adding = 3, b;
+        for (float ys = -5; ys < 30;) {
+            adding = fminf(adding, 5);
+            if (course_solid(c, l->x + xs, l->y + ys) || course_bsolid(c, l->x + xs, l->y + ys)) return true;
+            if (course_area_water(c->area, l->x + xs, l->y + ys, &b)) return false;
+            adding += 0.5f; ys += adding;
+        }
+    }
+    return false;
+}
+static void goomba_move(const CourseRuntime *c, LiveObject *l, int dir)
+{
+    if (ground_ahead(c, l, dir)) l->vx += dir * 0.5f; /* walkspeed */
+    else {
+        l->count = 0; l->dir = -dir;
+        if (!l->air && (dir > 0 || (l->frame_label != GOOMBA_TUMBLE && l->frame_label != GOOMBA_SQUISH)))
+            l->frame_label = GOOMBA_IDLE;
+    }
+}
+static void goomba_reset(LiveObject *l)
+{
+    l->x = l->home_x; l->y = l->home_y; l->vx = l->vy = 0;
+    l->timer = 0; l->powerhit = l->seeing = l->see = l->hurt = l->air = l->tumble = l->bounce = false;
+    l->tumblerot = 0; l->frame_label = GOOMBA_IDLE; l->frame = 0;
+}
+/* GoombaCode frame 3 onEnterFrame (DefineSprite_2386, decompiled). */
+static void step_goomba(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *p, CourseProgress *g,
+                        CoursePickups *taken)
+{
+    const bool on_screen = fabsf(cam_cx - l->x) < 600 && fabsf(cam_cy - l->y) < 600;
+    if (!on_screen) {
+        if (l->frame_label == GOOMBA_SQUISH) ++l->timer;
+        if (l->timer > 30 || fabsf(cam_cx - l->home_x) > 600 || fabsf(cam_cy - l->home_y) > 600) goomba_reset(l);
+        return;
+    }
+    if (l->frame_label == GOOMBA_SQUISH) {
+        /* Squish clip 2377: hold Mario on top (frames 1-8), bounce at 9, coin at 12. */
+        const unsigned f = ++l->count;
+        if (l->bounce && f <= 8 && p->ejump) {
+            p->vy = 0;
+            const float top = l->y - (f < 3 ? 7.0f - 1.5f : 5.5f), fx = course_cx(c, p->x + PLAYER_WIDTH / 2);
+            const float fy = course_cy(c, p->y + player_height(p));
+            if (fabsf(top - fy) < 15) p->y += (top - fy) / 5 * COURSE_SCALE;
+            if (fabsf(l->x - fx) < 15) p->x += (l->x - fx) / (fabsf(p->vx / 44 / 2) + 5) * COURSE_SCALE;
+            if (f == 4 || f == 6 || f == 8) if (jump_key && l->p3 != 1) l->p3 = 2; /* landtime 2 */
+            if (f == 8) p->y -= 5 * COURSE_SCALE;
+        }
+        if (l->bounce && f == 9) {
+            const float boost = !p->ejump ? 9 : l->p3 == 1 ? 10 : l->p3 == 2 ? 12 : 8;
+            p->vy -= boost * 44; p->ejump = false; p->grounded = false;
+            p->jump_cut = true; /* the boost is not cut by releasing Jump */
+        }
+        if (f == 12 && !l->spawned) { /* frame 12: one bouncing coin per Goomba (coindata) */
+            l->spawned = true;
+            if (!(taken && l->index < COURSE_MAX_PICKUPS && taken->taken[l->index])) {
+                if (taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
+                LiveObject *coin = spawn(o, LIVE_COIN, l->src, l->x, l->y - 12);
+                if (coin) coin->bounce = true;
+            }
+        }
+        return;
+    }
+    float body[4] = {l->x - 7.5f, l->y - 7.0f, l->x + 7.5f, l->y + 0.9f};
+    const float head[4] = {l->x - 7.5f, l->y - 21.0f, l->x + 7.5f, l->y - 13.0f};
+    const float eye[4] = {l->x - 208.8f, l->y - 65.2f, l->x + 209.0f, l->y + 30.1f};
+    float mbody[4], mfeet[4];
+    mario_box(p, c, p->action == ACTION_DIVE ? MARIO_DIVE_BODY : MARIO_BODY, mbody);
+    mario_box(p, c, MARIO_FEET, mfeet);
+    const float mx = course_cx(c, p->x + PLAYER_WIDTH / 2), mxs = p->vx / 44;
+    if (overlap(eye, mbody) && !l->tumble) { if (!l->seeing) l->see = true; l->seeing = true; }
+    else { l->seeing = false; l->see = false; }
+    if (overlap(body, mbody) && p->action == ACTION_DIVE && fabsf(mxs) > 1) {
+        l->tumble = true; l->vy -= fabsf((mxs + 1) / 5); l->vx += mxs - l->vx / 1.5f; l->y -= 3;
+        if (fabsf(l->vx / 0.5f) > 17) l->powerhit = true;
+    }
+    float spin[4] = {mbody[0] - 18, mbody[1] - 4, mbody[2] + 18, mbody[3] + 4};
+    if (p->spin_time > 0 && (overlap(body, spin) || overlap(head, spin))) { /* charClip 'water' during Spin */
+        l->tumble = true; l->vy -= 1.5f;
+        l->vx *= 0.7f; l->vx += mx > l->x ? -20 : 20;
+        if (fabsf(l->vx / 0.5f) > 9) l->powerhit = true;
+        l->y -= 3;
+    }
+    if (overlap(body, mbody) && !(p->action == ACTION_DIVE && fabsf(mxs) > 0.3f) && !l->tumble && p->spin_time == 0)
+        course_mario_hit(p, g, 1, 90, -5, mx > l->x ? 7 : -7, 7);
+    if (overlap(head, mfeet) && !p->grounded && p->vy > 0) {
+        p->vy = 0; l->hurt = true; l->tumblerot = 0; l->bounce = true;
+        p->ejump = true; p->action = ACTION_NONE; p->spin_time = 0;
+        l->p3 = jump_key ? 1 : 0; /* landtime 1 when Up is held on contact */
+    }
+    float b;
+    if (course_area_water(c->area, l->x, l->y, &b)) { l->hurt = true; l->tumblerot = 0; }
+    if (!solid_any(c, l->x, l->y)) { l->y += l->vy; l->vy += 1; l->vy *= 0.98f; l->air = true; }
+    if (solid_any(c, l->x, l->y)) {
+        if (l->air) l->jump = false;
+        l->air = false;
+        if (!l->tumble) l->vy = fminf(0, l->vy);
+        else {
+            if (fabsf(l->vy) + fabsf(l->vx / 2) > 11) { l->tumble = false; if (l->powerhit) { l->tumblerot = 0; l->hurt = true; } }
+            if (l->vy > 3) { l->vy = fminf(0, -l->vy + 2); l->vx = drag(l->vx, 2, 1.2f); }
+            else { l->vx = drag(l->vx, 0.5f, 1.1f); l->vy = 0; }
+            if (fabsf(l->vx) < 2) { l->tumble = false; if (l->powerhit) { l->tumblerot = 0; l->hurt = true; } }
+        }
+    }
+    for (int n = 0; n < 64 && solid_any(c, l->x, l->y - 3); ++n) l->y -= 1;
+    for (int n = 0; n < 64 && course_solid(c, l->x + 10, l->y - 12.5f); ++n) {
+        l->x -= 1; l->dir = -1; l->count = 0;
+        if (l->tumble) { if (l->vx < 7) l->vx = fmaxf(l->vx * 0.7f, -l->vx * 0.7f); else if (l->vx > 0 && l->powerhit) { l->hurt = true; l->tumblerot = -90; } }
+    }
+    for (int n = 0; n < 64 && course_solid(c, l->x - 10, l->y - 12.5f); ++n) {
+        l->x += 1; l->dir = 1; l->count = 0;
+        if (l->tumble) { if (l->vx > 7) l->vx = fminf(l->vx * 0.7f, -l->vx * 0.7f); else if (l->vx < 0 && l->powerhit) { l->hurt = true; l->tumblerot = 90; } }
+    }
+    for (int n = 0; n < 64 && solid_any(c, l->x, l->y + 3) && !(course_solid(c, l->x, l->y - 1) || course_bsolid(c, l->x, l->y - 3)); ++n) l->y += 1;
+    for (int n = 0; n < 64 && (course_solid(c, l->x, l->y - 1) || course_bsolid(c, l->x, l->y - 3)); ++n) l->y -= 1;
+    if (l->hurt) { l->frame_label = GOOMBA_SQUISH; l->count = 0; l->frame = 0; l->vx = l->vy = 0; return; }
+    if (l->air) l->frame_label = GOOMBA_JUMP;
+    if (l->seeing && !l->tumble) {
+        if (mx > l->x && fabsf(mx - l->x) > 20) goomba_move(c, l, 1);
+        else if (mx < l->x && fabsf(mx - l->x) > 20) goomba_move(c, l, -1);
+        else if (!l->air && !l->tumble) l->frame_label = GOOMBA_IDLE;
+    }
+    if (!l->seeing && !l->tumble) {
+        ++l->count;
+        goomba_move(c, l, l->dir);
+        if (l->count > (int)l->p0) { l->dir = -l->dir; l->count = 0; }
+    }
+    if (l->see) { l->jump = true; l->see = false; }
+    if (l->jump && !l->air) { l->vy = -5; l->y -= 3; l->jump = false; l->frame_label = GOOMBA_JUMP; }
+    if (!l->air && !l->tumble && fabsf(l->vx) > 0.3f && solid_any(c, l->x, l->y + 3))
+        l->frame_label = l->vx > 0 ? GOOMBA_WALKR : GOOMBA_WALKL;
+    else if (!l->air && !l->tumble) l->frame_label = GOOMBA_IDLE;
+    if (l->tumble) { l->tumblerot += l->vx * 3; l->frame_label = GOOMBA_TUMBLE; }
+    if (l->vy > 7) l->vy *= 0.9f;
+    l->vy = fmaxf(-10, fminf(10, l->vy));
+    l->vx = fmaxf(-15, fminf(15, l->vx));
+    l->x += l->vx;
+    l->vx = l->tumble ? drag(l->vx, 0.05f, 1.01f) : drag(l->vx, 0.3f, 1.1f);
+    if (!l->tumble && fabsf(l->tumblerot) > 0) { l->tumblerot = drag(l->tumblerot, 5, 1.3f); l->frame_label = GOOMBA_TUMBLE; }
+}
 static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *p, CourseProgress *g,
                      CoursePickups *taken, const float body[4], float fx, float fy)
 {
     ++l->frame;
     switch (l->kind) {
     case LIVE_COIN: case LIVE_BLUE_COIN: {
+        if (l->bounce && !l->collected) {
+            step_bounce_coin(l, c);
+            if (!l->alive || l->count <= 12) break; /* hitcoin false for 12 frames */
+        }
         if (l->collected) {
             if (l->frame >= 14) l->alive = false; /* frames 4..17, then removed */
             break;
@@ -169,7 +379,7 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
             if (l->kind == LIVE_COIN) { g->coins += 1; g->coincount += 1; g->hpcoins += 1; }
             else { g->coins += 5; g->coincount += 5; g->hpcoins += 15; }
             heal(g);
-            if (taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
+            if (!l->bounce && taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
         }
         break;
     }
@@ -252,6 +462,7 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
         }
         break;
     }
+    case LIVE_GOOMBA: step_goomba(o, l, c, p, g, taken); break;
     case LIVE_ARROW: /* YI Arrow: fades and is removed once Platforms leaves frame 1 */
         if (c->platform_frame != 0) { l->alpha -= 10; if (l->alpha <= 0) l->alive = false; }
         break;
@@ -261,12 +472,16 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
 }
 
 void course_objects_step(CourseObjects *o, CourseRuntime *c, Player *p, CourseProgress *g, CoursePickups *taken,
-                         bool frozen)
+                         bool frozen, float cam_x, float cam_y, bool jump_held)
 {
     if (!p->source_step || frozen) return;
+    cam_cx = cam_x; cam_cy = cam_y; jump_key = jump_held;
+    if (p->blink > 0) --p->blink;
+    if (p->stun > 0) --p->stun;
     float body[4];
     body_box(p, c, body);
     const float fx = course_cx(c, p->x + PLAYER_WIDTH / 2), fy = course_cy(c, p->y + player_height(p));
-    for (unsigned i = 0; i < o->count; ++i)
+    const unsigned n = o->count; /* objects spawned this frame start next frame */
+    for (unsigned i = 0; i < n; ++i)
         if (o->live[i].alive) step_one(o, &o->live[i], c, p, g, taken, body, fx, fy);
 }

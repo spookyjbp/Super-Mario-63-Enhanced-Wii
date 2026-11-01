@@ -99,11 +99,56 @@ static void test_birds_and_butterflies_move(void)
     ticks((GameInput){0}, 120);
     assert(g->x != gx && b->x != bx && fabsf(b->x - bx) < 200);
 }
+static void settle_goomba(LiveObject *gm) { for (int i = 0; i < 90; ++i) course_session_step(&s, (GameInput){0}); (void)gm; }
+static void test_goomba_hurts_and_stomps(void)
+{
+    play_area("8-E1-1");
+    LiveObject *gm = first(LIVE_GOOMBA);
+    assert(gm && gm->home_x == 1337.95f);
+    /* Stand far away, let the Goomba settle on the ground. */
+    course_place_player(&s.runtime, &s.game.player, 1150, -60);
+    settle_goomba(gm);
+    assert(!gm->air);
+    /* Walk into it: MarioHit(1, 90, -5, +/-7, 7). */
+    course_place_player(&s.runtime, &s.game.player, gm->x - 4, gm->y);
+    s.game.player.vx = s.game.player.vy = 0; s.game.player.grounded = true;
+    ticks((GameInput){0}, 2);
+    assert(s.progress.hp == 7 && s.game.player.blink > 80 && s.game.player.vy < 0);
+    ticks((GameInput){0}, 2);
+    assert(s.progress.hp == 7); /* invulnerable while blinking */
+    /* Stomp: fall onto the head from above. */
+    play_area("8-E1-1");
+    gm = first(LIVE_GOOMBA);
+    course_place_player(&s.runtime, &s.game.player, 1150, -60);
+    settle_goomba(gm);
+    gm->seeing = true; /* already noticed Mario: no surprise hop */
+    const float gx = gm->x, gy = gm->y;
+    const unsigned coins = s.progress.coins;
+    course_place_player(&s.runtime, &s.game.player, gx, gy - 40);
+    s.game.player.vy = 200; s.game.player.grounded = false;
+    int t = 0;
+    while (gm->frame_label != GOOMBA_SQUISH && t++ < 40) ticks((GameInput){0}, 1);
+    assert(gm->frame_label == GOOMBA_SQUISH && s.progress.hp == 8 && s.game.player.ejump);
+    float lowest = 0;
+    for (int i = 0; i < 40; ++i) { ticks((GameInput){0}, 1); lowest = fminf(lowest, s.game.player.vy); }
+    /* bounced: yspeed -= 8 (read one port tick after the 32 Hz frame) */
+    assert(lowest < -6.5f * 44 && !s.game.player.ejump);
+    ticks((GameInput){0}, 10);
+    LiveObject *drop = NULL;
+    for (unsigned i = 0; i < s.objects.count; ++i) if (s.objects.live[i].kind == LIVE_COIN && s.objects.live[i].bounce) drop = &s.objects.live[i];
+    assert(drop); /* frame 12: one bouncing coin */
+    for (int i = 0; i < 90 && !drop->collected; ++i) {
+        course_place_player(&s.runtime, &s.game.player, drop->x, drop->y + 9);
+        ticks((GameInput){0}, 1);
+    }
+    assert(s.progress.coins == coins + 1);
+}
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
     const size_t n = fread(blob, 1, sizeof(blob), f); fclose(f);
     assert(course_pack_parse(blob, n, &pack));
     test_coins_heal_and_persist(); test_toad_dialogue_pages(); test_falling_log(); test_birds_and_butterflies_move();
-    puts("4 course object (coins/Toad/log/birds) test groups passed"); return 0;
+    test_goomba_hurts_and_stomps();
+    puts("5 course object (coins/Toad/log/birds/Goomba) test groups passed"); return 0;
 }

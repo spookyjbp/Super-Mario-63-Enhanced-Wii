@@ -247,14 +247,24 @@ void course_session_step(CourseSession *s, GameInput in)
         }
         break;
     case SESSION_PLAY:
+        if (p->stun > 0 || p->ejump) in = (GameInput){.jump_held = in.jump_held}; /* StunTime / EJump: no control */
         game_step(&s->game, &s->world, in, s->view_width);
+        if (s->progress.hp <= 0) {
+            /* Faint: the original plays the faint clip and restarts the course
+               (lives); the port restarts this area's entry with full health. */
+            s->progress.hp = 8; s->progress.hpcoins = 0;
+            enter_area(s, s->runtime.area, course_cx(&s->runtime, s->world.spawn_x + PLAYER_WIDTH / 2),
+                       course_cy(&s->runtime, s->world.spawn_y + PLAYER_HEIGHT));
+            break;
+        }
         try_read_sign(s, in, z_pressed);
         if (s->state == SESSION_PLAY) try_talk(s, z_pressed);
         if (s->state == SESSION_PLAY) check_exits(s, in);
         break;
     }
     if (s->state != SESSION_WARP)
-        course_objects_step(&s->objects, &s->runtime, &s->game.player, &s->progress, pickups_for(s), false);
+        course_objects_step(&s->objects, &s->runtime, &s->game.player, &s->progress, pickups_for(s), false,
+                            s->game.camera.cx, s->game.camera.cy, in.jump_held);
     if (s->camera_override) {
         /* Camcenter = another clip: centre moves 1/10 of the way each frame. */
         Camera *c = &s->game.camera;

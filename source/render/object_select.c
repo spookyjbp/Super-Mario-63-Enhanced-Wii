@@ -13,6 +13,7 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
     switch (l->kind) {
     case LIVE_COIN:
         o[0] = l->collected ? base(l, OBJ_COIN_COLLECT, f < 13 ? f : 13) : base(l, OBJ_COIN_SPIN, f % 16);
+        o[0].alpha = l->alpha;
         return 1;
     case LIVE_BLUE_COIN:
         o[0] = l->collected ? base(l, OBJ_BCOIN_COLLECT, f < 13 ? f : 13) : base(l, OBJ_BCOIN_SPIN, f % 8);
@@ -39,7 +40,16 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         return 1;
     case LIVE_LOG: o[0] = base(l, OBJ_LOG, 0); o[0].dx = l->home_x - l->x; o[0].dy = l->home_y - l->y; return 1;
     case LIVE_ARROW: o[0] = base(l, OBJ_ARROW, f % 30); o[0].alpha = l->alpha; return 1;
-    case LIVE_GOOMBA: o[0] = base(l, OBJ_GOOMBA_WALKL, f % 8); return 1;
+    case LIVE_GOOMBA:
+        switch (l->frame_label) {
+        case GOOMBA_JUMP: o[0] = base(l, OBJ_GOOMBA_JUMP, f % 4); break;
+        case GOOMBA_WALKR: o[0] = base(l, OBJ_GOOMBA_WALKR, f % 8); break;
+        case GOOMBA_WALKL: o[0] = base(l, OBJ_GOOMBA_WALKL, f % 8); break;
+        case GOOMBA_SQUISH: o[0] = base(l, OBJ_GOOMBA_SQUISH, l->count < 12 ? (unsigned)l->count : 12); break;
+        case GOOMBA_TUMBLE: o[0] = base(l, OBJ_GOOMBA_TUMBLE, l->powerhit ? 0 : 1); break;
+        default: o[0] = base(l, OBJ_GOOMBA_IDLE, 0); break;
+        }
+        return 1;
     case LIVE_CHEEP: o[0] = base(l, OBJ_CHEEP_SWIM, f % 19); return 1;
     case LIVE_BOMB: o[0] = base(l, OBJ_BOMB_WALK, f % 30); return 1;
     case LIVE_KOOPA: o[0] = base(l, OBJ_KOOPA_WALK, f % 24); return 1;
