@@ -31,6 +31,14 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
     case LIVE_BUTTERFLY: /* clip._y = sin(wave)*5; _xscale = +/-scale */
         o[0] = base(l, OBJ_BUTTERFLY, f % 18);
         o[0].dy = sinf(l->wave) * 5 * l->scale; o[0].scale = l->scale; o[0].flip_x = l->vx < 0;
+        { /* ButterflyCode frames 1-6: the clip's colour transform (mult / 256, add) */
+            static const float mul[6][3] = {{0.5f, 0.898f, 1}, {0.898f, 1, 0.5f}, {1, 0.699f, 0.699f},
+                                            {1, 0.699f, 1}, {0.5f, 1, 0.5f}, {1, 1, 1}};
+            static const float add[6][3] = {{30, 30, 0}, {30, 30, 0}, {50, 0, 0}, {50, 0, 50}, {0, 20, 0}, {15, 15, 0}};
+            const unsigned k = l->state >= 0 && l->state < 6 ? (unsigned)l->state : 5;
+            o[0].cxform = true;
+            for (unsigned i = 0; i < 3; ++i) { o[0].cx_mul[i] = mul[k][i]; o[0].cx_add[i] = add[k][i]; }
+        }
         return 1;
     case LIVE_GOONIE:
         if (l->carrying) o[0] = base(l, OBJ_GOONIE_RIDE, f % 9);

@@ -65,6 +65,7 @@ void course_objects_init(CourseObjects *o, const CourseArea *a, const CoursePick
                           .home_y = src->y, .alive = true, .alpha = 100, .scale = 1, .facing_left = src->a < 0};
         switch (kind) {
         case LIVE_BUTTERFLY: { /* ButterflyCode frame 1 */
+            l->state = (int)rnd(o, 6);            /* frame = random(6) + 1: colour */
             const unsigned diff = rnd(o, 5);
             l->scale = (float)(rnd(o, 40) + 80) / 100;
             l->p0 = diff / 5.0f + 0.4f;           /* maxxspeed */

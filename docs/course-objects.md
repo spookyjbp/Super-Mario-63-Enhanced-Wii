@@ -13,7 +13,7 @@ BackGFX objects behind Mario and FrontGFX objects in front.
 | Gold / Blue Coin | GoldCoin 963, BlueCoin 3495 | Spin, collect (+1 / +5 coins, hpcoincount +1 / +15), heal 1 HP per 5 (DOMDocument.xml:5151), stay collected per area (`coindata`) |
 | Coded Sign | CodedSign 986 | Drawn; Z prompt ('aa') eases in when readable; reading in course_session |
 | Toad | Toad Main Clip 2517 | Idle animation, Z prompt ('bz'), pages M1..M6 until an undefined `MnTxt`, faces Mario, camera on Toad. Not yet: mood faces, typewriter text, zoom to 150 |
-| Butterfly | ButterflyCode 2324 | Wander and wave as scripted (colour variant frames not yet) |
+| Butterfly | ButterflyCode 2324 | Wander and wave as scripted; one of the six colour frames (the clip colour transforms) |
 | Goonie (bird) | GoonieCode 2305 | Fly / dive / ride states, rideable GooniePL platform with carry and wrap |
 | Falling log | Falling Log Code 3317 | Invisible BPlatforms log (SWF 57): fade-in, 10-frame quake, fall, carry, reset after 24; graphic stays, as in the original |
 | YI Arrow | 3410 | Animates; fades out when the barrier opens |
