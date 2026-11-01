@@ -27,6 +27,7 @@ GameInput input_poll(void)
     state.jump_pressed = (gc_down & PAD_BUTTON_A) != 0;
     state.jump_held = (gc_held & PAD_BUTTON_A) != 0;
     state.spin_pressed = (gc_down & PAD_BUTTON_B) != 0;
+    state.spin_held = (gc_held & PAD_BUTTON_B) != 0;
     state.pound_pressed = (gc_down & PAD_TRIGGER_Z) != 0;
     state.pause_pressed = (gc_down & PAD_BUTTON_START) != 0;
     state.confirm_pressed = state.jump_pressed;
@@ -73,6 +74,7 @@ GameInput input_poll(void)
         state.jump_pressed |= (down & jump) != 0;
         state.jump_held |= (held & jump) != 0;
         state.spin_pressed |= (down & spin) != 0;
+        state.spin_held |= (held & spin) != 0;
         state.pound_pressed |= (down & pound) != 0;
         state.pause_pressed |= (down & pause) != 0;
         state.confirm_pressed |= (down & jump) != 0;

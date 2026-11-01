@@ -1,4 +1,5 @@
 #include "game.h"
+#include "source_movement.h"
 #include <math.h>
 /* Original game is 32 Hz. Its velocity unit at the chosen logical collider scale is 32*1.375=44
    screen px/s. These conversions are adapters, not a full Flash simulation. */
@@ -24,28 +25,8 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
         p->nozzle=(Nozzle)((p->nozzle+1)%NOZZLE_COUNT);
         p->rocket_charge=p->rocket_boost=0;
     }
-    float surface=0;
-    p->submerged=world_water_at(w,p->x+PLAYER_WIDTH/2,p->y+player_height(p)*0.55f,&surface);
-    if(p->submerged) {
-        p->action=ACTION_NONE;p->pounding=false;
-        if(in.spin_pressed && p->spin_cooldown==0) {p->spin_time=0.32f;p->spin_cooldown=0.5f;}
-        p->jump_stage=0;p->jump_buffer=p->coyote=0;
+    if(player_swim_step(p,w,in)) {
         if(player_height(p)<PLAYER_HEIGHT && player_stand_clear(p,w)) resize(p,PLAYER_HEIGHT);
-        p->water=fminf(100,p->water+160*GAME_DT);
-        p->power=fminf(100,p->power+96*GAME_DT);
-        p->vx+=in.horizontal*500*GAME_DT;
-        p->vx=friction(p->vx,0.05f,1.05f);
-        const float swim_limit=in.nozzle_held && p->nozzle==NOZZLE_TURBO && p->power>=100 ? 1400 : 220;
-        p->vx=fmaxf(-swim_limit,fminf(swim_limit,p->vx));
-        const float vertical=(in.crouch_held || in.vertical>0) ? 1 : in.vertical<0 || in.jump_held ? -1 : 0;
-        p->vy+=vertical*422.4f*GAME_DT;
-        p->vy=friction(p->vy,0.05f,1.1f);
-        p->vy=fmaxf(-180,fminf(200,p->vy));
-        if(in.horizontal!=0) p->facing_left=in.horizontal<0;
-        /* Original surface jump is weaker than a land jump. */
-        if(in.jump_pressed && p->y<surface+12) {
-            p->vy=-10*ORIGINAL_VELOCITY/1.5f;p->submerged=false;p->jump_cut=true;
-        }
         return true;
     }
     if(p->action==ACTION_BONK) {
@@ -59,10 +40,19 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
     }
     if(p->action==ACTION_BACKFLIP || p->action==ACTION_ROLL) {
         if(grounded) p->action=ACTION_NONE;
-        else if(p->action_time<0.5f) return false;
+        else if(p->action_time<22.0f/32) {
+            if(p->source_step) {
+                float vx=p->vx/44;
+                if(in.horizontal>0) vx-=fminf((vx-5)/(20.0f/3),0)/1.5f;
+                if(in.horizontal<0) vx-=fmaxf((vx+5)/(20.0f/3),0)/1.5f;
+                p->vx=vx*44;
+            }
+            p->facing_left=p->backflip_facing_left;
+            return true;
+        }
         else p->action=ACTION_NONE;
     }
-    if(in.crouch_held && !p->pounding && p->landing_time==0 && p->action==ACTION_NONE) {
+    if(in.crouch_held && p->spin_time==0 && !p->pounding && p->landing_time==0 && p->action==ACTION_NONE) {
         p->action=ACTION_DIVE;p->action_time=0;p->spin_time=0;p->dashing=false;
         if(!grounded) {
             float target=(p->facing_left ? -1 : 1)*35*ORIGINAL_VELOCITY;
@@ -76,14 +66,18 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
         if(grounded && in.jump_pressed && player_stand_clear(p,w)) {
             resize(p,PLAYER_HEIGHT);
             if(backwards && speed<5*ORIGINAL_VELOCITY) {
-                p->action=ACTION_BACKFLIP;p->action_time=0;
+                p->action=ACTION_BACKFLIP;p->action_time=0;p->backflip_facing_left=p->facing_left;
                 p->vx*=0.75f;
                 const float target=(p->facing_left ? 1 : -1)*30*ORIGINAL_VELOCITY;
                 p->vx+=(target-p->vx)/5;p->vy=-12*ORIGINAL_VELOCITY;
-            } else {
-                p->action=ACTION_ROLL;p->action_time=0;
+            } else if(speed>3*ORIGINAL_VELOCITY && p->ground_slope==0 && p->action_time>2.0f/32) {
+                p->action=ACTION_ROLL;p->action_time=0;p->backflip_facing_left=p->facing_left;
                 const float target=(p->facing_left ? -1 : 1)*15*ORIGINAL_VELOCITY;
                 p->vx+=(target-p->vx)/5;p->vy=-10*ORIGINAL_VELOCITY/1.5f;
+            }
+            if(p->action==ACTION_DIVE) {
+                p->action=ACTION_NONE;p->jump_buffer=p->coyote=0;
+                return true; /* Original slow dive plays its recovery, not a forced roll. */
             }
             p->grounded=false;p->jump_cut=true;p->jump_buffer=p->coyote=0;
             return true;
@@ -103,7 +97,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
 }
 void player_fludd_step(Player *p,GameInput in)
 {
-    if(!in.nozzle_held || p->water<=0 || p->action==ACTION_BONK || p->pounding) {
+    if(!in.nozzle_held || p->water<=0 || p->action==ACTION_BONK || p->pounding || p->spin_time>0) {
         p->rocket_charge=fmaxf(0,p->rocket_charge-GAME_DT);
         if(!in.nozzle_held && p->rocket_boost<=0) p->power=fminf(100,p->power+32*GAME_DT);
     } else if(p->nozzle==NOZZLE_HOVER && p->power>0) {

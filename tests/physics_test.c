@@ -134,18 +134,20 @@ static void test_collisions(void)
 static void test_spin_and_pound(void)
 {
     Player p = standing();
-    player_step(&p, &floor_world, (GameInput){.spin_pressed = true});
-    assert(p.animation == PLAYER_SPIN && !p.air_spin_used);
+    ticks(&p, &floor_world, (GameInput){.spin_held=true},2);
+    assert(p.animation == PLAYER_SPIN);
     Rect attack;
     assert(player_attack_hitbox(&p, &attack) && attack.w > PLAYER_WIDTH);
     ticks(&p, &floor_world, (GameInput){0}, 40);
     assert(p.spin_time == 0 && !player_attack_hitbox(&p, &attack));
     player_step(&p, &floor_world, (GameInput){.jump_pressed = true, .jump_held = true});
-    player_step(&p, &floor_world, (GameInput){.spin_pressed = true, .jump_held = true});
-    assert(p.air_spin_used && p.spin_time > 0);
-    p.spin_cooldown = p.spin_time = 0;
+    p.vy=0;
+    ticks(&p, &floor_world, (GameInput){.spin_held=true, .jump_held = true},2);
+    assert(p.spin_time > 0);
+    p.spin_speed = p.spin_time = 0;
     player_step(&p, &floor_world, (GameInput){.spin_pressed = true});
-    assert(p.spin_time == 0); /* Cannot repeatedly float in air. */
+    ticks(&p, &floor_world, (GameInput){.spin_held=true},2);
+    assert(p.spin_time > 0); /* Original permits another spin after an attack ends. */
     player_step(&p, &floor_world, (GameInput){.pound_pressed = true});
     assert(p.pounding && p.animation == PLAYER_POUND_WINDUP && p.vy == 0);
     assert(!player_attack_hitbox(&p, &attack));
@@ -157,7 +159,7 @@ static void test_spin_and_pound(void)
     player_step(&p, &floor_world, (GameInput){.horizontal = 1, .jump_pressed = true, .jump_held = true});
     assert(p.grounded && p.vx == 0); /* Landing recovery. */
     ticks(&p, &floor_world, (GameInput){0}, 20);
-    assert(p.animation == PLAYER_IDLE && !p.air_spin_used);
+    assert(p.animation == PLAYER_IDLE);
 }
 static void test_camera(void)
 {

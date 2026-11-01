@@ -1,4 +1,5 @@
 #include "game.h"
+#include "source_movement.h"
 #include <math.h>
 #include <string.h>
 
@@ -14,6 +15,7 @@ void player_init(Player *p, float x, float y)
     p->x = p->previous_x = x;
     p->y = p->previous_y = y;
     p->animation = PLAYER_FALL;
+    p->source_phase=28;
     p->height=PLAYER_HEIGHT; p->water=100; p->power=100; p->nozzle=NOZZLE_HOVER;
 }
 
@@ -22,12 +24,14 @@ void player_step(Player *p, const World *world, GameInput input)
     p->previous_x = p->x;
     p->previous_y = p->y;
     p->animation_time += GAME_DT;
+    p->jump_time+=GAME_DT;
+    p->normal_land_time=decay(p->normal_land_time);
+    player_source_begin(p,input);
     const bool was_grounded = p->grounded;
     p->coyote = was_grounded ? 0.1f : decay(p->coyote);
     p->chain_window = decay(p->chain_window);
     p->jump_buffer = input.jump_pressed ? 0.1f : decay(p->jump_buffer);
-    p->spin_time = decay(p->spin_time);
-    p->spin_cooldown = decay(p->spin_cooldown);
+
     p->landing_time = decay(p->landing_time);
     if (was_grounded && p->chain_window == 0) p->jump_stage = 0;
 
@@ -63,18 +67,10 @@ void player_step(Player *p, const World *world, GameInput input)
             if(p->jump_stage==3 && fabsf(p->vx)<=3*44) p->jump_stage=1;
             static const float jumps[] = {0, -430, -510, -610};
             p->vy = jumps[p->jump_stage];
+            p->jump_time=0;
             p->grounded = false;
             p->coyote = p->jump_buffer = p->chain_window = 0;
             p->jump_cut = false;
-        }
-        if (p->action==ACTION_NONE && input.spin_pressed && p->spin_cooldown == 0 &&
-            (p->grounded || !p->air_spin_used)) {
-            p->spin_time = 0.32f;
-            p->spin_cooldown = 0.5f;
-            if (!p->grounded) {
-                p->air_spin_used = true;
-                p->vy = fminf(p->vy, -100);
-            }
         }
         if (input.pound_pressed && !p->grounded) {
             p->pounding = true;
@@ -87,12 +83,13 @@ void player_step(Player *p, const World *world, GameInput input)
         p->vx = approach(p->vx, 0, 2400 * GAME_DT);
     }
 
+    player_spin_prepare(p,input);
     if (p->pounding) {
         if (p->pound_windup > 0) {
             p->pound_windup = decay(p->pound_windup);
             p->vy = 0;
         } else p->vy = fminf(1200, p->vy + 3600 * GAME_DT);
-    } else if (!p->submerged && p->action!=ACTION_BONK) {
+    } else if (!p->submerged && p->action!=ACTION_BONK && p->spin_time==0) {
         if (!input.jump_held && p->vy < 0 && !p->jump_cut) {
             p->vy *= 0.45f;
             p->jump_cut = true;
@@ -102,6 +99,7 @@ void player_step(Player *p, const World *world, GameInput input)
     }
     if(p->grounded) p->power=100;
     if(p->material==TILE_PUDDLE) p->water=fminf(100,p->water+80*GAME_DT);
+    player_spin_update(p,input);
     player_fludd_step(p,input);
     player_collision_step(p,world);
     if(p->wall_normal && (fabsf(p->wall_speed)>11*44 || (p->dashing && fabsf(p->wall_speed)>5*44)) && !p->submerged && p->action!=ACTION_BONK) {
@@ -109,8 +107,9 @@ void player_step(Player *p, const World *world, GameInput input)
         p->vx=p->vy=0;p->rocket_boost=0;p->dashing=false;
     }
     if (p->grounded) {
-        p->air_spin_used = false;
+
         if (!was_grounded) {
+            p->normal_land_time=3.0f/32;
             p->chain_window = p->jump_stage > 0 ? 0.28f : 0;
             if (p->pounding) {
                 p->landing_time = 0.18f;

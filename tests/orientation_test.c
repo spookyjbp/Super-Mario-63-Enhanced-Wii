@@ -110,11 +110,11 @@ static void test_spin_exit_preserves_facing(void)
     for (unsigned left = 0; left < 2; ++left) {
         Player p;
         player_init(&p, 100, 100);
-        p.vy = -200;
+        p.vy = 0;
         const float axis = left ? -1 : 1;
         player_step(&p, &empty, (GameInput){.horizontal = axis, .spin_pressed = true, .jump_held = true});
         assert(p.animation == PLAYER_SPIN);
-        for (int tick = 0; tick < 25; ++tick) {
+        for (int tick = 0; tick < 100; ++tick) {
             const bool facing = p.facing_left;
             (void)player_sprite_select(&p);
             assert(p.facing_left == facing);

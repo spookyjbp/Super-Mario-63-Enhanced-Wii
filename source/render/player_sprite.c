@@ -19,7 +19,7 @@ PlayerSprite player_sprite_select(const Player *p)
             {13, true}, {12, true}, {11, false}, {12, false},
             {13, false}, {14, false}, {15, false}, {14, true}
         };
-        const unsigned tick = (unsigned)(fmaxf(0, 0.32f - p->spin_time) * 25);
+        const unsigned tick = p->spin_speed>0 ? (unsigned)(p->spin_frame/5) : (unsigned)(fmaxf(0, 0.32f - p->spin_time) * 25);
         frame = cycle[tick % 8].frame;
         spin_mirror = cycle[tick % 8].mirror;
         break;

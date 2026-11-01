@@ -24,7 +24,7 @@ typedef struct {
 typedef struct {
     float horizontal, vertical;
     bool crouch_held, nozzle_held, nozzle_next_pressed;
-    bool jump_pressed, jump_held, spin_pressed, pound_pressed;
+    bool jump_pressed, jump_held, spin_pressed, spin_held, pound_pressed;
     bool pause_pressed, confirm_pressed, cancel_pressed;
     int menu_delta;
 } GameInput;
@@ -41,6 +41,10 @@ typedef enum { ACTION_NONE, ACTION_DIVE, ACTION_BACKFLIP, ACTION_ROLL, ACTION_BO
 typedef enum { NOZZLE_HOVER, NOZZLE_ROCKET, NOZZLE_TURBO, NOZZLE_COUNT } Nozzle;
 
 typedef struct {
+    unsigned source_phase, swim_frames, spin_combo_count;
+    bool source_step, swim_stroke, spin_requested, backflip_facing_left;
+    int spin_combo_direction;
+    float spin_speed, spin_frame, spin_combo_window, jump_time, normal_land_time;
     float height, action_time, wall_speed, ground_slope;
     float water, power, rocket_charge, rocket_boost, tap_window;
     int wall_normal, last_tap, bonk_direction;
@@ -49,9 +53,9 @@ typedef struct {
     PlayerAction action;
     Nozzle nozzle;
     float x, y, previous_x, previous_y, vx, vy;
-    bool grounded, facing_left, air_spin_used, jump_cut;
+    bool grounded, facing_left, jump_cut;
     unsigned jump_stage;
-    float coyote, jump_buffer, chain_window, spin_time, spin_cooldown;
+    float coyote, jump_buffer, chain_window, spin_time;
     float pound_windup, landing_time, animation_time;
     bool pounding;
     PlayerAnimation animation;

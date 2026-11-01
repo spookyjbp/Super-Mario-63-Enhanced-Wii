@@ -20,7 +20,7 @@ static void test_low_dive_and_backflip(void)
     assert(p.action==ACTION_BACKFLIP && p.vy<-500 && p.vx<0 && !p.grounded);
     assert(!p.facing_left && player_height(&p)==44);
     p=standing();p.vx=200;
-    player_step(&p,&flat,(GameInput){.crouch_held=true});
+    ticks(&p,&flat,(GameInput){.crouch_held=true},5);
     player_step(&p,&flat,(GameInput){.jump_pressed=true,.jump_held=true,.crouch_held=true});
     assert(p.action==ACTION_ROLL && p.vy<0);
     ticks(&p,&flat,(GameInput){.jump_held=true},120);
@@ -126,11 +126,13 @@ static void test_water_transitions(void)
     Player p;player_init(&p,80,80);p.vx=400;p.pounding=true;
     player_step(&p,&w,(GameInput){0});
     assert(p.submerged && !p.pounding && p.vx<400 && p.animation==PLAYER_SWIM);
-    player_step(&p,&w,(GameInput){.spin_pressed=true});assert(p.animation==PLAYER_SPIN);
+    p.vx=0;
+    ticks(&p,&w,(GameInput){.spin_held=true},2);assert(p.animation==PLAYER_SPIN);
     ticks(&p,&w,(GameInput){0},30);
     assert(p.spin_time==0);
-    ticks(&p,&w,(GameInput){.crouch_held=true},10);assert(p.vy>0);
-    ticks(&p,&w,(GameInput){.jump_held=true},30);assert(p.vy<0);
+    const float before_down=p.vy;
+    ticks(&p,&w,(GameInput){.crouch_held=true},10);assert(p.vy>before_down);
+    ticks(&p,&w,(GameInput){.jump_held=true},3);assert(p.vy<0);
     p.x=10;
     player_step(&p,&w,(GameInput){0});assert(!p.submerged);
 }
