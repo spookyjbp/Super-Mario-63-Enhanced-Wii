@@ -2,27 +2,28 @@
 #ifndef SM63_MARIO_ATLAS_H
 #define SM63_MARIO_ATLAS_H
 #define MARIO_ATLAS_SIZE 256
-typedef struct { unsigned short x, y, width, height; } MarioFrame;
+enum { MARIO_FACE_RIGHT, MARIO_FACE_LEFT, MARIO_FACE_FRONT, MARIO_FACE_BACK_LEFT, MARIO_FACE_BACK };
+typedef struct { unsigned short x, y, width, height; unsigned char native_facing, mirror_for_right; } MarioFrame;
 static const MarioFrame mario_frames[] = {
-    {2, 2, 16, 32},
-    {42, 2, 16, 31},
-    {82, 2, 16, 32},
-    {122, 2, 16, 31},
-    {162, 2, 16, 30},
-    {202, 2, 16, 31},
-    {2, 42, 16, 32},
-    {42, 42, 16, 31},
-    {82, 42, 16, 30},
-    {122, 42, 19, 31},
-    {162, 42, 19, 32},
-    {202, 42, 24, 31},
-    {2, 82, 20, 31},
-    {42, 82, 16, 32},
-    {82, 82, 19, 32},
-    {122, 82, 24, 32},
-    {162, 82, 24, 34},
-    {202, 82, 29, 29},
-    {2, 122, 23, 28},
-    {42, 122, 24, 30},
+    {2, 2, 16, 32, MARIO_FACE_RIGHT, 0},
+    {42, 2, 16, 31, MARIO_FACE_RIGHT, 0},
+    {82, 2, 16, 32, MARIO_FACE_RIGHT, 0},
+    {122, 2, 16, 31, MARIO_FACE_RIGHT, 0},
+    {162, 2, 16, 30, MARIO_FACE_RIGHT, 0},
+    {202, 2, 16, 31, MARIO_FACE_RIGHT, 0},
+    {2, 42, 16, 32, MARIO_FACE_RIGHT, 0},
+    {42, 42, 16, 31, MARIO_FACE_RIGHT, 0},
+    {82, 42, 16, 30, MARIO_FACE_RIGHT, 0},
+    {122, 42, 19, 31, MARIO_FACE_LEFT, 1},
+    {162, 42, 19, 32, MARIO_FACE_LEFT, 1},
+    {202, 42, 24, 31, MARIO_FACE_FRONT, 0},
+    {2, 82, 20, 31, MARIO_FACE_LEFT, 1},
+    {42, 82, 16, 32, MARIO_FACE_LEFT, 1},
+    {82, 82, 19, 32, MARIO_FACE_BACK_LEFT, 1},
+    {122, 82, 24, 32, MARIO_FACE_BACK, 0},
+    {162, 82, 24, 34, MARIO_FACE_RIGHT, 1},
+    {202, 82, 29, 29, MARIO_FACE_RIGHT, 1},
+    {2, 122, 23, 28, MARIO_FACE_RIGHT, 1},
+    {42, 122, 24, 30, MARIO_FACE_RIGHT, 0},
 };
 #endif

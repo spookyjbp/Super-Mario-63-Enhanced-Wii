@@ -1,5 +1,6 @@
 #include "render.h"
 #include "graphics.h"
+#include "player_sprite.h"
 #include "mario_atlas.h"
 #include "mario_rgba8_bin.h"
 #include <math.h>
@@ -19,29 +20,13 @@ void render_init(void)
 
 static void draw_player(const Player *p, float x, float y)
 {
-    unsigned frame = 0;
-    switch (p->animation) {
-    case PLAYER_RUN: frame = 1 + (unsigned)(p->animation_time * 12) % 8; break;
-    case PLAYER_RISE: frame = 9; break;
-    case PLAYER_FALL: frame = 10; break;
-    case PLAYER_SPIN: {
-        /* Original front/side/back turn order, fitted to the existing spin window. */
-        static const unsigned cycle[] = {13, 12, 11, 12, 13, 14, 15, 14};
-        const unsigned tick = (unsigned)(fmaxf(0, 0.32f - p->spin_time) * 25);
-        frame = cycle[tick % 8];
-        break;
-    }
-    case PLAYER_POUND_WINDUP: frame = p->pound_windup > 0.06f ? 16 : 17; break;
-    case PLAYER_POUND: frame = 18; break;
-    case PLAYER_LAND: frame = 19; break;
-    case PLAYER_IDLE: break;
-    }
-    const MarioFrame sprite = mario_frames[frame];
+    const PlayerSprite selected = player_sprite_select(p);
+    const MarioFrame sprite = mario_frames[selected.frame];
     const float scale = 1.5f;
     const float width = sprite.width * scale, height = sprite.height * scale;
     float u0 = (float)sprite.x / MARIO_ATLAS_SIZE;
     float u1 = (float)(sprite.x + sprite.width) / MARIO_ATLAS_SIZE;
-    if (p->facing_left != (frame >= 16 && frame <= 18)) { const float swap = u0; u0 = u1; u1 = swap; }
+    if (selected.flip_x) { const float swap = u0; u0 = u1; u1 = swap; }
     graphics_sprite(&mario_texture, x + (PLAYER_WIDTH - width) / 2,
                     y + PLAYER_HEIGHT - height, width, height,
                     u0, (float)sprite.y / MARIO_ATLAS_SIZE,

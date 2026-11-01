@@ -140,7 +140,8 @@ source/game/camera.c        Camera smoothing and world limits
 source/game/world.c         Static collision playground (not a Story Mode level)
 source/platform/input.c     Wii/Classic/GameCube mappings
 source/platform/graphics.c  GX video, rectangles and small built-in text font
-source/platform/render.c    Original Mario animation, interpolated scene and menu
+source/platform/render.c    GX draw calls, interpolated scene and menu
+source/render/player_sprite.c Original frame selection and per-keyframe UV mirrors
 assets/mario/               Original PNG subset and provenance
 assets/generated/           Embedded GX texture atlas and frame metadata
 tools/build_mario_atlas.py  Reproducible PNG-to-GX conversion (optional Pillow tool)
@@ -158,11 +159,13 @@ Run platform-independent tests with the host C compiler (no devkitPro needed):
 make -C tests test
 ```
 
-Nine test groups exercise acceleration/braking/reversal, variable jump height,
+Nine physics test groups exercise acceleration/braking/reversal, variable jump height,
 consecutive jump windows, input buffering and coyote time, floor/wall/ceiling
 and edge collisions, high-speed pounds, spin limits and attack bounds, landing
 recovery, camera clamps, pause/restart/exit/respawn and one-shot input latching.
 Sprite conversion also verifies source checksums, atlas bounds and RGBA tile layout.
+Five additional sprite orientation test groups cover both facing directions,
+all spin keyframes, airborne reversals and unchanged facing after a spin.
 Tests compile with `-Wall -Wextra -Werror -pedantic`. CI runs these tests before
 building the Wii application; Wii compilation also treats warnings as errors.
 All gameplay calculations tested are the same C sources linked into `boot.dol`.

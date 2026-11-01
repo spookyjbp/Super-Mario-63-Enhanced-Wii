@@ -10,7 +10,7 @@ include $(DEVKITPPC)/wii_rules
 
 TARGET := boot
 BUILD := build
-SOURCES := source source/platform source/game
+SOURCES := source source/platform source/game source/render
 INCLUDES := include assets/generated
 DATA := assets/generated
 APP := super-mario-63-enhanced-wii

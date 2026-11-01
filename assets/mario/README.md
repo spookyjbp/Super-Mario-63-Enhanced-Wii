@@ -37,3 +37,41 @@ comes from the original clips; timings and foot anchors are adapted to the Wii
 physics rather than a full recreation of the Flash animation timeline.
 Terrain, sky and attack effects still use the test playground's placeholder
 shapes. FLUDD, Luigi, enemies and Story Mode scenery have not been imported.
+
+## Facing and spin keyframes
+
+The atlas keeps the original pixels and does not pre-flip them. Native pose
+facing and the default right-facing presentation mirror are explicit in
+`manifest.json` and the generated header:
+
+| Atlas frames | Animation | Native facing | Presentation |
+| --- | --- | --- | --- |
+| 0–8 | Standing / walking | Right | Mirror only for left-facing player |
+| 9–10 | Rising / falling | Left | Mirror for right-facing player |
+| 11 | Spin front | Front | Use the spin keyframe's mirror |
+| 12–13 | Spin side poses | Left | Use the spin keyframe's mirror |
+| 14 | Spin rear three-quarter | Back-left | Use the spin keyframe's mirror |
+| 15 | Spin back | Back | Use the spin keyframe's mirror |
+| 16–18 | Pound windup / descent | Right | Preserve the existing authored pound mirror |
+| 19 | Landing | Right | Mirror only for left-facing player |
+
+`source/render/player_sprite.c` selects the frame and one final UV mirror bit.
+The original `Mario (none) Spin Attack.xml` uses atlas frames
+`13,12,11,12,13,14,15,14` with mirror flags
+`true,true,false,false,false,false,false,true`. These are per-keyframe values:
+the same PNG is mirrored on one half of the turn and unmirrored on the other.
+Front/back poses remain part of the turn rather than being forced into a
+side-facing pose. The player's facing XOR the authored pose mirror is applied
+once by GX; native-facing compensation is not applied a second time to spin.
+Selection is read-only, so changing direction in the air is reflected on the
+next render and a spin cannot change the gameplay facing.
+
+`make -C tests test` includes five orientation regression groups alongside the
+physics tests. These cover both directions, every spin phase, existing ground
+poses, actual airborne input reversals and facing after a spin ends. They test
+selection and mirroring calculations, not Dolphin's displayed result.
+
+Dolphin verification is still required after this correction: jump left/right,
+reverse in the air, spin from both directions and reverse during a spin, then
+check the direction after landing. Also check standing, walking and pounds to
+confirm their existing presentation is retained.
