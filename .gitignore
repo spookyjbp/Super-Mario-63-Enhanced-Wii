@@ -1,0 +1,5 @@
+/build/
+/dist/
+/boot.dol
+/boot.elf
+/boot.elf.map

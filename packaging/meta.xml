@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<app version="1">
+  <name>Super Mario 63: Enhanced Wii Edition</name>
+  <coder>Super Mario 63: Enhanced Wii Edition contributors</coder>
+  <version>0.1.0-dev</version>
+  <short_description>Wii build pipeline test scene</short_description>
+  <long_description>Development scaffold only. Move the red square with the Nunchuk stick, Classic Controller stick or D-pad, or GameCube stick or D-pad. Jump with Wii Remote A, Nunchuk Z, Classic A or GameCube A. Exit with HOME or GameCube START. Story Mode is not implemented.</long_description>
+</app>

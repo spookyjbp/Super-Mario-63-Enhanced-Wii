@@ -1,0 +1,21 @@
+#ifndef SM63_GRAPHICS_H
+#define SM63_GRAPHICS_H
+
+#include <stdbool.h>
+#include <gccore.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+bool graphics_init(void);
+float graphics_width(void);
+void graphics_rect(float x, float y, float width, float height, GXColor color);
+void graphics_present(void);
+void graphics_shutdown(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
