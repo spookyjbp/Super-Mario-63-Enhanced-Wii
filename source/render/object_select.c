@@ -49,6 +49,7 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         case GOOMBA_TUMBLE: o[0] = base(l, OBJ_GOOMBA_TUMBLE, l->powerhit ? 0 : 1); break;
         default: o[0] = base(l, OBJ_GOOMBA_IDLE, 0); break;
         }
+        o[0].flip_x = o[0].flip_y = false; /* GoombaCode resets _xscale/_yscale to scale * 100 */
         return 1;
     case LIVE_CHEEP: /* clip.gotoAndStop(frame); art faces left at _xscale > 0 */
         switch (l->frame_label) {
@@ -62,7 +63,27 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         o[0].flip_x = !l->facing_left;
         if (l->frame_label != CHEEP_SPIN) o[0].rotation = l->facing_left ? l->rotation : -l->rotation;
         return 1;
-    case LIVE_BOMB: o[0] = base(l, OBJ_BOMB_WALK, f % 30); return 1;
+    case LIVE_BOMB: { /* clip 3310: Walkleft, Walkright (mirrored), tumble, explode, explode2 */
+        const unsigned dead = l->deadcount > 0 ? (unsigned)l->deadcount - 1 : 0;
+        switch (l->state) {
+        case BOMB_TUMBLE: o[0] = base(l, OBJ_BOMB_TUMBLE, 0); o[0].pivot_y = -4; o[0].rotation = l->rotation; break;
+        case BOMB_EXPLODE: o[0] = base(l, OBJ_BOMB_EXPLODE, dead < 12 ? dead : 12); o[0].pivot_y = -10; o[0].rotation = l->rotation; break;
+        case BOMB_EXPLODE2: o[0] = base(l, OBJ_BOMB_EXPLODE2, dead < 14 ? dead : 14); break;
+        default: o[0] = base(l, OBJ_BOMB_WALK, f % 30); break;
+        }
+        o[0].flip_y = false;
+        o[0].flip_x = l->state == BOMB_WALKR;
+        if (l->exploding && l->state != BOMB_EXPLODE && l->state != BOMB_EXPLODE2) {
+            /* Fuse colour transform: rb = t^2/75 + blink, ga = ba = 100 - t^2/100 + blink (%). */
+            const float t = (float)l->timer2;
+            const float blink = sinf(t * t * t / 700 * 0.01745329252f) * 25 + 25 + t / 6;
+            const float gb = (100 - t * t / 100 + blink) / 100;
+            o[0].cxform = true;
+            o[0].cx_mul[0] = 1; o[0].cx_mul[1] = o[0].cx_mul[2] = gb < 0 ? 0 : gb > 2 ? 2 : gb;
+            o[0].cx_add[0] = t * t / 75 + blink; o[0].cx_add[1] = o[0].cx_add[2] = 0;
+        }
+        return 1;
+    }
     case LIVE_KOOPA: o[0] = base(l, OBJ_KOOPA_WALK, f % 24); return 1;
     case LIVE_BOX: o[0] = base(l, OBJ_BOX, 0); return 1;
     case LIVE_FLUDD_BOX: o[0] = base(l, OBJ_FLUDD_BOX, 0); return 1;

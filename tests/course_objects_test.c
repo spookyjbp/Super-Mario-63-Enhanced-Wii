@@ -174,6 +174,80 @@ static void test_cheep_cheep(void)
     ticks((GameInput){0}, 60);
     assert(ch->frame_label == CHEEP_GONE && ch->spawned);
 }
+static LiveObject *bomb_at(float hx)
+{
+    for (unsigned i = 0; i < s.objects.count; ++i)
+        if (s.objects.live[i].kind == LIVE_BOMB && s.objects.live[i].home_x == hx) return &s.objects.live[i];
+    return NULL;
+}
+static void test_bob_omb(void)
+{
+    play_area("8-E1-1-2");
+    LiveObject *b = bomb_at(282.5f);
+    assert(b && b->state == BOMB_WALKL && !b->exploding);
+    /* Out of sight it patrols (walks) without lighting its fuse. */
+    course_place_player(&s.runtime, &s.game.player, b->x + 300, b->y - 200);
+    ticks((GameInput){0}, 120);
+    assert(!b->exploding && !b->air && (b->state == BOMB_WALKL || b->state == BOMB_WALKR));
+    /* Seen within its eye (x 0.4 * 2381): the fuse burns 96 frames, it chases,
+       then explodes beside Mario: MarioHit(2, 90, -7, +/-5, 10, ..., true). */
+    s.game.player.blink = 0;
+    course_place_player(&s.runtime, &s.game.player, b->x + 50, b->y);
+    ticks((GameInput){0}, 2);
+    assert(b->exploding && b->seeing);
+    int t = 0;
+    while (b->state != BOMB_EXPLODE && t++ < 400) {
+        course_place_player(&s.runtime, &s.game.player, b->x + 14, b->y); /* stay beside it */
+        s.game.player.vx = s.game.player.vy = 0; s.game.player.blink = 3; /* touch shoves only */
+        ticks((GameInput){0}, 1);
+    }
+    assert(b->state == BOMB_EXPLODE && b->timer2 >= 96 && b->timer2 <= 97);
+    /* EnemyHurtBox (X, Y-15) 30 x 30, time 6 (the other Bob-omb, which saw
+       Mario on the same frame, may explode too). */
+    bool box = false;
+    for (unsigned k = 0; k < s.objects.hurt_count; ++k) {
+        const EnemyHurtBox *h = &s.objects.hurt[k];
+        box |= fabsf(h->x0 - (b->x - 15)) < 0.01f && fabsf(h->y1 - (b->y)) < 0.01f && h->time == 6;
+    }
+    assert(box);
+    s.game.player.blink = 0;
+    course_place_player(&s.runtime, &s.game.player, b->x + 8, b->y);
+    ticks((GameInput){0}, 2);
+    assert(s.progress.hp == 6 && s.game.player.stun > 0 && s.game.player.blink > 80);
+    ticks((GameInput){0}, 20);
+    assert(s.objects.hurt_count == 0); /* removed when count reaches time */
+    LiveObject *drop = NULL;
+    for (unsigned i = 0; i < s.objects.count; ++i) if (s.objects.live[i].kind == LIVE_COIN && s.objects.live[i].bounce) drop = &s.objects.live[i];
+    assert(drop && b->spawned); /* coinappear: one bouncing coin */
+    /* 30 frames later it stays exploded until its home is 600 px off camera. */
+    ticks((GameInput){0}, 80);
+    assert(b->state == BOMB_EXPLODE && b->deadcount >= 30);
+
+    /* A spin knocks it tumbling with a power hit: it explodes on landing, and
+       its blast (EnemyHurtBox 35 x 50) knocks a nearby Goomba. */
+    play_area("8-E1-1-2");
+    b = bomb_at(450.5f);
+    course_place_player(&s.runtime, &s.game.player, b->x + 300, b->y - 200);
+    ticks((GameInput){0}, 60);
+    b->seeing = true; b->exploding = false;
+    for (int i = 0; i < 10 && !b->tumble; ++i) {
+        course_place_player(&s.runtime, &s.game.player, b->x + 20, b->y);
+        ticks((GameInput){.spin_pressed = true, .spin_held = true}, 1);
+    }
+    assert(b->tumble && b->powerhit && b->vx < 0);
+    course_place_player(&s.runtime, &s.game.player, b->x + 300, b->y - 200);
+    for (t = 0; t < 200 && b->state != BOMB_EXPLODE && b->state != BOMB_EXPLODE2; ++t) ticks((GameInput){0}, 1);
+    assert(b->state == BOMB_EXPLODE || b->state == BOMB_EXPLODE2);
+    LiveObject *gm = first(LIVE_GOOMBA);
+    assert(gm);
+    course_place_player(&s.runtime, &s.game.player, b->x + 150, b->y - 150);
+    ticks((GameInput){0}, 60); /* camera over the blast */
+    gm->x = b->x + 12; gm->y = b->y; gm->vx = gm->vy = 0; gm->tumble = false; /* stand it in the blast */
+    s.objects.hurt[0] = (EnemyHurtBox){b->x - 17.5f, b->y - 50, b->x + 17.5f, b->y, 0, 6};
+    s.objects.hurt_count = 1;
+    ticks((GameInput){0}, 2);
+    assert(gm->tumble && gm->vx > 0); /* left point only: xspeed += max(12 - xspeed/1.5, 0) */
+}
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
@@ -182,5 +256,6 @@ int main(void)
     test_coins_heal_and_persist(); test_toad_dialogue_pages(); test_falling_log(); test_birds_and_butterflies_move();
     test_goomba_hurts_and_stomps();
     test_cheep_cheep();
-    puts("6 course object (coins/Toad/log/birds/Goomba/Cheep) test groups passed"); return 0;
+    test_bob_omb();
+    puts("7 course object (coins/Toad/log/birds/Goomba/Cheep/Bob-omb) test groups passed"); return 0;
 }

@@ -199,20 +199,40 @@ void graphics_sprite_alpha(GXTexObj *texture, float x, float y, float width, flo
 void graphics_quad_alpha(GXTexObj *texture, const float xs[4], const float ys[4],
                          float u0, float v0, float u1, float v1, unsigned char alpha)
 {
+    const float mul[4] = {1, 1, 1, alpha / 255.0f}, add[3] = {0, 0, 0};
+    graphics_quad_cxform(texture, xs, ys, u0, v0, u1, v1, mul, add);
+}
+static unsigned char clamp_u8(float v) { return v <= 0 ? 0 : v >= 255 ? 255 : (unsigned char)(v + 0.5f); }
+void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4],
+                          float u0, float v0, float u1, float v1, const float mul[4], const float add[3])
+{
     GX_SetNumTexGens(1);
     GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
     GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
     GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
     GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GX_SetTevOp(GX_TEVSTAGE0, GX_MODULATE);
+    /* Multipliers above 1 (Flash allows them) use the TEV x2 scale. */
+    const bool doubled = mul[0] > 1 || mul[1] > 1 || mul[2] > 1;
+    const float k = doubled ? 127.5f : 255.0f, ka = doubled ? 0.5f : 1.0f;
+    const GXColor m = {clamp_u8(mul[0] * k), clamp_u8(mul[1] * k), clamp_u8(mul[2] * k), clamp_u8(mul[3] * 255)};
+    if (doubled || add[0] > 0 || add[1] > 0 || add[2] > 0) {
+        GX_SetTevColor(GX_TEVREG0, (GXColor){clamp_u8(add[0] * ka), clamp_u8(add[1] * ka), clamp_u8(add[2] * ka), 0});
+        GX_SetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_RASC, GX_CC_C0);
+        GX_SetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, doubled ? GX_CS_SCALE_2 : GX_CS_SCALE_1, GX_TRUE,
+                         GX_TEVPREV);
+        GX_SetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_ZERO);
+        GX_SetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    } else {
+        GX_SetTevOp(GX_TEVSTAGE0, GX_MODULATE);
+    }
     GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
     GX_SetAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
     GX_LoadTexObj(texture, GX_TEXMAP0);
     GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
-    GX_Position3f32(xs[0], ys[0], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u0, v0);
-    GX_Position3f32(xs[1], ys[1], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u1, v0);
-    GX_Position3f32(xs[2], ys[2], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u1, v1);
-    GX_Position3f32(xs[3], ys[3], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u0, v1);
+    GX_Position3f32(xs[0], ys[0], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(u0, v0);
+    GX_Position3f32(xs[1], ys[1], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(u1, v0);
+    GX_Position3f32(xs[2], ys[2], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(u1, v1);
+    GX_Position3f32(xs[3], ys[3], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(u0, v1);
     GX_End();
     GX_SetVtxDesc(GX_VA_TEX0, GX_NONE);
     GX_SetNumTexGens(0);

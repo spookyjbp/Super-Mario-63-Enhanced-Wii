@@ -25,6 +25,10 @@ void graphics_sprite_alpha(GXTexObj *texture, float x, float y, float width, flo
 /* Arbitrary textured quad (corners clockwise from the u0,v0 corner) with alpha. */
 void graphics_quad_alpha(GXTexObj *texture, const float xs[4], const float ys[4],
                          float u0, float v0, float u1, float v1, unsigned char alpha);
+/* Same quad with a Flash colour transform: rgb * mul[0..2] + add (0..255),
+   alpha * mul[3]; multipliers may exceed 1 (up to 2). */
+void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4],
+                          float u0, float v0, float u1, float v1, const float mul[4], const float add[3]);
 void graphics_present(void);
 void graphics_shutdown(void);
 

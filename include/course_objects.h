@@ -10,6 +10,9 @@ extern "C" {
 #define COURSE_MAX_LIVE 192
 enum { CHEEP_SWIM, CHEEP_CHASE, CHEEP_TURN, CHEEP_JUMP, CHEEP_SPIN, CHEEP_GONE };
 enum { GOOMBA_IDLE, GOOMBA_JUMP, GOOMBA_WALKR, GOOMBA_WALKL, GOOMBA_SQUISH, GOOMBA_TUMBLE };
+/* Bob-omb `frame` variable. Its clip (3310) has no "Idle" label, so Idle keeps
+   the frame shown last (LiveObject.state holds the shown label). */
+enum { BOMB_IDLE, BOMB_WALKL, BOMB_WALKR, BOMB_TUMBLE, BOMB_EXPLODE, BOMB_EXPLODE2 };
 typedef enum {
     LIVE_NONE, LIVE_COIN, LIVE_BLUE_COIN, LIVE_SIGN, LIVE_BUTTERFLY, LIVE_GOONIE, LIVE_TOAD, LIVE_LOG,
     LIVE_ARROW, LIVE_GOOMBA, LIVE_CHEEP, LIVE_BOMB, LIVE_KOOPA, LIVE_BOX, LIVE_FLUDD_BOX, LIVE_BOTTLE,
@@ -27,18 +30,28 @@ typedef struct {
     float p0, p1, p2, p3;      /* per-kind parameters */
     bool air, tumble, hurt, seeing, see, jump, powerhit, bounce, spawned;
     float tumblerot, rotation, spinrot;
-    bool lastwater;
+    bool lastwater, exploding;
     int frame_label;          /* enemy clip label (see course_objects.c) */
+    unsigned eye;             /* eye clip 2385 frame 0..19 (19 = seeing) */
+    int deadcount, timer2;    /* Bob-omb deadcount / explodetimer */
 } LiveObject;
+/* _root.Course.Enemyhurt children (EnemyHurtBox, SWF 63): invisible boxes that
+   knock enemies; removed when count reaches time. */
+#define COURSE_MAX_HURT 16
+typedef struct { float x0, y0, x1, y1; int count, time; } EnemyHurtBox;
 typedef struct CourseObjects {
     LiveObject live[COURSE_MAX_LIVE];
     unsigned count;
     unsigned seed;
+    EnemyHurtBox hurt[COURSE_MAX_HURT];
+    unsigned hurt_count;
 } CourseObjects;
 /* Shared player progress (_root.Coins, CharHP, hpcoincount). */
 typedef struct { unsigned coins, coincount, hpcoins; int hp; } CourseProgress;
-/* _root.MarioHit(a, b, c, d, e): lose a HP, blink b frames, knock (d, c), stun e. */
-void course_mario_hit(Player *p, CourseProgress *g, int hp, int blink, float vy, float vx, int stun);
+/* _root.MarioHit(a, b, c, d, e, f, g): lose a HP, blink b frames, stun e. With
+   a > 0 the speed halves and (d, c) replaces it ("hurt1"), or is added when g
+   (add) is true; with a == 0, (d, c) is added and the attack ends (a shove). */
+void course_mario_hit(Player *p, CourseProgress *g, int hp, int blink, float vy, float vx, int stun, bool add);
 /* Persistent per-area pickups (_root["coindata"+course]). */
 #define COURSE_MAX_PICKUPS 192
 typedef struct { const CourseArea *area; uint8_t taken[COURSE_MAX_PICKUPS]; } CoursePickups;

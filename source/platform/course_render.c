@@ -69,11 +69,15 @@ static void draw_object_frame(const ObjectDraw *d, float wx, float wy)
     if (d->flip_y) { y = -y - h; const float s = v0; v0 = v1; v1 = s; }
     const float a = fminf(100, d->alpha) * 2.55f;
     const float ox = wx + d->dx * COURSE_SCALE, oy = wy + d->dy * COURSE_SCALE; /* registration point */
-    const float lx[4] = {x, x + w, x + w, x}, ly[4] = {y, y, y + h, y + h};
+    const float py = d->pivot_y * COURSE_SCALE * d->scale;
+    const float lx[4] = {x, x + w, x + w, x}, ly[4] = {y - py, y - py, y + h - py, y + h - py};
     const float r = d->rotation * 0.01745329252f, cr = cosf(r), sr = sinf(r);
     float xs[4], ys[4];
-    for (unsigned i = 0; i < 4; ++i) { xs[i] = ox + lx[i] * cr - ly[i] * sr; ys[i] = oy + lx[i] * sr + ly[i] * cr; }
-    graphics_quad_alpha(&object_tex[pack], xs, ys, u0, v0, u1, v1, (unsigned char)a);
+    for (unsigned i = 0; i < 4; ++i) { xs[i] = ox + lx[i] * cr - ly[i] * sr; ys[i] = oy + py + lx[i] * sr + ly[i] * cr; }
+    if (d->cxform) {
+        const float mul[4] = {d->cx_mul[0], d->cx_mul[1], d->cx_mul[2], a / 255.0f};
+        graphics_quad_cxform(&object_tex[pack], xs, ys, u0, v0, u1, v1, mul, d->cx_add);
+    } else graphics_quad_alpha(&object_tex[pack], xs, ys, u0, v0, u1, v1, (unsigned char)a);
 }
 static void draw_objects(const CourseSession *s, float ox, float oy, bool front)
 {
