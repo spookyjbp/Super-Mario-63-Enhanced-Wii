@@ -1,0 +1,106 @@
+{
+  "repository": "https://github.com/runouw/Super-Mario-63",
+  "commit": "83e81fb6b80d11c4119e420d25298000a6e13f66",
+  "frames": [
+    {
+      "file": "00.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 3.png",
+      "sha256": "16b52443dc0eacb830a27a1aa73970596697a752e9cadde294688e766a35d106"
+    },
+    {
+      "file": "01.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 2.png",
+      "sha256": "a692bd397dd3365da46bcb5224985ea894f170d45b5181880761a29454759b5f"
+    },
+    {
+      "file": "02.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 3.png",
+      "sha256": "16b52443dc0eacb830a27a1aa73970596697a752e9cadde294688e766a35d106"
+    },
+    {
+      "file": "03.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 4.png",
+      "sha256": "6bc3513b19cf0adebfd328ef7ccb289771885f7f4f1082a0804b22de6292dcec"
+    },
+    {
+      "file": "04.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 5.png",
+      "sha256": "f12d0b38d373cecfb3084dfb7b64cdee951461114023eeb7fa24024fb3f7e1e9"
+    },
+    {
+      "file": "05.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 6.png",
+      "sha256": "6bc3513b19cf0adebfd328ef7ccb289771885f7f4f1082a0804b22de6292dcec"
+    },
+    {
+      "file": "06.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 7.png",
+      "sha256": "16b52443dc0eacb830a27a1aa73970596697a752e9cadde294688e766a35d106"
+    },
+    {
+      "file": "07.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 8.png",
+      "sha256": "a692bd397dd3365da46bcb5224985ea894f170d45b5181880761a29454759b5f"
+    },
+    {
+      "file": "08.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Overworld - Mario 3 - 9.png",
+      "sha256": "ba18b917c445cade2057e489d894017cdbfbe18a7fdff59c8b29813dcb8d872d"
+    },
+    {
+      "file": "09.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario Air (none) - 1.png",
+      "sha256": "500a5a982dad3fa83d2eb2573d35de4d673ea8def2f6cf9975c97427b8142bb1"
+    },
+    {
+      "file": "10.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario Air (none) - 2.png",
+      "sha256": "5d994037e42f71f9f6165d4be585b17d46bafa327a525d64d48f1d65950244bd"
+    },
+    {
+      "file": "11.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (None) - Spin - 1.png",
+      "sha256": "b751cae8e5e58b9f128916f8cac3cf04905b2cdddbc1eea299854360020f88fd"
+    },
+    {
+      "file": "12.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (None) - Spin - 2.png",
+      "sha256": "4ac3d360c986aa418a9f7164c6238a1c836e9c60e37321a3dd456835f1f11d8b"
+    },
+    {
+      "file": "13.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (None) - Spin - 3.png",
+      "sha256": "cce27cd3cfeafb371b4305ee34a8325faef3600580283e039fcd3a15d6d4b7bd"
+    },
+    {
+      "file": "14.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (None) - Spin - 4.png",
+      "sha256": "a54923dcc1ca574cb60df92184be361b25e52246bd24ebda5fea83fe8cb882c9"
+    },
+    {
+      "file": "15.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (None) - Spin - 5.png",
+      "sha256": "2fdd46ef220dcdf65f4e3e80c3b1d4aeb7dc43f5b78e385908c0485f9bb508cd"
+    },
+    {
+      "file": "16.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (none) Hurt Fall Back -1.png",
+      "sha256": "2d6f1d00e59fab0496b26782bc2175e25fd1e0d01b6836ed1cc974051e5737ed"
+    },
+    {
+      "file": "17.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (none) Hurt Fall Back -2.png",
+      "sha256": "5193c95048de960b9df2646ae3d09db25100190cb84710383db0c3d2a2836d5d"
+    },
+    {
+      "file": "18.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (none) Hurt Fall Back -3.png",
+      "sha256": "dd47b3bf3b5da912285899384c08f229e363060926601e0d667928827d2622c0"
+    },
+    {
+      "file": "19.png",
+      "upstream_path": "Super_Mario_63_2010/LIBRARY/Char/BITS Mario/Mario (none) Land - 1.png",
+      "sha256": "5d0a004edeb70062109dfab9ce2ad0efe9b7c17744278d2a92ef45b836529955"
+    }
+  ]
+}

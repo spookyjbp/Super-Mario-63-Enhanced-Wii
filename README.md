@@ -3,10 +3,10 @@
 A native Nintendo Wii homebrew project using C/C++, devkitPPC and libogc.
 
 **v0.3 — Movement and Physics** adds a responsive platforming playground with
-placeholder graphics. This is not yet the Story Mode port. The original game's
-source, assets and measured physics are not available in this repository; the
-movement constants here are independently tuned starting points, not a fidelity
-claim.
+original animated Mario sprites from Runouw's source repository. This is not yet
+the Story Mode port. A small, attributed subset of original player artwork is
+included; levels, story and measured original physics are not ported. Movement
+constants here are independently tuned starting points, not a fidelity claim.
 
 ## Movement playground
 
@@ -24,8 +24,9 @@ claim.
   walls, including thin platforms at pound speed. No slopes, moving platforms
   or one-way surfaces are implemented. Falling into the gap respawns the player.
 - Smoothed, world-bounded camera with render interpolation. The HUD displays the
-  current animation state and jump stage. Running feet, spin sparks and pound
-  landing dust are placeholder animations.
+  current animation state and jump stage. Original Mario frames animate walking,
+  jumping, falling, spinning and pounding; spin sparks and landing dust remain
+  placeholder effects.
 - Pause menu: Resume, Restart (at the spawn) and Exit to Loader. Simulation and
   animation timers freeze while paused.
 
@@ -40,9 +41,8 @@ heap allocations; GX framebuffers/FIFO are allocated only at startup.
 
 The intended game is the original Story Mode, preserving its gameplay, physics,
 levels, story and art style while improving presentation for Wii. Level Designer
-and all level-editing functionality are excluded. Future work must establish
-authorized access to the original source/assets and measure fidelity and
-performance on hardware. No original game code or assets are bundled here.
+and all level-editing functionality are excluded. Future work must port the original level and story data and measure fidelity
+and performance on hardware. A small subset of original Mario PNGs is bundled; see [asset provenance and credits](assets/mario/README.md).
 
 The scaffold supports Wii Remote + Nunchuk, Classic Controller and GameCube
 controller input. It follows the console's preferred video mode and 4:3/16:9
@@ -109,9 +109,9 @@ SD:/apps/super-mario-63-enhanced-wii/meta.xml
 ```
 
 Launch **Super Mario 63: Enhanced Wii Edition** in the Homebrew Channel. An icon
-is optional and is not supplied. Expect a scrolling platform playground with a colored placeholder player, a
-state HUD, platforms, a wall, a low ceiling and a gap. The colored player is not
-final Mario artwork.
+is optional and is not supplied. Expect a scrolling platform playground with original Mario artwork, a
+state HUD, platforms, a wall, a low ceiling and a gap. Mario now uses original
+sprites with transparency and facing direction; terrain is still placeholder art.
 
 Use Wii Remote channel 1 or GameCube port 1:
 
@@ -140,7 +140,10 @@ source/game/camera.c        Camera smoothing and world limits
 source/game/world.c         Static collision playground (not a Story Mode level)
 source/platform/input.c     Wii/Classic/GameCube mappings
 source/platform/graphics.c  GX video, rectangles and small built-in text font
-source/platform/render.c    Interpolated scene, placeholder animation and menu
+source/platform/render.c    Original Mario animation, interpolated scene and menu
+assets/mario/               Original PNG subset and provenance
+assets/generated/           Embedded GX texture atlas and frame metadata
+tools/build_mario_atlas.py  Reproducible PNG-to-GX conversion (optional Pillow tool)
 include/                    Game and platform interfaces
 tests/                      Host-side physics tests, no Wii SDK required
 packaging/meta.xml          Homebrew Channel metadata
@@ -159,6 +162,7 @@ Nine test groups exercise acceleration/braking/reversal, variable jump height,
 consecutive jump windows, input buffering and coyote time, floor/wall/ceiling
 and edge collisions, high-speed pounds, spin limits and attack bounds, landing
 recovery, camera clamps, pause/restart/exit/respawn and one-shot input latching.
+Sprite conversion also verifies source checksums, atlas bounds and RGBA tile layout.
 Tests compile with `-Wall -Wextra -Werror -pedantic`. CI runs these tests before
 building the Wii application; Wii compilation also treats warnings as errors.
 All gameplay calculations tested are the same C sources linked into `boot.dol`.

@@ -11,7 +11,8 @@ include $(DEVKITPPC)/wii_rules
 TARGET := boot
 BUILD := build
 SOURCES := source source/platform source/game
-INCLUDES := include
+INCLUDES := include assets/generated
+DATA := assets/generated
 APP := super-mario-63-enhanced-wii
 
 CFLAGS = -g -O2 -Wall -Wextra -Werror $(MACHDEP) $(INCLUDE) -std=gnu11
@@ -22,12 +23,15 @@ LIBS := -lwiiuse -lbte -logc -lm
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)
 export DEPSDIR := $(CURDIR)/$(BUILD)
-export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
-export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) -I$(LIBOGC_INC)
+export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) $(CURDIR)/$(DATA)
+export INCLUDE := $(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) -I$(LIBOGC_INC) -I$(CURDIR)/$(BUILD)
 export LIBPATHS := -L$(LIBOGC_LIB)
 CFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
 CPPFILES := $(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
-export OFILES := $(CFILES:.c=.o) $(CPPFILES:.cpp=.o)
+BINFILES := $(notdir $(wildcard $(DATA)/*.bin))
+export OFILES_SOURCES := $(CFILES:.c=.o) $(CPPFILES:.cpp=.o)
+export OFILES := $(OFILES_SOURCES) $(addsuffix .o,$(BINFILES))
+export HFILES := $(addsuffix .h,$(subst .,_,$(BINFILES)))
 ifeq ($(strip $(CPPFILES)),)
 export LD := $(CC)
 else
@@ -50,5 +54,8 @@ else
 all: $(OUTPUT).dol
 $(OUTPUT).dol: $(OUTPUT).elf
 $(OUTPUT).elf: $(OFILES)
+$(OFILES_SOURCES): $(HFILES)
+%.bin.o %_bin.h: %.bin
+	@$(bin2o)
 -include $(DEPSDIR)/*.d
 endif

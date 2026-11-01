@@ -1,7 +1,52 @@
 #include "render.h"
 #include "graphics.h"
+#include "mario_atlas.h"
+#include "mario_rgba8_bin.h"
 #include <math.h>
 #include <stdio.h>
+
+static GXTexObj mario_texture;
+
+void render_init(void)
+{
+    DCFlushRange((void *)mario_rgba8_bin, mario_rgba8_bin_size);
+    GX_InitTexObj(&mario_texture, (void *)mario_rgba8_bin, MARIO_ATLAS_SIZE, MARIO_ATLAS_SIZE,
+                  GX_TF_RGBA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    GX_InitTexObjLOD(&mario_texture, GX_NEAR, GX_NEAR, 0, 0, 0,
+                     GX_FALSE, GX_FALSE, GX_ANISO_1);
+    GX_InvalidateTexAll();
+}
+
+static void draw_player(const Player *p, float x, float y)
+{
+    unsigned frame = 0;
+    switch (p->animation) {
+    case PLAYER_RUN: frame = 1 + (unsigned)(p->animation_time * 12) % 8; break;
+    case PLAYER_RISE: frame = 9; break;
+    case PLAYER_FALL: frame = 10; break;
+    case PLAYER_SPIN: {
+        /* Original front/side/back turn order, fitted to the existing spin window. */
+        static const unsigned cycle[] = {13, 12, 11, 12, 13, 14, 15, 14};
+        const unsigned tick = (unsigned)(fmaxf(0, 0.32f - p->spin_time) * 25);
+        frame = cycle[tick % 8];
+        break;
+    }
+    case PLAYER_POUND_WINDUP: frame = p->pound_windup > 0.06f ? 16 : 17; break;
+    case PLAYER_POUND: frame = 18; break;
+    case PLAYER_LAND: frame = 19; break;
+    case PLAYER_IDLE: break;
+    }
+    const MarioFrame sprite = mario_frames[frame];
+    const float scale = 1.5f;
+    const float width = sprite.width * scale, height = sprite.height * scale;
+    float u0 = (float)sprite.x / MARIO_ATLAS_SIZE;
+    float u1 = (float)(sprite.x + sprite.width) / MARIO_ATLAS_SIZE;
+    if (p->facing_left != (frame >= 16 && frame <= 18)) { const float swap = u0; u0 = u1; u1 = swap; }
+    graphics_sprite(&mario_texture, x + (PLAYER_WIDTH - width) / 2,
+                    y + PLAYER_HEIGHT - height, width, height,
+                    u0, (float)sprite.y / MARIO_ATLAS_SIZE,
+                    u1, (float)(sprite.y + sprite.height) / MARIO_ATLAS_SIZE);
+}
 
 static float lerp(float a, float b, float t) { return a + (b - a) * t; }
 
@@ -28,19 +73,7 @@ void render_game(const Game *game, const World *world, float interpolation)
     }
     const float x = lerp(p->previous_x, p->x, interpolation) - camera_x;
     const float y = lerp(p->previous_y, p->y, interpolation) - camera_y;
-    static const GXColor colors[] = {
-        {70, 90, 230, 255}, {225, 65, 65, 255}, {250, 210, 70, 255},
-        {250, 140, 65, 255}, {60, 230, 240, 255}, {160, 95, 230, 255},
-        {130, 65, 200, 255}, {245, 248, 255, 255}
-    };
-    const float squash = p->animation == PLAYER_LAND ? 12 : 0;
-    graphics_rect(x, y + squash, PLAYER_WIDTH, PLAYER_HEIGHT - squash, colors[p->animation]);
-    graphics_rect(x + (p->facing_left ? 4 : 19), y + 8 + squash, 5, 7, white);
-    if (p->animation == PLAYER_RUN) {
-        const float stride = sinf(p->animation_time * 24) * 5;
-        graphics_rect(x + 2, y + PLAYER_HEIGHT - 5 + stride, 10, 7, (GXColor){50, 50, 70, 255});
-        graphics_rect(x + 16, y + PLAYER_HEIGHT - 5 - stride, 10, 7, (GXColor){50, 50, 70, 255});
-    }
+    draw_player(p, x, y);
     if (p->spin_time > 0) {
         for (int i = 0; i < 6; ++i) {
             const float phase = p->animation_time * 24 + i * 1.0472f;

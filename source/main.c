@@ -23,6 +23,7 @@ static void on_remote_power(s32 channel) { (void)channel; power_requested = true
 int main(void)
 {
     if (!graphics_init()) return EXIT_FAILURE;
+    render_init();
     input_init();
     SYS_SetResetCallback(on_reset);
     SYS_SetPowerCallback(on_power);
