@@ -50,7 +50,18 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         default: o[0] = base(l, OBJ_GOOMBA_IDLE, 0); break;
         }
         return 1;
-    case LIVE_CHEEP: o[0] = base(l, OBJ_CHEEP_SWIM, f % 19); return 1;
+    case LIVE_CHEEP: /* clip.gotoAndStop(frame); art faces left at _xscale > 0 */
+        switch (l->frame_label) {
+        case CHEEP_CHASE: o[0] = base(l, OBJ_CHEEP_CHASE, f % 11); break;
+        case CHEEP_TURN: o[0] = base(l, OBJ_CHEEP_TURN, f < 3 ? f : 3); break;
+        case CHEEP_JUMP: o[0] = base(l, OBJ_CHEEP_JUMP, f < 23 ? f : 22); break;
+        case CHEEP_SPIN: o[0] = base(l, OBJ_CHEEP_SPIN, 0); o[0].rotation = l->tumblerot; break;
+        case CHEEP_GONE: o[0] = base(l, OBJ_CHEEP_GONE, f < 7 ? f : 7); break;
+        default: o[0] = base(l, OBJ_CHEEP_SWIM, f % 19); break;
+        }
+        o[0].flip_x = !l->facing_left;
+        if (l->frame_label != CHEEP_SPIN) o[0].rotation = l->facing_left ? l->rotation : -l->rotation;
+        return 1;
     case LIVE_BOMB: o[0] = base(l, OBJ_BOMB_WALK, f % 30); return 1;
     case LIVE_KOOPA: o[0] = base(l, OBJ_KOOPA_WALK, f % 24); return 1;
     case LIVE_BOX: o[0] = base(l, OBJ_BOX, 0); return 1;

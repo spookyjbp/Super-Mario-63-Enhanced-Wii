@@ -8,6 +8,7 @@
 extern "C" {
 #endif
 #define COURSE_MAX_LIVE 192
+enum { CHEEP_SWIM, CHEEP_CHASE, CHEEP_TURN, CHEEP_JUMP, CHEEP_SPIN, CHEEP_GONE };
 enum { GOOMBA_IDLE, GOOMBA_JUMP, GOOMBA_WALKR, GOOMBA_WALKL, GOOMBA_SQUISH, GOOMBA_TUMBLE };
 typedef enum {
     LIVE_NONE, LIVE_COIN, LIVE_BLUE_COIN, LIVE_SIGN, LIVE_BUTTERFLY, LIVE_GOONIE, LIVE_TOAD, LIVE_LOG,
@@ -25,7 +26,8 @@ typedef struct {
     bool alive, collected, facing_left, carrying;
     float p0, p1, p2, p3;      /* per-kind parameters */
     bool air, tumble, hurt, seeing, see, jump, powerhit, bounce, spawned;
-    float tumblerot;
+    float tumblerot, rotation, spinrot;
+    bool lastwater;
     int frame_label;          /* enemy clip label (see course_objects.c) */
 } LiveObject;
 typedef struct CourseObjects {

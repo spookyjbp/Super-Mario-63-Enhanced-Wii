@@ -193,6 +193,12 @@ void graphics_sprite_rotated(GXTexObj *texture, float x, float y, float width, f
 void graphics_sprite_alpha(GXTexObj *texture, float x, float y, float width, float height,
                            float u0, float v0, float u1, float v1, unsigned char alpha)
 {
+    const float xs[4] = {x, x + width, x + width, x}, ys[4] = {y, y, y + height, y + height};
+    graphics_quad_alpha(texture, xs, ys, u0, v0, u1, v1, alpha);
+}
+void graphics_quad_alpha(GXTexObj *texture, const float xs[4], const float ys[4],
+                         float u0, float v0, float u1, float v1, unsigned char alpha)
+{
     GX_SetNumTexGens(1);
     GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
     GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
@@ -203,10 +209,10 @@ void graphics_sprite_alpha(GXTexObj *texture, float x, float y, float width, flo
     GX_SetAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
     GX_LoadTexObj(texture, GX_TEXMAP0);
     GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
-    GX_Position3f32(x, y, 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u0, v0);
-    GX_Position3f32(x + width, y, 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u1, v0);
-    GX_Position3f32(x + width, y + height, 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u1, v1);
-    GX_Position3f32(x, y + height, 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u0, v1);
+    GX_Position3f32(xs[0], ys[0], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u0, v0);
+    GX_Position3f32(xs[1], ys[1], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u1, v0);
+    GX_Position3f32(xs[2], ys[2], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u1, v1);
+    GX_Position3f32(xs[3], ys[3], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u0, v1);
     GX_End();
     GX_SetVtxDesc(GX_VA_TEX0, GX_NONE);
     GX_SetNumTexGens(0);

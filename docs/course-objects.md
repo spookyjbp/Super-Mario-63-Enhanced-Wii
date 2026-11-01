@@ -18,7 +18,8 @@ BackGFX objects behind Mario and FrontGFX objects in front.
 | Falling log | Falling Log Code 3317 | Invisible BPlatforms log (SWF 57): fade-in, 10-frame quake, fall, carry, reset after 24; graphic stays, as in the original |
 | YI Arrow | 3410 | Animates; fades out when the barrier opens |
 | Goomba | GoombaCode 2386 | Full port: walk/turn at ledges and water, sees Mario (eye box) and hops, chases, hurts on touch (`MarioHit(1,90,-5,+/-7,7)`), stomp with the Squish clip hold and bounce (8, 10 with Jump held on contact, 12 when pressed during the hold), dive and spin knock it tumbling, one bouncing coin per Goomba, respawn when 600 px off camera |
-| Cheep Cheep, Bob-omb, Koopa | 2234, 3311, 3403 | **Drawn only** (idle animation); behaviour next |
+| Cheep Cheep | CheepCheepCode 2234 | Full port: idle swim with turns, chase within 80 px (rotating toward Mario), leap out of the water, bite (MarioHit, then 32 frames without chasing), bounce on ground, dive / spin / Turbo hits spin it away, "gone" clip drops one bouncing coin, respawn off camera |
+| Bob-omb, Koopa | 3311, 3403 | **Drawn only** (walk animation); behaviour next |
 | Breakable box, FLUDD box, Water bottle, platforms | 2808, 972, 3995, 3315, 3476, 3063 | **Drawn only**; behaviour next |
 | Shine Sprite | 977 | Not shown on a new save (frames reached only with Star[39]) |
 

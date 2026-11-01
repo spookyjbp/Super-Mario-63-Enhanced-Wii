@@ -25,6 +25,7 @@ static bool param_f(const CourseObject *src, const char *k, float *v)
     *v = sign * (val + frac);
     return true;
 }
+static void cheep_reset(CourseObjects *o, LiveObject *l);
 static LiveKind kind_of(CourseString t)
 {
     static const struct { const char *name; LiveKind kind; } table[] = {
@@ -92,6 +93,16 @@ void course_objects_init(CourseObjects *o, const CourseArea *a, const CoursePick
             else l->dir = rnd(o, 2) == 0 ? 1 : -1;
             l->p0 = param_f(src, "WalkDistance", &v) ? v : 100;
             l->frame_label = GOOMBA_IDLE;
+            break;
+        }
+        case LIVE_CHEEP: { /* CheepCheepCode frame 1 */
+            float v;
+            l->p0 = param_f(src, "idlespeed", &v) ? v : 2;
+            l->p1 = param_f(src, "chasespeed", &v) ? v : 0.5f;
+            l->p2 = param_f(src, "turncount", &v) ? v : 96;
+            CourseString hg;
+            l->p3 = course_object_param(src, "hungry", &hg) && course_string_equals(hg, "false") ? 1 : 0;
+            cheep_reset(o, l);
             break;
         }
         case LIVE_LOG: { /* Falling Log Code (graphics) */
@@ -359,6 +370,116 @@ static void step_goomba(CourseObjects *o, LiveObject *l, CourseRuntime *c, Playe
     l->vx = l->tumble ? drag(l->vx, 0.05f, 1.01f) : drag(l->vx, 0.3f, 1.1f);
     if (!l->tumble && fabsf(l->tumblerot) > 0) { l->tumblerot = drag(l->tumblerot, 5, 1.3f); l->frame_label = GOOMBA_TUMBLE; }
 }
+/* CheepCheepCode HitTest(): the layer at (X, Y), or BPlatforms at the fish
+   centre (the original tests _X/_Y there regardless of the arguments). */
+static bool cheep_hit(const CourseRuntime *c, const LiveObject *l, bool water, float x, float y)
+{
+    float b;
+    const bool layer = water ? course_area_water(c->area, x, y, &b) : course_solid(c, x, y);
+    return layer || course_bsolid(c, l->x, l->y);
+}
+static void cheep_reset(CourseObjects *o, LiveObject *l)
+{
+    l->x = l->home_x; l->y = l->home_y; l->vx = l->vy = 0; l->rotation = 0;
+    l->timer = 0; l->carrying = false; l->facing_left = true; /* Direction 1, _xscale > 0 */
+    l->count = (int)rnd(o, 96) + 1; l->frame_label = CHEEP_SWIM; l->frame = rnd(o, 19);
+}
+/* CheepCheepCode frame 3 onEnterFrame (DefineSprite_2234, decompiled). */
+static void step_cheep(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *p, CourseProgress *g,
+                       CoursePickups *taken)
+{
+    const float idle = l->p0, chase = l->p1, turncount = l->p2, wide = 9, tall = 8;
+    const bool hungry = l->p3 == 0;
+    const bool visible = fabsf(cam_cx - l->x) < 600 && fabsf(cam_cy - l->y) < 600;
+    const bool far = fabsf(cam_cx - l->home_x) > 600 || fabsf(cam_cy - l->home_y) > 600;
+    if (!visible) {
+        if (l->frame_label == CHEEP_GONE && far) cheep_reset(o, l);
+        return;
+    }
+    const float mx = course_cx(c, p->x + PLAYER_WIDTH / 2), my = course_cy(c, p->y + player_height(p));
+    if (l->frame_label != CHEEP_SPIN && l->frame_label != CHEEP_GONE) {
+        const float distance = sqrtf((my - l->y) * (my - l->y) + (mx - l->x) * (mx - l->x));
+        if (l->timer > 0) --l->timer; /* stopchasing */
+        if (cheep_hit(c, l, true, l->x, l->y)) {
+            if (!l->lastwater) l->frame_label = CHEEP_SWIM;
+            l->lastwater = true;
+            if (!l->carrying) { /* chase == false */
+                l->rotation *= 0.7f;
+                if (++l->count > turncount) { l->count = 0; l->frame_label = CHEEP_TURN; l->frame = 0; l->facing_left = !l->facing_left; }
+                l->vx += ((l->facing_left ? -idle : idle) - l->vx) / 7;
+                if (distance < 80 && hungry && l->timer <= 0) l->carrying = true;
+            } else {
+                l->frame_label = CHEEP_CHASE;
+                float rot = atan2f(my - l->y, mx - l->x) * 57.29578f - 180;
+                if (mx - l->x > 0) { if (l->facing_left) { l->rotation += 180; l->facing_left = false; } rot += 180; }
+                else if (!l->facing_left) { l->rotation += 180; l->facing_left = true; }
+                while (rot > 180) rot -= 360;
+                while (rot < -180) rot += 360;
+                while (l->rotation > 180) l->rotation -= 360; /* Flash wraps _rotation */
+                while (l->rotation < -180) l->rotation += 360;
+                l->rotation += -(l->rotation - rot) / 3;
+                const float r = l->rotation / 57.29578f, k = l->facing_left ? -1.0f : 1.0f;
+                l->vx += k * cosf(r) * chase; l->vy += k * sinf(r) * chase;
+                if (distance > 100 || l->timer > 0) { l->carrying = false; l->frame_label = CHEEP_SWIM; }
+            }
+            l->vx *= 0.7f; l->vy *= 0.7f;
+        } else {
+            if (l->carrying && l->lastwater) { l->vx *= 2; l->rotation = 0; l->vy = -11; l->frame_label = CHEEP_JUMP; l->frame = 0; }
+            l->lastwater = false;
+            l->vy += 1;
+        }
+        float mbody[4]; mario_box(p, c, p->action == ACTION_DIVE ? MARIO_DIVE_BODY : MARIO_BODY, mbody);
+        const float body[4] = {l->x - 7.5f, l->y - 7.6f, l->x + 7.5f, l->y + 7.4f};
+        const bool invincible = p->action == ACTION_DIVE && fabsf(p->vx / 44) > 0.3f;
+        const float spin[4] = {mbody[0] - 18, mbody[1] - 4, mbody[2] + 18, mbody[3] + 4};
+        if (overlap(body, mbody) && invincible) {
+            l->vx += p->vx / 44; l->vy += p->vy / 44 - 5;
+            l->frame_label = CHEEP_SPIN; l->p2 = turncount; l->spinrot = fabsf(p->vx / 44); l->count = 0;
+        } else if (p->spin_time > 0 && overlap(body, spin)) { /* charClip 'water' during Spin */
+            l->frame_label = CHEEP_SPIN; l->spinrot = fabsf(p->vx / 44); l->count = 0;
+            l->vy -= 1.5f; l->vx *= 0.7f; l->vx += mx > l->x ? -20 : 20;
+        } else if (overlap(body, mbody) && !invincible) {
+            l->timer = 32;
+            course_mario_hit(p, g, 1, 90, -5, mx > l->x ? 7 : -7, 7);
+        }
+    } else if (l->frame_label == CHEEP_SPIN) {
+        l->vx *= 0.85f; l->vy *= 0.85f;
+        l->tumblerot += l->spinrot * 6;
+        if (++l->count > 16) { l->frame_label = CHEEP_GONE; l->frame = 0; }
+    } else if ((fabsf(cam_cx - l->x) > 600 || fabsf(cam_cy - l->y) > 600) && far) {
+        cheep_reset(o, l);
+    }
+    if (l->frame_label == CHEEP_GONE && l->frame == 4 && !l->spawned) { /* gone clip frame 5: coin */
+        l->spawned = true;
+        if (!(taken && l->index < COURSE_MAX_PICKUPS && taken->taken[l->index])) {
+            if (taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
+            LiveObject *coin = spawn(o, LIVE_COIN, l->src, l->x, l->y - 4);
+            if (coin) coin->bounce = true;
+        }
+    }
+    if (cheep_hit(c, l, false, l->x, l->y + tall)) {
+        for (int n = 0; n < 64 && cheep_hit(c, l, false, l->x, l->y + tall - 1); ++n) l->y -= 1;
+        if (!l->lastwater) {
+            l->vy = -4; l->vx *= -0.5f; l->vx += frand(o) * 4 - 2;
+            if (l->frame_label != CHEEP_GONE && l->frame_label != CHEEP_SPIN) l->frame_label = CHEEP_SWIM;
+            if (l->vx < 0 && !l->facing_left) l->facing_left = true;
+            if (l->vx > 0 && l->facing_left) l->facing_left = false;
+        } else l->vy = -l->vy * 0.7f;
+    }
+    if (cheep_hit(c, l, false, l->x, l->y - tall)) {
+        for (int n = 0; n < 64 && cheep_hit(c, l, false, l->x, l->y - tall); ++n) l->y += 1;
+        l->vy = -l->vy * 0.7f;
+    }
+    if (cheep_hit(c, l, false, l->x + wide, l->y)) {
+        for (int n = 0; n < 64 && cheep_hit(c, l, false, l->x + wide, l->y); ++n) l->x -= 1;
+        l->vx = -l->vx * 0.7f;
+    }
+    if (cheep_hit(c, l, false, l->x - wide, l->y)) {
+        for (int n = 0; n < 64 && cheep_hit(c, l, false, l->x - wide, l->y); ++n) l->x += 1;
+        l->vx = -l->vx * 0.7f;
+    }
+    l->x += l->vx; l->y += l->vy;
+}
 static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *p, CourseProgress *g,
                      CoursePickups *taken, const float body[4], float fx, float fy)
 {
@@ -463,6 +584,7 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
         break;
     }
     case LIVE_GOOMBA: step_goomba(o, l, c, p, g, taken); break;
+    case LIVE_CHEEP: step_cheep(o, l, c, p, g, taken); break;
     case LIVE_ARROW: /* YI Arrow: fades and is removed once Platforms leaves frame 1 */
         if (c->platform_frame != 0) { l->alpha -= 10; if (l->alpha <= 0) l->alive = false; }
         break;

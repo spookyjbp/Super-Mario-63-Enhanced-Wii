@@ -143,6 +143,37 @@ static void test_goomba_hurts_and_stomps(void)
     }
     assert(s.progress.coins == coins + 1);
 }
+static void test_cheep_cheep(void)
+{
+    play_area("8-E1-1");
+    LiveObject *ch = NULL;
+    for (unsigned i = 0; i < s.objects.count; ++i)
+        if (s.objects.live[i].kind == LIVE_CHEEP && s.objects.live[i].home_x == 619.95f) ch = &s.objects.live[i];
+    assert(ch);
+    /* Idle: swims at idlespeed and stays in the water. */
+    course_place_player(&s.runtime, &s.game.player, 1150, -60);
+    ticks((GameInput){0}, 120);
+    float surface;
+    assert(course_area_water(s.runtime.area, ch->x, ch->y, &surface) && !ch->carrying);
+    /* Mario in the water within 80 px: it chases and bites (MarioHit). */
+    course_place_player(&s.runtime, &s.game.player, ch->x + 30, ch->y + 10);
+    int t = 0;
+    while (s.progress.hp == 8 && t++ < 240) {
+        course_place_player(&s.runtime, &s.game.player, ch->x + 30 - t * 0.1f, ch->y + 10);
+        ticks((GameInput){0}, 1);
+    }
+    assert(s.progress.hp == 7 && ch->timer > 0); /* stopchasing = 32 after a bite */
+    /* Spin attack (the clip's 'water' area): it spins away, then is gone and
+       drops one coin. (Diving is not possible in water.) */
+    s.game.player.blink = 0;
+    for (int i = 0; i < 20 && ch->frame_label != CHEEP_SPIN; ++i) {
+        course_place_player(&s.runtime, &s.game.player, ch->x + 20, ch->y + 12);
+        ticks((GameInput){.spin_pressed = true, .spin_held = true}, 1);
+    }
+    assert(ch->frame_label == CHEEP_SPIN);
+    ticks((GameInput){0}, 60);
+    assert(ch->frame_label == CHEEP_GONE && ch->spawned);
+}
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
@@ -150,5 +181,6 @@ int main(void)
     assert(course_pack_parse(blob, n, &pack));
     test_coins_heal_and_persist(); test_toad_dialogue_pages(); test_falling_log(); test_birds_and_butterflies_move();
     test_goomba_hurts_and_stomps();
-    puts("5 course object (coins/Toad/log/birds/Goomba) test groups passed"); return 0;
+    test_cheep_cheep();
+    puts("6 course object (coins/Toad/log/birds/Goomba/Cheep) test groups passed"); return 0;
 }

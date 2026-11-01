@@ -22,6 +22,9 @@ void graphics_set_zoom(float zoom);
 /* Textured quad with alpha 0..255 multiplied in; u/v may be swapped to flip. */
 void graphics_sprite_alpha(GXTexObj *texture, float x, float y, float width, float height,
                            float u0, float v0, float u1, float v1, unsigned char alpha);
+/* Arbitrary textured quad (corners clockwise from the u0,v0 corner) with alpha. */
+void graphics_quad_alpha(GXTexObj *texture, const float xs[4], const float ys[4],
+                         float u0, float v0, float u1, float v1, unsigned char alpha);
 void graphics_present(void);
 void graphics_shutdown(void);
 
