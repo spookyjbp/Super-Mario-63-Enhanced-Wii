@@ -11,8 +11,12 @@
 #include "object_art_ids.h"
 #include "object_select.h"
 #include "objects_8e1_0_bin.h"
+#if OBJECT_ART_PACKS > 1
 #include "objects_8e1_1_bin.h"
+#endif
+#if OBJECT_ART_PACKS > 2
 #include "objects_8e1_2_bin.h"
+#endif
 #include <gccore.h>
 #include <math.h>
 #include <stdio.h>
@@ -34,8 +38,25 @@ static bool objects_ready;
 /* Decode the three compressed object packs (art pack v3) into MEM2 once. */
 static bool load_objects(unsigned char *dst, size_t cap)
 {
-    const unsigned char *blobs[OBJECT_ART_PACKS] = {objects_8e1_0_bin, objects_8e1_1_bin, objects_8e1_2_bin};
-    const unsigned sizes[OBJECT_ART_PACKS] = {objects_8e1_0_bin_size, objects_8e1_1_bin_size, objects_8e1_2_bin_size};
+    const unsigned char *blobs[OBJECT_ART_PACKS] = {objects_8e1_0_bin,
+#if OBJECT_ART_PACKS > 1
+        objects_8e1_1_bin,
+#endif
+#if OBJECT_ART_PACKS > 2
+        objects_8e1_2_bin,
+#endif
+    };
+    const unsigned sizes[OBJECT_ART_PACKS] = {objects_8e1_0_bin_size,
+#if OBJECT_ART_PACKS > 1
+        objects_8e1_1_bin_size,
+#endif
+#if OBJECT_ART_PACKS > 2
+        objects_8e1_2_bin_size,
+#endif
+    };
+#if OBJECT_ART_PACKS > 3
+#error "add the extra object art packs here"
+#endif
     size_t used = 0;
     for (unsigned i = 0; i < OBJECT_ART_PACKS; ++i) {
         ArtPack *p = &object_packs[i];

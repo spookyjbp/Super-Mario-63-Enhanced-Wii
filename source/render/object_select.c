@@ -84,13 +84,52 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         }
         return 1;
     }
-    case LIVE_KOOPA: o[0] = base(l, OBJ_KOOPA_WALK, f % 24); return 1;
-    case LIVE_BOX: o[0] = base(l, OBJ_BOX, 0); return 1;
-    case LIVE_FLUDD_BOX: o[0] = base(l, OBJ_FLUDD_BOX, 0); return 1;
-    case LIVE_BOTTLE: o[0] = base(l, OBJ_BOTTLE, f % 3); return 1;
-    case LIVE_GREEN_PLAT: o[0] = base(l, OBJ_GREEN_PLAT, 0); return 1;
-    case LIVE_TIP_LOG: o[0] = base(l, OBJ_TIP_LOG, 0); return 1;
-    case LIVE_ROT_BLOCK: o[0] = base(l, OBJ_ROT_BLOCK, 0); return 1;
+    case LIVE_KOOPA: /* clip 3402 by label; KoopaCode sets _xscale = -scale while moving right */
+        switch (l->frame_label) {
+        case KOOPA_TURN: o[0] = base(l, OBJ_KOOPA_TURN, l->timer < 14 ? (unsigned)l->timer : 14);
+            o[0].dx = -0.8571428571f * (float)l->timer * (l->dir > 0 ? -1.0f : 1.0f); break; /* 3377 _X -= 6/7 */
+        case KOOPA_FLYING: o[0] = base(l, OBJ_KOOPA_FLY, f % 18); break;
+        case KOOPA_SHELL: { const unsigned k = (unsigned)lroundf(l->p2); o[0] = base(l, OBJ_KOOPA_SHELL, k > 0 ? k - 1 : 0); break; }
+        default: o[0] = base(l, OBJ_KOOPA_WALK, f % 24); break;
+        }
+        o[0].flip_x = l->dir > 0; o[0].flip_y = false;
+        return 1;
+    case LIVE_BOX: /* frame 3 intact, 4-25 breaking (the 'stuff' icon is "none") */
+        o[0] = base(l, OBJ_BOX, l->state == 0 ? 2u : l->state == 1 ? (unsigned)(3 + l->timer < 24 ? 3 + l->timer : 24) : 24u);
+        return 1;
+    case LIVE_FLUDD_BOX:
+        o[0] = base(l, OBJ_FLUDD_BOX, l->state == 0 ? 0u : l->state == 1 ? (unsigned)(l->timer < 11 ? l->timer : 11) : 11u);
+        return 1;
+    case LIVE_NOZZLE: o[0] = base(l, OBJ_HNOZZLE, 0); o[0].flip_x = o[0].flip_y = false; o[0].alpha = l->alpha; return 1;
+    case LIVE_BOTTLE: {
+        const unsigned k = l->state == 0 ? (unsigned)l->timer : l->state == 1 ? 2u : l->state == 2 ? (unsigned)l->timer : 17u;
+        o[0] = base(l, OBJ_BOTTLE, k < 17 ? k : 17); o[0].alpha = l->alpha;
+        return 1;
+    }
+    case LIVE_GREEN_PLAT: { /* Path dots every dotdistance degrees, then pl (frame = scale) */
+        unsigned n = 0;
+        const int step = l->timer > 0 ? l->timer : 20;
+        if (step < 360)
+            for (int i = 0; i < 360 && n < OBJECT_DRAW_MAX - 1; i += step) {
+                const float r = (float)i * 0.01745329252f;
+                o[n] = base(l, OBJ_PATH_DOT, 0); o[n].flip_x = o[n].flip_y = false;
+                o[n].dx = -sinf(r) * l->p1; o[n].dy = cosf(r) * l->p1; ++n;
+            }
+        const unsigned k = l->p3 >= 3 ? 2u : l->p3 >= 2 ? 1u : 0u;
+        o[n] = base(l, OBJ_GREEN_PL, k); o[n].flip_x = o[n].flip_y = false;
+        o[n].dx = l->q0; o[n].dy = l->wave; ++n;
+        return n;
+    }
+    case LIVE_TIP_LOG: { /* gotoAndStop(round(scale)); the log turns with LogPL */
+        const int k = (int)lroundf(l->p0);
+        o[0] = base(l, OBJ_TIP_LOG, k >= 1 && k <= 4 ? (unsigned)k - 1 : 0); o[0].rotation = l->rotation;
+        return 1;
+    }
+    case LIVE_ROT_BLOCK: {
+        o[0] = base(l, OBJ_ROT_BLOCK, l->p3 >= 2 ? 1u : 0u); o[0].flip_x = o[0].flip_y = false;
+        o[0].scale = l->p2 / 100; o[0].rotation = l->rotation;
+        return 1;
+    }
     default: return 0;
     }
 }

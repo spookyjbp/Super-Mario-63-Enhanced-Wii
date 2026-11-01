@@ -122,7 +122,8 @@ def render(jar, swf_path, work, ids):
 
 
 def sprite_dir(root, ident):
-    hits = sorted(root.glob(f'DefineSprite_{ident}*'))
+    hits = sorted(h for h in root.glob(f'DefineSprite_{ident}*')
+                  if h.name == f'DefineSprite_{ident}' or h.name.startswith(f'DefineSprite_{ident}_'))
     if len(hits) != 1:
         raise ValueError(f'Expected one export directory for sprite {ident}')
     return hits[0]

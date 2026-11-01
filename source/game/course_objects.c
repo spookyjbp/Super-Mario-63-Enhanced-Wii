@@ -36,6 +36,7 @@ static LiveKind kind_of(CourseString t)
         {"Breakable Orange Box", LIVE_BOX}, {"Squirt Nozzle Box Clip", LIVE_FLUDD_BOX},
         {"Water Bottle Clip", LIVE_BOTTLE}, {"Green Circle Platform", LIVE_GREEN_PLAT},
         {"Tipping Log", LIVE_TIP_LOG}, {"Rotating Block Plat", LIVE_ROT_BLOCK},
+        {"Camera Control Box", LIVE_CAMBOX},
     };
     for (unsigned i = 0; i < sizeof(table) / sizeof(table[0]); ++i)
         if (course_string_equals(t, table[i].name)) return table[i].kind;
@@ -105,6 +106,76 @@ void course_objects_init(CourseObjects *o, const CourseArea *a, const CoursePick
             l->frame_label = BOMB_IDLE; l->state = BOMB_WALKL; /* clip 3310 starts on Walkleft */
             break;
         }
+        case LIVE_KOOPA: { /* KoopaCode frame 1 */
+            float v;
+            CourseString st, md, uw;
+            l->timer2 = KOOPA_WALK_STATE;                       /* savestate */
+            if (course_object_param(src, "State", &st)) {
+                if (course_string_equals(st, "Flying")) l->timer2 = KOOPA_FLYING_STATE;
+                else if (course_string_equals(st, "Shell")) l->timer2 = KOOPA_SHELL_STATE;
+            }
+            l->state = l->timer2;
+            l->p1 = param_f(src, "walkspeed", &v) ? v : 3;
+            if (course_object_param(src, "movedirection", &md)) { l->dir = course_string_equals(md, "right") ? 1 : -1; l->count = 0; }
+            else { l->count = (int)rnd(o, 2); l->dir = l->count == 0 ? 1 : -1; }
+            l->p0 = param_f(src, "WalkDistance", &v) ? v : 100;
+            l->p3 = course_object_param(src, "underwater", &uw) && course_string_equals(uw, "true") ? 1 : 0;
+            l->frame_label = l->state == KOOPA_FLYING_STATE ? KOOPA_FLYING : l->state == KOOPA_SHELL_STATE ? KOOPA_SHELL : KOOPA_WALK;
+            l->p2 = 1; /* shell clip 3401 frame */
+            break;
+        }
+        case LIVE_BOX: { /* Breakable Orange Box frame 1 */
+            CourseString st;
+            static const struct { const char *name; int total, per; } stuff[] = {
+                {"1coin", 1, 1}, {"3coins", 3, 1}, {"5coins", 5, 2}, {"10coins", 10, 3},
+                {"20coins", 20, 5}, {"30coins", 30, 6}, {"100coins", 100, 10}};
+            l->p0 = 3; l->p1 = 1;                           /* stuffinside = "3coins" */
+            if (course_object_param(src, "stuffinside", &st)) {
+                l->p0 = 0; l->p1 = 0;                       /* other contents: not in the tutorial */
+                for (unsigned k = 0; k < sizeof(stuff) / sizeof(stuff[0]); ++k)
+                    if (course_string_equals(st, stuff[k].name)) { l->p0 = (float)stuff[k].total; l->p1 = (float)stuff[k].per; }
+            }
+            CourseString ra;
+            l->p2 = course_object_param(src, "reappear", &ra) && course_string_equals(ra, "false") ? 0 : 1;
+            l->state = 0;
+            break;
+        }
+        case LIVE_GREEN_PLAT: { /* Green Circle Platform frame 2 */
+            float v;
+            l->p3 = param_f(src, "scale", &v) ? v : 2;
+            l->p0 = param_f(src, "angle", &v) ? v : 0;
+            l->p1 = param_f(src, "distance", &v) ? v : 50;
+            l->p2 = param_f(src, "speed", &v) ? v : 5;
+            l->timer = param_f(src, "dotdistance", &v) ? (int)v : 20;
+            const float r = l->p0 * 0.01745329252f;
+            l->q0 = -sinf(r) * l->p1; l->q1 = cosf(r) * l->p1; /* pl._x, pl._y */
+            l->rotation = l->q0; l->spinrot = l->q1;            /* oldx, oldy */
+            l->q2 = l->x; l->q3 = l->y;                         /* GreenPL starts at the centre */
+            l->q3 = l->y;
+            l->wave = l->q1;                                    /* pl._y as drawn */
+            break;
+        }
+        case LIVE_TIP_LOG: { float v; l->p0 = param_f(src, "scale", &v) ? v : 1; break; }
+        case LIVE_ROT_BLOCK: { /* Rotating Block Plat frame 1 */
+            float v;
+            CourseString rd;
+            l->p0 = param_f(src, "rotwait", &v) ? v : 72;
+            l->p1 = param_f(src, "rotspeed", &v) ? v : 3;
+            l->p2 = param_f(src, "scale", &v) ? v : 80;
+            l->p3 = param_f(src, "blocktype", &v) ? v : 1;
+            l->dir = course_object_param(src, "rotdirection", &rd) && course_string_equals(rd, "Right") ? 1 : -1;
+            break;
+        }
+        case LIVE_CAMBOX: { /* Camera Control Box */
+            float v;
+            CourseString t;
+            l->dir = course_object_param(src, "t", &t) && course_string_equals(t, "X") ? 1 : 0;
+            l->p0 = param_f(src, "amount", &v) ? v : 100;
+            if (l->dir == 1) l->p0 = -l->p0;
+            l->p1 = param_f(src, "speed", &v) && v >= 1 ? v : 15;
+            o->camboxes = true; o->cam_x_var = o->cam_y_var = 0;
+            break;
+        }
         case LIVE_CHEEP: { /* CheepCheepCode frame 1 */
             float v;
             l->p0 = param_f(src, "idlespeed", &v) ? v : 2;
@@ -167,8 +238,9 @@ static bool inside(float x, float y, const float b[4]) { return x >= b[0] && x <
 /* Mario's charClip boxes for this source frame, read by the enemy scripts. */
 static struct {
     float body[4], feet[4], spin[4], spray[4];
-    bool spin_on, spray_on, dive, facing_left;
-    float mx, mxs;
+    bool spin_on, spray_on, dive, facing_left, pound;
+    float mx, my, mxs;
+    float last_vx, last_vy;  /* Mario's speed (px/frame) on the previous source frame */
 } M;
 /* Spin Attack clip 1114 'water' (Blank 896 at 1.31 x 0.637, (1, 5)). */
 static const float MARIO_SPIN_WATER[4] = {-35.65f, -34.58f, 38.35f, 1.41f};
@@ -192,7 +264,9 @@ static void mario_attacks(const Player *p, const CourseRuntime *c)
     M.dive = p->action == ACTION_DIVE;
     M.facing_left = p->facing_left;
     M.mx = course_cx(c, p->x + PLAYER_WIDTH / 2);
+    M.my = course_cy(c, p->y + player_height(p));
     M.mxs = p->vx / 44;
+    M.pound = p->pounding || p->landing_time > 0; /* attackFrame "Ground" */
 }
 static bool enemy_hurt_at(const CourseObjects *o, float x, float y)
 {
@@ -281,6 +355,22 @@ static void log_box(const LiveObject *l, float b[4]) /* FallinglogCode (SWF 57) 
 {
     b[0] = l->x - 8.5f; b[1] = l->y - 6.5f; b[2] = l->x + 8.5f; b[3] = l->y + 10.5f;
 }
+/* Point in a scaled, rotated rectangle placed at (ox, oy) (Flash matrix order). */
+static bool in_rot_rect(float px, float py, float ox, float oy, float degrees, float sx, float sy, const float r[4])
+{
+    const float a = degrees * 0.01745329252f, c = cosf(a), sn = sinf(a), dx = px - ox, dy = py - oy;
+    const float lx = (dx * c + dy * sn) / sx, ly = (-dx * sn + dy * c) / sy;
+    return lx >= r[0] && lx <= r[2] && ly >= r[1] && ly <= r[3];
+}
+/* GreenPLcode (2103): shape 52 at 1.4 x, (2.8, -9), _xscale 100/150/200 by scale. */
+static void green_pl_box(const LiveObject *l, float b[4])
+{
+    const float k = l->p3 >= 3 ? 2.0f : l->p3 >= 2 ? 1.5f : 1.0f;
+    b[0] = l->q2 - 17.5f * k; b[1] = l->q3 - 6; b[2] = l->q2 + 17.5f * k; b[3] = l->q3 + 6;
+}
+static const float LOG_PL[4] = {-41.0f, -13.5f, 41.0f, -6.5f};       /* LogPL (55), shape 54 */
+static const float ORANGE_BLOCK_PL[4] = {-16.0f, -31.0f, 16.0f, -5.0f}; /* OrangeBlockPL (2807) */
+static const float ROT_BLOCK_PL[4] = {-50.0f, -50.0f, 50.0f, 50.0f};   /* Rotating Block Plat Code (7527) */
 bool course_objects_platform(const CourseObjects *o, float x, float y)
 {
     for (unsigned i = 0; i < o->count; ++i) {
@@ -289,8 +379,27 @@ bool course_objects_platform(const CourseObjects *o, float x, float y)
         if (!l->alive) continue;
         if (l->kind == LIVE_GOONIE) goonie_box(l, b);
         else if (l->kind == LIVE_LOG) log_box(l, b);
-        else continue;
+        else if (l->kind == LIVE_GREEN_PLAT) green_pl_box(l, b);
+        else if (l->kind == LIVE_TIP_LOG) {
+            if (in_rot_rect(x, y, l->x, l->y, l->rotation, l->p0, 1, LOG_PL)) return true;
+            continue;
+        } else continue;
         if (inside(x, y, b)) return true;
+    }
+    return false;
+}
+bool course_objects_solid(const CourseObjects *o, float x, float y)
+{
+    for (unsigned i = 0; i < o->count; ++i) {
+        const LiveObject *l = &o->live[i];
+        if (!l->alive) continue;
+        if (l->kind == LIVE_BOX && l->state == 0) {
+            if (x >= l->x + ORANGE_BLOCK_PL[0] && x <= l->x + ORANGE_BLOCK_PL[2] &&
+                y >= l->y + ORANGE_BLOCK_PL[1] && y <= l->y + ORANGE_BLOCK_PL[3]) return true;
+        } else if (l->kind == LIVE_ROT_BLOCK) {
+            const float k = l->p2 / 100;
+            if (in_rot_rect(x, y, l->x, l->y, l->rotation, k, k, ROT_BLOCK_PL)) return true;
+        }
     }
     return false;
 }
@@ -326,6 +435,14 @@ static LiveObject *spawn(CourseObjects *o, LiveKind kind, const CourseObject *sr
     *l = (LiveObject){.kind = kind, .src = src, .index = COURSE_MAX_PICKUPS, .x = x, .y = y, .home_x = x, .home_y = y,
                       .alive = true, .alpha = 100, .scale = 1};
     return l;
+}
+/* attachMovie("GoldCoin", {bounce: true}): GoldCoin frame 1 defaults yspeed
+   to -7 and xspeed to Math.random() * 4 - 2 when not given. */
+static LiveObject *spawn_coin(CourseObjects *o, const CourseObject *src, float x, float y)
+{
+    LiveObject *coin = spawn(o, LIVE_COIN, src, x, y);
+    if (coin) { coin->bounce = true; coin->vy = -7; coin->vx = frand(o) * 4 - 2; }
+    return coin;
 }
 /* GoldCoin with bounce = true (DoAction_2): falls, bounces, collectable after
    12 frames, flickers after 288 and vanishes at 384. */
@@ -409,8 +526,7 @@ static void step_goomba(CourseObjects *o, LiveObject *l, CourseRuntime *c, Playe
             l->spawned = true;
             if (!(taken && l->index < COURSE_MAX_PICKUPS && taken->taken[l->index])) {
                 if (taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
-                LiveObject *coin = spawn(o, LIVE_COIN, l->src, l->x, l->y - 12);
-                if (coin) coin->bounce = true;
+                spawn_coin(o, l->src, l->x, l->y - 12);
             }
         }
         return;
@@ -549,8 +665,7 @@ static void step_bomb(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player 
             l->spawned = true;
             if (!(taken && l->index < COURSE_MAX_PICKUPS && taken->taken[l->index])) {
                 if (taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
-                LiveObject *coin = spawn(o, LIVE_COIN, l->src, l->x, l->y - 12);
-                if (coin) coin->bounce = true;
+                spawn_coin(o, l->src, l->x, l->y - 12);
             }
         }
         if (!bomb_boom(l->frame_label)) {
@@ -647,6 +762,348 @@ static void step_bomb(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player 
     const bool here_far = fabsf(cam_cx - l->x) > 600 || fabsf(cam_cy - l->y) > 600;
     const bool home_far = fabsf(cam_cx - l->home_x) > 600 || fabsf(cam_cy - l->home_y) > 600;
     if ((l->deadcount >= 30 || here_far) && home_far) bomb_reset(l);
+}
+/* KoopaCode Moveright/Moveleft: three columns 15/25/35 px ahead, 30 px deep;
+   each column's first hit decides (water or lava means no ground). */
+static void koopa_move(const CourseRuntime *c, LiveObject *l, int dir)
+{
+    bool offground = true;
+    for (float xs2 = 15; xs2 < 40; xs2 += 10) {
+        const float xs = dir * xs2 + l->vx * 7;
+        float adding = 3, b;
+        for (float ys = -5; ys < 30;) {
+            adding = fminf(adding, 5);
+            if (solid_any(c, l->x + xs, l->y + ys)) { offground = false; break; }
+            if (l->p3 == 0 && course_area_water(c->area, l->x + xs, l->y + ys, &b)) { offground = true; break; }
+            adding += 0.5f; ys += adding;
+        }
+    }
+    if (!offground) { if (l->frame_label != KOOPA_TURN) l->vx += (dir * l->p1 - l->vx) / 5; }
+    else { l->count = 0; if (!l->air && l->frame_label != KOOPA_SHELL) l->frame_label = KOOPA_TURN; }
+}
+static void koopa_reset(LiveObject *l) /* restartvars */
+{
+    l->x = l->home_x; l->y = l->home_y; l->state = l->timer2;
+    l->vx = l->vy = 0; l->air = false;
+    l->frame_label = l->state == KOOPA_FLYING_STATE ? KOOPA_FLYING : l->state == KOOPA_SHELL_STATE ? KOOPA_SHELL : KOOPA_WALK;
+}
+/* Koopa boxes (Blank 896): body 0.265 at (1, 6.4), head 0.265 x 0.142 at
+   (-1, -17); the clip is mirrored while moving right (_xscale = -scale). */
+static void koopa_box(const LiveObject *l, bool head, float b[4])
+{
+    const float x0 = head ? -8.49f : -6.49f, x1 = head ? 6.49f : 8.49f;
+    const bool m = l->dir > 0;
+    b[0] = l->x + (m ? -x1 : x0); b[2] = l->x + (m ? -x0 : x1);
+    b[1] = l->y + (head ? -25.02f : -8.57f); b[3] = l->y + (head ? -17.0f : 6.41f);
+}
+/* Mario Main 'head' (Blank 896 at 0.354 x 0.212, (1.4, -24.1)). */
+static const float MARIO_HEAD[4] = {-8.6f, -39.1f, 11.4f, -27.1f};
+/* KoopaCode frame 3 onEnterFrame (DefineSprite_3403, decompiled). */
+static void step_koopa(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *p, CourseProgress *g)
+{
+    const float scale = 1, wide = 7 * scale, tall = 25 * scale;
+    const bool on_screen = fabsf(cam_cx - l->x) < 600 && fabsf(cam_cy - l->y) < 600;
+    if (on_screen) {
+        if (l->state == KOOPA_WALK_STATE && solid_any(c, l->x, l->y + 3)) {
+            koopa_move(c, l, l->dir);
+            if (l->frame_label == KOOPA_TURN) l->vx = l->dir > 0 ? -0.8571428571f : 0.8571428571f;
+            else ++l->count;
+            if (l->count > (int)l->p0) { l->frame_label = KOOPA_TURN; l->count = 0; }
+            l->vx *= 0.95f;
+        }
+        if (l->state == KOOPA_SHELL_STATE) l->vx *= 0.99f;
+        float body[4], head[4], mhead[4];
+        koopa_box(l, false, body); koopa_box(l, true, head);
+        mario_box(p, c, MARIO_HEAD, mhead);
+        const bool mariowater = (M.spin_on && overlap(body, M.spin)) ||
+                                (M.spray_on && (overlap(body, M.spray) || overlap(head, M.spray)));
+        const bool inv = M.dive && fabsf(M.mxs) > 0.3f;
+        const bool mair = !p->grounded;
+        float mys = p->vy / 44;
+        if (l->state == KOOPA_FLYING_STATE && overlap(body, M.body) && inv) {
+            l->vx += M.mxs / 1.5f; l->vy += mys / 1.5f; l->state = KOOPA_SHELL_STATE;
+        }
+        if (l->state == KOOPA_WALK_STATE && overlap(body, M.body) && inv) {
+            l->vx += M.mxs / 1.5f; l->vy -= 5; l->y -= 5; l->state = KOOPA_SHELL_STATE;
+        }
+        if (l->state == KOOPA_SHELL_STATE && overlap(body, M.body) && inv) {
+            l->vx += M.mx > l->x ? mys / 2 : -mys / 2;
+            l->vx += M.mxs / 1.5f;
+        }
+        if (mariowater) {
+            l->state = KOOPA_SHELL_STATE; l->vy -= 1.5f / scale;
+            if (M.spin_on) { l->vx *= 0.7f; l->vx += (M.mx > l->x ? -20 : 20) / scale; }
+            else if (M.facing_left) { l->vx *= 0.9f; l->vx -= 3 / scale; }
+            else { l->vx *= 0.9f; l->vx += 3 / scale; }
+        }
+        /* Stomps (+ "flippers" sound). The boost is not cut by releasing Jump. */
+        if (l->state == KOOPA_FLYING_STATE && overlap(head, M.feet) && mair && mys > 0) {
+            mys = mys / 2 - 15; p->vy = mys * 44; p->jump_cut = true; l->state = KOOPA_WALK_STATE;
+        }
+        if (l->state == KOOPA_WALK_STATE && overlap(head, M.feet) && mair && mys > 0) {
+            mys = mys / 2 - 12; p->vy = mys * 44; p->jump_cut = true; l->vx = 0; l->state = KOOPA_SHELL_STATE;
+        }
+        if (l->state == KOOPA_SHELL_STATE && overlap(body, M.feet) && mair && mys > 0) {
+            if (l->air) l->vy += (mys - l->vy) * 0.5f;
+            mys = mys / 4 - 12; p->vy = mys * 44; p->jump_cut = true;
+            l->vx += M.mx > l->x ? mys / 1.5f : -mys / 1.5f;
+            l->vx += M.mxs / 2;
+        }
+        if ((l->state == KOOPA_FLYING_STATE || l->state == KOOPA_WALK_STATE) && overlap(body, M.body) && !inv)
+            course_mario_hit(p, g, 1, 90, -5, M.mx > l->x ? 7 : -7, 7, false);
+        if (l->state == KOOPA_SHELL_STATE && ((overlap(body, M.body) && !mair) || (overlap(body, mhead) && mair)) && !inv) {
+            l->vx += (M.mxs - l->vx) / 2;   /* kick */
+            l->vx += M.mx > l->x ? -3 : 3;
+        }
+        if (l->state == KOOPA_FLYING_STATE || l->state == KOOPA_WALK_STATE) {
+            const bool hl = enemy_hurt_at(o, l->x - wide, l->y - tall / 2), hr = enemy_hurt_at(o, l->x + wide, l->y - tall / 2);
+            if (hl && hr) { l->vy -= 1.4f; l->vx += frand(o) * 4 - 2 - l->vx / 1.5f; l->y -= 3; l->state = KOOPA_SHELL_STATE; }
+            else {
+                if (hl) { l->vy -= 1.4f; l->vx += fmaxf(5 - l->vx / 1.5f, 0); l->y -= 3; l->state = KOOPA_SHELL_STATE; }
+                if (hr) { l->vy -= 1.4f; l->vx += fminf(-5 - l->vx / 1.5f, 0); l->y -= 3; l->state = KOOPA_SHELL_STATE; }
+            }
+        }
+        float b;
+        if (l->state == KOOPA_WALK_STATE && course_area_water(c->area, l->x, l->y, &b)) {
+            if (l->p3 == 0) l->state = KOOPA_SHELL_STATE; else l->vx *= 0.9f;
+        }
+        if (l->state == KOOPA_SHELL_STATE) { /* the shell floats */
+            int n = 0;
+            while (course_area_water(c->area, l->x, l->y - n + 5, &b)) { if (++n > 7) break; }
+            if (course_area_water(c->area, l->x, l->y - n + 5, &b)) {
+                if (!course_solid(c, l->x, l->y - 8)) { l->vy *= 0.9f; l->vy -= n / 7.0f; }
+                if (course_solid(c, l->x, l->y + 3)) l->y -= 5;
+                l->vx *= 0.85f;
+            }
+        }
+        if (l->state == KOOPA_WALK_STATE || l->state == KOOPA_SHELL_STATE) {
+            if (solid_any(c, l->x, l->y)) l->vy = 0;
+            else { l->vy += 1; if (l->vy > 7) l->vy *= 0.9f; }
+        }
+        for (int n = 0; n < 64 && course_solid(c, l->x + wide, l->y - tall / 2); ++n) {
+            l->x -= 1;
+            if (l->state == KOOPA_WALK_STATE && l->dir > 0) l->frame_label = KOOPA_TURN;
+            if (l->state == KOOPA_SHELL_STATE) l->vx = fminf(-l->vx * 0.7f, l->vx);
+        }
+        for (int n = 0; n < 64 && course_solid(c, l->x - wide, l->y - tall / 2); ++n) {
+            l->x += 1;
+            if (l->state == KOOPA_WALK_STATE && l->dir < 0) l->frame_label = KOOPA_TURN;
+            if (l->state == KOOPA_SHELL_STATE) l->vx = fmaxf(-l->vx * 0.7f, l->vx);
+        }
+        if (l->state != KOOPA_FLYING_STATE)
+            for (int n = 0; n < 64 && solid_any(c, l->x, l->y + 3) && !solid_any(c, l->x, l->y - 1); ++n) l->y += 1;
+        for (int n = 0; n < 64 && solid_any(c, l->x, l->y - 1); ++n) l->y -= 1;
+        const float ceiling = l->state != KOOPA_SHELL_STATE ? 30.0f : 20.0f;
+        for (int n = 0; n < 64 && course_solid(c, l->x, l->y - ceiling); ++n) l->y += 1;
+        if (l->state == KOOPA_FLYING_STATE) l->frame_label = KOOPA_FLYING;
+        if (l->state == KOOPA_WALK_STATE && l->frame_label != KOOPA_TURN) l->frame_label = KOOPA_WALK;
+        if (l->state == KOOPA_SHELL_STATE) {
+            l->frame_label = KOOPA_SHELL;
+            if (fabsf(l->vx) > 1) enemy_hurt_box(o, l->x, l->y - 7, 0.15f, 0.15f, 1);
+        }
+        l->vx = fmaxf(-12, fminf(12, l->vx));
+        l->y += l->vy; l->x += l->vx;
+        /* clip.gotoAndStop(frame): the Turn clip (3377) restarts on entry and its
+           frame 15 flips movedirection and returns to Walk. */
+        if (l->frame_label == KOOPA_TURN) {
+            if (!l->carrying) { l->carrying = true; l->timer = 0; }
+            else if (++l->timer >= 14) { l->frame_label = KOOPA_WALK; l->dir = -l->dir; l->carrying = false; }
+        } else l->carrying = false;
+        if (l->frame_label == KOOPA_SHELL) { /* shell clip 3401: frame += |xspeed|, wraps at 20 */
+            l->p2 += fabsf(l->vx);
+            while (l->p2 > 20) l->p2 -= 20;
+            l->p2 = fmaxf(l->p2, 1);
+        }
+    }
+    const bool here_far = fabsf(cam_cx - l->x) > 600 || fabsf(cam_cy - l->y) > 600;
+    const bool home_far = fabsf(cam_cx - l->home_x) > 600 || fabsf(cam_cy - l->home_y) > 600;
+    if (here_far && home_far) koopa_reset(l);
+}
+/* Breakable Orange Box (2808): frame 3 waits with OrangeBlockPL in Platforms;
+   a ground pound (box3), a hard run/dive (box4, HitWall), Spin water or an
+   Enemyhurt blast breaks it (frames 4-25); frame 5 drops its coins once
+   (coindata); it reforms when the camera and Mario are both 600 px away.
+   (Its hurt2 trigger, `box2` while Mario is knocked into it, is not modelled.) */
+static void step_box(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *p, CoursePickups *taken)
+{
+    if (l->state == 0) {
+        if (!(fabsf(cam_cx - l->x) < 600 && fabsf(cam_cy - l->y) < 600)) return;
+        const float box[4] = {l->x - 24, l->y - 18.02f, l->x + 24, l->y - 0.98f};
+        const float box3[4] = {l->x - 21, l->y - 39.52f, l->x + 21, l->y - 19.48f};
+        const float box4[4] = {l->x - 36, l->y - 22.52f, l->x + 36, l->y - 2.48f};
+        /* The port lands Mario before objects run, so the pound's fall speed is
+           the one from the previous source frame. */
+        const float fall = fmaxf(p->vy / 44, M.last_vy);
+        bool brk = false;
+        if (overlap(box3, M.feet) && fall > 3 && M.pound && !p->submerged) {
+            p->vy = (fall * 0.75f - 3) * 44; p->grounded = false; brk = true;
+        }
+        if (overlap(box4, M.body) && fabsf(M.last_vx) > 9) { /* _root.HitWall() */
+            p->action = ACTION_BONK; p->action_time = 0; p->bonk_direction = M.last_vx > 0 ? -1 : 1;
+            p->vx = p->vy = 0; p->spin_time = 0; p->pounding = false;
+            p->facing_left = !(M.mx < l->x);
+            brk = true;
+        }
+        if ((M.spin_on && overlap(box, M.spin)) || enemy_hurt_at(o, l->x, l->y - 5) || enemy_hurt_at(o, l->x + 10, l->y - 5) ||
+            enemy_hurt_at(o, l->x - 10, l->y - 5) || enemy_hurt_at(o, l->x, l->y - 30)) brk = true;
+        if (brk) { l->state = 1; l->timer = 0; l->count = 0; } /* + "boxbreak" sound */
+        return;
+    }
+    if (l->state == 1) { /* frames 4..25 (index 3..24) */
+        ++l->timer;
+        if (l->timer == 1) { /* frame 5: coindata, then createCoins(total, per frame) */
+            const bool had = taken && l->index < COURSE_MAX_PICKUPS && taken->taken[l->index];
+            if (!had && taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
+            l->count = had ? (int)l->p0 : 0;
+            if (!had && l->p0 == 1) { spawn_coin(o, l->src, l->x - 5, l->y - 12); l->count = 1; }
+        } else if (l->count < (int)l->p0) {
+            for (int i = 0; i < (int)l->p1 && l->count < (int)l->p0; ++i, ++l->count) {
+                LiveObject *coin = spawn_coin(o, l->src, l->x - 5, l->y - 12);
+                if (!coin) break;
+                if (l->p0 == 5) { coin->vy = frand(o) * 5 - 7; coin->vx = frand(o) * 10 - 5; }
+                else if (l->p0 == 10) { coin->vy = frand(o) * 6 - 10; coin->vx = frand(o) * 12 - 6; }
+                else if (l->p0 == 20) { coin->vy = frand(o) * 7 - 15; coin->vx = frand(o) * 14 - 7; }
+                else if (l->p0 == 30) { coin->vy = frand(o) * 10 - 15; coin->vx = frand(o) * 16 - 8; }
+                else if (l->p0 == 100) { coin->vy = frand(o) * 15 - 18; coin->vx = frand(o) * 18 - 9; }
+            }
+        }
+        if (3 + l->timer >= 24) l->state = 2;
+        return;
+    }
+    const bool cam_far = fabsf(cam_cx - l->x) > 600 || fabsf(cam_cy - l->y) > 600;
+    const bool mario_far = fabsf(M.mx - l->x) > 600 || fabsf(M.my - l->y) > 600;
+    if (cam_far && mario_far && l->p2 != 0) { l->state = 0; l->timer = 0; } /* gotoAndStop(3) */
+}
+/* Squirt Nozzle Box (HoverFluddBox 972): landing on its top (Blank 839 at
+   0.604 x, (0, -14)) bounces Mario (yspeed -6) and breaks it (frames 2-12),
+   releasing the Hover nozzle; it reforms 300 frames later. */
+static void step_fludd_box(CourseObjects *o, LiveObject *l, Player *p, float fx, float fy)
+{
+    if (l->state == 0) {
+        const float b[4] = {l->x - 16.0f, l->y - 22.0f, l->x + 16.0f, l->y - 6.0f};
+        if (inside(fx, fy, b) && p->vy > 0) {
+            p->vy = -6 * 44; p->grounded = false; p->jump_cut = true;
+            l->state = 1; l->timer = 1;
+            LiveObject *n = spawn(o, LIVE_NOZZLE, l->src, l->x, l->y + 10); /* attachMovie("Hnozzle") */
+            if (n) n->vy = -3;                                             /* + "Nozzle Box Break" */
+        }
+    } else if (l->state == 1) {
+        if (++l->timer >= 11) { l->state = 2; l->count = 0; }
+    } else if (++l->count > 300) { l->state = 0; l->timer = 0; }
+}
+/* Hnozzle (42): falls to the ground; touching it gives FLUDD Hover with a full tank. */
+static void step_nozzle(LiveObject *l, const CourseRuntime *c, Player *p, float fx, float fy)
+{
+    const float b[4] = {l->x - 16.0f, l->y - 21.95f, l->x + 16.0f, l->y + 21.05f};
+    if (inside(fx, fy, b)) { /* Fluddpow = "H"; WaterAmount = TotalWater */
+        p->has_fludd = true; p->nozzle = NOZZLE_HOVER; p->water = 100; l->alive = false; return;
+    }
+    if (!solid_any(c, l->x, l->y + 7)) { l->y += l->vy; l->vy += 0.5f; l->vy *= 0.95f; }
+    for (int n = 0; n < 64 && solid_any(c, l->x, l->y + 5); ++n) { l->y -= 1; l->vy = fminf(0, l->vy); }
+    ++l->count;
+    if (l->count > 900) l->alpha = (float)((l->count * 37) % 100); /* _alpha = random(100) */
+    if (l->count > 1000) l->alive = false;
+}
+/* Water Bottle (3995): frames 1-3 appear; on frame 3 touching it adds 5000 of
+   TotalWater 10000 (half a tank); frames 4-18 play; it comes back when off
+   camera or after 960 frames. */
+static void step_bottle(LiveObject *l, Player *p, float fx, float fy)
+{
+    const bool on_screen = fabsf(cam_cx - l->x) < 600 && fabsf(cam_cy - l->y) < 600;
+    if (l->state == 0) { if (++l->timer >= 2) l->state = 1; return; }
+    if (l->state == 1) {
+        l->alpha = on_screen ? 100 : 0;  /* _visible */
+        const float b[4] = {l->x - 7.9f, l->y - 4.9f, l->x + 7.85f, l->y + 23.65f};
+        if (on_screen && (overlap(b, M.body) || inside(fx, fy - 15, b))) {
+            p->water = fminf(100, p->water + 50); l->state = 2; l->timer = 3; l->alpha = 100; /* + "Fludd Nozzle" */
+        }
+        return;
+    }
+    if (l->state == 2) { if (++l->timer >= 17) { l->state = 3; l->count = 0; } return; }
+    if (!on_screen || l->count++ > 960) { l->state = 0; l->timer = 0; }
+}
+/* Green Circle Platform (3315 frame 2): `pl` circles the centre; GreenPLcode
+   (2103) in BPlatforms follows it and carries Mario by the step (diffx, diffy). */
+static void step_green_plat(LiveObject *l, Player *p, float fx, float fy)
+{
+    l->p0 += l->p2;                                     /* angle += speed */
+    const float r = l->p0 * 0.01745329252f;
+    const float nx = -sinf(r) * l->p1, ny = cosf(r) * l->p1;
+    l->vx = nx - l->rotation; l->vy = ny - l->spinrot;  /* diffx, diffy */
+    l->wave = l->spinrot;                               /* pl._y drawn one step behind */
+    l->rotation = nx; l->spinrot = ny;
+    l->q0 = nx; l->q1 = ny;
+    if (fabsf(cam_cx - l->x) < 600 + l->p1 * 2 && fabsf(cam_cy - l->y) < 600 + l->p1 * 2) {
+        float b[4];
+        green_pl_box(l, b);
+        if (inside(fx, fy + l->vy + 4, b) && p->vy / 44 > -3) {
+            p->x += l->vx * COURSE_SCALE; p->y += l->vy * COURSE_SCALE;
+            p->vx = drag(p->vx / 44, 0.3f, 1.1f) * 44;
+            if (!l->carrying) p->vx -= l->vx / 2 * 44;
+            l->carrying = true;
+        } else {
+            if (l->carrying) { p->vx += l->vx * 44; p->vy += l->vy * 44; }
+            l->carrying = false;
+        }
+        l->q2 = l->x + nx; l->q3 = l->y + ny;
+    }
+}
+/* Tipping Log (3476) with LogPL (55) in BPlatforms: Mario's weight tips it. */
+static void step_tip_log(LiveObject *l, Player *p, float fx, float fy)
+{
+    if (!(fabsf(cam_cx - l->x) < 600 && fabsf(cam_cy - l->y) < 600)) return;
+    const float k = l->p0, w = (k - 1) / 2 + 1;
+    l->vx = drag(l->vx, 0.15f, 1.05f);                  /* rotspeed */
+    const float distance = (fx - l->x) / k;
+    if (in_rot_rect(fx, fy, l->x, l->y, l->rotation, k, 1, LOG_PL)) {
+        l->carrying = true;                             /* land (+ "step-wetwood") */
+        p->x += l->rotation / 7 * COURSE_SCALE;
+        l->vx += distance / 5 / w;
+        l->vx -= l->rotation - drag(l->rotation, 0.3f / k, 0.07f / k + 1);
+    } else {
+        if (l->carrying) {
+            p->vx += (l->rotation / 5 - p->vx / 44) / 3 * 44;
+            if (p->vy / 44 < -3) l->vx += distance * 2 / w;
+        }
+        l->carrying = false;
+        l->vx -= l->rotation - drag(l->rotation, 1 / k, 0.12f / k + 1);
+    }
+    l->rotation += l->vx / 20;
+    if (l->rotation >= 80 || l->rotation <= -80) l->vx *= -0.7f;
+    l->rotation = fmaxf(-80, fminf(80, l->rotation));
+}
+/* Rotating Block Plat (3063) with its Platforms code clip (7527): turns 90
+   degrees every rotwait frames, quaking for the last 20. (The tutorial's
+   blocks have no speedX/speedY, so the travel code is not modelled.) */
+static void step_rot_block(CourseObjects *o, LiveObject *l, Player *p, float fx, float fy)
+{
+    const float k = l->p2 / 100;
+    ++l->count;
+    if (l->count > (int)l->p0) {
+        ++l->timer;                                     /* spincount */
+        if (l->timer * l->p1 <= 90) {
+            l->rotation += l->dir * l->p1;
+            if (in_rot_rect(fx, fy, l->x, l->y, l->rotation, k, k, ROT_BLOCK_PL)) p->x += l->dir * l->p1 * COURSE_SCALE;
+        } else { l->count = 0; l->timer = 0; l->rotation = roundf(l->rotation / 90) * 90; }
+    }
+    if (l->count + 20 > (int)l->p0 && l->count < (int)l->p0)
+        l->rotation = roundf(l->rotation / 90) * 90 + (frand(o) * 5 - 2.5f);
+    if (fabsf(cam_cx - l->x) < 600 && fabsf(cam_cy - l->y) < 600 &&
+        in_rot_rect(fx, fy + 1, l->x, l->y, l->rotation, k, k, ROT_BLOCK_PL) && p->grounded)
+        p->vx = drag(p->vx / 44, 0.15f, 1.05f) * 44;   /* standing on it */
+}
+/* Camera Control Box: eases its count toward |amount| while Mario's body
+   touches it and adds the change to _root.CamXchangeVar / CamYchangeVar. */
+static void step_cambox(CourseObjects *o, LiveObject *l)
+{
+    float b[4];
+    course_object_bounds(l->src, -50.025f, -50.0f, 49.975f, 50.0f, b); /* shape: XFL edges in twips */
+    const float last = l->q0;
+    if (overlap(b, M.body)) l->q0 += (fabsf(l->p0) - l->q0) / l->p1;
+    else l->q0 -= l->q0 / l->p1;
+    float *var = l->dir == 1 ? &o->cam_x_var : &o->cam_y_var;
+    if (l->p0 > 0) *var += l->q0 - last;
+    else if (l->p0 < 0) *var -= l->q0 - last;
 }
 /* CheepCheepCode HitTest(): the layer at (X, Y), or BPlatforms at the fish
    centre (the original tests _X/_Y there regardless of the arguments). */
@@ -745,8 +1202,7 @@ static void step_cheep(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player
         l->spawned = true;
         if (!(taken && l->index < COURSE_MAX_PICKUPS && taken->taken[l->index])) {
             if (taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
-            LiveObject *coin = spawn(o, LIVE_COIN, l->src, l->x, l->y - 4);
-            if (coin) coin->bounce = true;
+            spawn_coin(o, l->src, l->x, l->y - 4);
         }
     }
     if (cheep_hit(c, l, false, l->x, l->y + tall)) {
@@ -878,6 +1334,15 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
     case LIVE_GOOMBA: step_goomba(o, l, c, p, g, taken); break;
     case LIVE_CHEEP: step_cheep(o, l, c, p, g, taken); break;
     case LIVE_BOMB: step_bomb(o, l, c, p, g, taken); break;
+    case LIVE_KOOPA: step_koopa(o, l, c, p, g); break;
+    case LIVE_BOX: step_box(o, l, c, p, taken); break;
+    case LIVE_FLUDD_BOX: step_fludd_box(o, l, p, fx, fy); break;
+    case LIVE_NOZZLE: step_nozzle(l, c, p, fx, fy); break;
+    case LIVE_BOTTLE: step_bottle(l, p, fx, fy); break;
+    case LIVE_GREEN_PLAT: step_green_plat(l, p, fx, fy); break;
+    case LIVE_TIP_LOG: step_tip_log(l, p, fx, fy); break;
+    case LIVE_ROT_BLOCK: step_rot_block(o, l, p, fx, fy); break;
+    case LIVE_CAMBOX: step_cambox(o, l); break;
     case LIVE_ARROW: /* YI Arrow: fades and is removed once Platforms leaves frame 1 */
         if (c->platform_frame != 0) { l->alpha -= 10; if (l->alpha <= 0) l->alive = false; }
         break;
@@ -901,4 +1366,5 @@ void course_objects_step(CourseObjects *o, CourseRuntime *c, Player *p, CoursePr
     for (unsigned i = 0; i < n; ++i)
         if (o->live[i].alive) step_one(o, &o->live[i], c, p, g, taken, body, fx, fy);
     enemy_hurt_age(o);
+    M.last_vx = p->vx / 44; M.last_vy = p->vy / 44;
 }

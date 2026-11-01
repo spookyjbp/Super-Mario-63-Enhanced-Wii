@@ -248,6 +248,130 @@ static void test_bob_omb(void)
     ticks((GameInput){0}, 2);
     assert(gm->tumble && gm->vx > 0); /* left point only: xspeed += max(12 - xspeed/1.5, 0) */
 }
+static LiveObject *find_at(LiveKind k, float hx, float hy)
+{
+    for (unsigned i = 0; i < s.objects.count; ++i) {
+        LiveObject *l = &s.objects.live[i];
+        if (l->kind == k && fabsf(l->home_x - hx) < 0.6f && fabsf(l->home_y - hy) < 0.6f) return l;
+    }
+    return NULL;
+}
+static bool solid_hit_ground(const LiveObject *k)
+{ return course_solid(&s.runtime, k->x, k->y + 1) || course_bsolid(&s.runtime, k->x, k->y + 1); }
+static void test_koopa(void)
+{
+    play_area("8-E1-2");
+    LiveObject *k = first(LIVE_KOOPA);
+    assert(k && k->state == KOOPA_FLYING_STATE && k->frame_label == KOOPA_FLYING);
+    /* A Paratroopa hovers in place. */
+    course_place_player(&s.runtime, &s.game.player, k->x - 200, k->y + 30);
+    const float kx = k->x, ky = k->y;
+    ticks((GameInput){0}, 60);
+    assert(k->x == kx && k->y == ky);
+    /* Stomp: Mario yspeed = yspeed / 2 - 15, it loses its wings and walks. */
+    s.progress.hp = 8; s.game.player.blink = 0;
+    course_place_player(&s.runtime, &s.game.player, k->x, k->y - 26);
+    s.game.player.vy = 4 * 44; s.game.player.grounded = false;
+    for (int t = 0; t < 6 && k->state == KOOPA_FLYING_STATE; ++t) ticks((GameInput){0}, 1);
+    assert(k->state == KOOPA_WALK_STATE && s.game.player.vy < -12 * 44 && s.progress.hp == 8);
+    /* Second stomp: into its shell (yspeed / 2 - 12). */
+    for (int t = 0; t < 200 && !solid_hit_ground(k); ++t) ticks((GameInput){0}, 1);
+    course_place_player(&s.runtime, &s.game.player, k->x, k->y - 26);
+    s.game.player.vy = 4 * 44; s.game.player.grounded = false;
+    for (int t = 0; t < 6 && k->state == KOOPA_WALK_STATE; ++t) ticks((GameInput){0}, 1);
+    assert(k->state == KOOPA_SHELL_STATE && s.game.player.vy < -9 * 44);
+}
+static void test_fludd_box_and_bottle(void)
+{
+    play_area("8-E1-2");
+    assert(!s.game.player.has_fludd);
+    LiveObject *b = first(LIVE_FLUDD_BOX);
+    assert(b && b->state == 0);
+    /* Falling onto its top: yspeed = -6, it breaks and drops the Hover nozzle. */
+    course_place_player(&s.runtime, &s.game.player, b->x, b->y - 24);
+    s.game.player.vy = 2 * 44; s.game.player.grounded = false;
+    for (int t = 0; t < 6 && b->state == 0; ++t) ticks((GameInput){0}, 1);
+    assert(b->state == 1 && s.game.player.vy < 0);
+    LiveObject *n = first(LIVE_NOZZLE);
+    assert(n);
+    course_place_player(&s.runtime, &s.game.player, b->x + 200, b->y - 100);
+    ticks((GameInput){0}, 120);                      /* it falls and settles */
+    assert(n->alive && n->y > b->y);
+    course_place_player(&s.runtime, &s.game.player, n->x, n->y);
+    ticks((GameInput){0}, 3);
+    assert(!n->alive && s.game.player.has_fludd && s.game.player.nozzle == NOZZLE_HOVER && s.game.player.water == 100);
+    /* 300 frames later the box is whole again. */
+    ticks((GameInput){0}, 620);
+    assert(b->state == 0);
+    /* Water Bottle (8-E1-2-2): +5000 of 10000. */
+    play_area("8-E1-2-2");
+    LiveObject *w = find_at(LIVE_BOTTLE, 420.1f, -81.8f);
+    assert(w);
+    course_place_player(&s.runtime, &s.game.player, w->x + 150, w->y);
+    ticks((GameInput){0}, 10);
+    assert(w->state == 1);
+    s.game.player.water = 20;
+    course_place_player(&s.runtime, &s.game.player, w->x, w->y + 20);
+    ticks((GameInput){0}, 3);
+    assert(s.game.player.water == 70 && w->state >= 2);
+}
+static void test_breakable_box(void)
+{
+    play_area("8-E1-1-2");
+    LiveObject *top = find_at(LIVE_BOX, 710.5f, 93.2f), *low = find_at(LIVE_BOX, 710.5f, 125.2f);
+    assert(top && low && top->p0 == 10 && low->p0 == 5);
+    /* OrangeBlockPL is solid: (-16, -31)-(16, -5). */
+    assert(course_solid(&s.runtime, top->x, top->y - 20) && !course_solid(&s.runtime, top->x, top->y - 33));
+    /* Ground pound onto it: it breaks (10 coins, 3 a frame) and Mario keeps
+       falling (yspeed * 0.75 - 3) through the box below (5 coins). */
+    course_place_player(&s.runtime, &s.game.player, top->x, top->y - 90);
+    s.game.player.grounded = false; s.game.player.vy = 0;
+    ticks((GameInput){.pound_pressed = true}, 1);
+    for (int t = 0; t < 120 && top->state == 0; ++t) ticks((GameInput){0}, 1);
+    assert(top->state >= 1 && !course_solid(&s.runtime, top->x, top->y - 20));
+    ticks((GameInput){0}, 20);
+    unsigned coins = 0;
+    for (unsigned i = 0; i < s.objects.count; ++i) coins += s.objects.live[i].kind == LIVE_COIN && s.objects.live[i].bounce;
+    assert(coins == 15 && low->state >= 1);
+}
+static void test_platforms_and_camera_boxes(void)
+{
+    play_area("8-E1-2-2");
+    LiveObject *g = find_at(LIVE_GREEN_PLAT, 353.8f, -239.9f);
+    assert(g);
+    course_place_player(&s.runtime, &s.game.player, g->x, g->y - 200);
+    ticks((GameInput){0}, 30);
+    /* The platform (GreenPLcode, one-way) circles the centre at distance 50. */
+    const float d = sqrtf((g->q2 - g->x) * (g->q2 - g->x) + (g->q3 - g->y) * (g->q3 - g->y));
+    assert(fabsf(d - 50) < 0.5f && course_objects_platform(&s.objects, g->q2, g->q3));
+    /* Standing on it carries Mario along. */
+    course_place_player(&s.runtime, &s.game.player, g->q2, g->q3 - 6);
+    s.game.player.vx = s.game.player.vy = 0;
+    float start = s.game.player.x;
+    ticks((GameInput){0}, 20);
+    assert(g->carrying && fabsf(s.game.player.x - start) > 5);
+    /* A Rotating Block turns a quarter after rotwait frames. */
+    LiveObject *r = find_at(LIVE_ROT_BLOCK, -567.6f, -528.5f);
+    assert(r && r->dir == 1 && r->p0 == 32);
+    play_area("8-E1-2-2");
+    r = find_at(LIVE_ROT_BLOCK, -567.6f, -528.5f);
+    float maxrot = 0;
+    bool quake = false;
+    for (int t = 0; t < 140; ++t) {
+        ticks((GameInput){0}, 1);
+        maxrot = fmaxf(maxrot, r->rotation);
+        quake |= fabsf(r->rotation) > 0.01f && fabsf(r->rotation) < 2.6f && r->count < 32;
+    }
+    assert(quake && maxrot >= 90 && maxrot < 93); /* shakes, then a quarter turn to the right */
+    /* Camera Control Box (8-E1-1-2 at 716.5, 18.4: t Y, amount -50). */
+    play_area("8-E1-1-2");
+    assert(s.objects.camboxes && s.objects.cam_y_var == 0);
+    LiveObject *cb = find_at(LIVE_CAMBOX, 716.5f, 18.5f);
+    assert(cb);
+    course_place_player(&s.runtime, &s.game.player, cb->x, cb->y + 20);
+    ticks((GameInput){0}, 240);
+    assert(s.objects.cam_y_var < -45 && s.game.camera.ychange < 5);
+}
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
@@ -257,5 +381,9 @@ int main(void)
     test_goomba_hurts_and_stomps();
     test_cheep_cheep();
     test_bob_omb();
-    puts("7 course object (coins/Toad/log/birds/Goomba/Cheep/Bob-omb) test groups passed"); return 0;
+    test_koopa();
+    test_fludd_box_and_bottle();
+    test_breakable_box();
+    test_platforms_and_camera_boxes();
+    puts("11 course object (coins/Toad/log/birds/Goomba/Cheep/Bob-omb/Koopa/FLUDD/boxes/platforms) test groups passed"); return 0;
 }

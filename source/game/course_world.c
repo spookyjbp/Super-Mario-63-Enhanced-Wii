@@ -21,7 +21,10 @@ World course_world(CourseRuntime *c)
                    .spawn_y = course_wy(c, 0) - PLAYER_HEIGHT, .course = c};
 }
 bool course_solid(const CourseRuntime *c, float x, float y)
-{ return course_area_hit(c->area, COURSE_PLATFORMS, c->platform_frame, x, y); }
+{
+    return course_area_hit(c->area, COURSE_PLATFORMS, c->platform_frame, x, y) ||
+           (c->objects && course_objects_solid(c->objects, x, y));
+}
 bool course_bsolid(const CourseRuntime *c, float x, float y)
 {
     return course_area_hit(c->area, COURSE_BPLATFORMS, 0, x, y) ||
@@ -152,9 +155,15 @@ void course_camera_step(Camera *cam, const Player *p, const World *w, float view
     cam->previous_x = cam->x; cam->previous_y = cam->y;
     if (p->source_step) {
         const float mx = course_cx(c, p->x + PLAYER_WIDTH / 2), my = course_cy(c, p->y + player_height(p));
-        /* `CamYchange = (80 - CamYchange)/10` (50 on ground) exactly as written. */
-        cam->ychange = ((p->grounded ? 50.0f : 80.0f) - cam->ychange) / 10;
-        float dx = (mx - cam->cx) / 10 + p->vx / V / 4;
+        /* `CamYchange = (80 - CamYchange)/10` (50 on ground) exactly as written;
+           where Camera Control Boxes exist they set CamYchange = CamYchangeVar + 50
+           and CamXchange = CamXchangeVar every frame instead. */
+        float xchange = 0;
+        if (c->objects && c->objects->camboxes) {
+            cam->ychange = c->objects->cam_y_var + 50;
+            xchange = c->objects->cam_x_var;
+        } else cam->ychange = ((p->grounded ? 50.0f : 80.0f) - cam->ychange) / 10;
+        float dx = (mx - cam->cx - xchange) / 10 + p->vx / V / 4;
         float dy = (my - cam->cy - cam->ychange) / 10 + p->vy / V / 4;
         const float hw = half_width(view_width), hh = COURSE_VIEW_HEIGHT / 2;
         const CourseArea *a = c->area;

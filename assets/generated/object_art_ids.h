@@ -2,7 +2,7 @@
 #ifndef SM63_OBJECT_ART_IDS_H
 #define SM63_OBJECT_ART_IDS_H
 #define OBJECT_ART_ZOOM 1.6f
-#define OBJECT_ART_PACKS 3
+#define OBJECT_ART_PACKS 2
 enum {
     OBJ_COIN_SPIN = 0, /* pack 0 */
     OBJ_COIN_COLLECT = 1, /* pack 0 */
@@ -36,16 +36,19 @@ enum {
     OBJ_BOMB_EXPLODE2 = 29, /* pack 0 */
     OBJ_KOOPA_WALK = 30, /* pack 0 */
     OBJ_KOOPA_TURN = 31, /* pack 0 */
-    OBJ_KOOPA_SHELL = 32, /* pack 0 */
-    OBJ_BOX = 33, /* pack 0 */
-    OBJ_FLUDD_BOX = 34, /* pack 0 */
-    OBJ_BOTTLE = 35, /* pack 1 */
-    OBJ_GREEN_PLAT = 36, /* pack 1 */
-    OBJ_TIP_LOG = 37, /* pack 1 */
-    OBJ_ROT_BLOCK = 38, /* pack 2 */
-    OBJ_CLIP_COUNT = 39
+    OBJ_KOOPA_FLY = 32, /* pack 0 */
+    OBJ_KOOPA_SHELL = 33, /* pack 0 */
+    OBJ_BOX = 34, /* pack 0 */
+    OBJ_FLUDD_BOX = 35, /* pack 0 */
+    OBJ_BOTTLE = 36, /* pack 1 */
+    OBJ_GREEN_PL = 37, /* pack 1 */
+    OBJ_PATH_DOT = 38, /* pack 1 */
+    OBJ_HNOZZLE = 39, /* pack 1 */
+    OBJ_TIP_LOG = 40, /* pack 1 */
+    OBJ_ROT_BLOCK = 41, /* pack 1 */
+    OBJ_CLIP_COUNT = 42
 };
 static const unsigned char object_art_pack_of[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1
 };
 #endif

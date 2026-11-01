@@ -56,13 +56,16 @@ SPEC = [
     ('BOMB_EXPLODE2', 3309, None, 1, None, ()),
     ('KOOPA_WALK', 3367, None, 1, None, ()),
     ('KOOPA_TURN', 3377, None, 1, None, ()),
+    ('KOOPA_FLY', 3396, None, 1, None, ()),            # Koopa clip frame 'Flying' (Paratroopa)
     ('KOOPA_SHELL', 3401, None, 1, None, ()),
-    ('BOX', 2808, None, 1, (0, 0, 1, 1), ()),                 # Breakable box (+ coins)
+    ('BOX', 2808, None, 1, (0, 0, 1, 1), (1,)),               # Breakable box; 'stuff' (d1) is "none" at blocknum 1
     ('FLUDD_BOX', 972, None, 1, (0, 0, 1, 1), ()),            # Hover FLUDD box
     ('BOTTLE', 3995, None, 1, (0, 0, 1, 1), ()),
-    ('GREEN_PLAT', 3315, [0], 1, (0, 0, 1, 1), ()),
+    ('GREEN_PL', 951, None, 1, (0, 0, 1, 1), ()),             # Green Circle Platform 'pl' (frame = scale)
+    ('PATH_DOT', 28, None, 1, (0, 0, 1, 1), ()),              # attachMovie("Path dot") around the circle
+    ('HNOZZLE', 42, None, 1, (0, 0, 1, 1), ()),               # Hover nozzle pickup from the FLUDD box
     ('TIP_LOG', 3476, None, 1, (0, 0, 1, 1), ()),
-    ('ROT_BLOCK', 3063, None, 1, (0, 0, 1, 1), ()),
+    ('ROT_BLOCK', 3063, [0, 1], 1, (0, 0, 1, 1), ()),        # frame = blocktype (tutorial uses 1, 2)
     # Shine Sprite 977/976: only on 8-E1-2-2 frames reached once Star[39] is set,
     # so a new save never shows it in the tutorial; not exported.
 ]
@@ -79,7 +82,7 @@ def child_matrix(sprites, parent, child):
 
 PARENTS = {17: 963, 3485: 3495, 2323: 2324, 2501: 2517, 981: 986, 2505: 2517, 2380: 2386, 2344: 2380, 2360: 2380, 2369: 2380, 2377: 2380, 2379: 2380,
            2385: 2386, 2216: 2233, 2217: 2233, 2220: 2233, 2229: 2233, 2230: 2233, 2232: 2233,
-           3280: 3310, 3282: 3310, 3294: 3310, 3309: 3310, 3367: 3402, 3377: 3402, 3401: 3402, 976: 977}
+           3280: 3310, 3282: 3310, 3294: 3310, 3309: 3310, 3367: 3402, 3377: 3402, 3396: 3402, 3401: 3402, 976: 977}
 # Chains whose own placement in the object must also be applied.
 GRAND = {2380: 2386, 2233: 2234, 3310: 3311, 3402: 3403}
 
