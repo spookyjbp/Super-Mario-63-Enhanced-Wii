@@ -6,6 +6,7 @@
 #define ART_CLIP_COUNT 192
 #define ART_MAX_FRAMES 4096
 #define ART_PACK_VERSION 2
+#define ART_PACK_VERSION_COMPRESSED 3
 /* Clip ids (tools/export_movement_clips.py): body = state*4 + variant, where
    variant 0 is no FLUDD and 1..3 follow Nozzle (Hover, Rocket, Turbo).
    ART_BACK_EFFECT/ART_FRONT_EFFECT + body id hold the FLUDD water blast drawn
@@ -24,6 +25,11 @@ typedef struct {
     ArtClip clips[ART_CLIP_COUNT];
     ArtFrame frames[ART_MAX_FRAMES];
     const unsigned char *texture;
+    /* Version 3 packs: GX RGB5A3 texture, LZ4 block compressed. The caller
+       decodes `packed` (raw_size bytes) and points `texture` at the result. */
+    bool rgb5a3;
+    const unsigned char *packed;
+    unsigned packed_size, raw_size;
 } ArtPack;
 bool art_pack_parse(const unsigned char *data,size_t size,ArtPack *pack);
 const ArtFrame *art_pack_frame(const ArtPack *pack,unsigned clip,float seconds);

@@ -19,6 +19,9 @@ void graphics_sprite(GXTexObj *texture, float x, float y, float width, float hei
                      float u0, float v0, float u1, float v1);
 /* Scale all following geometry about the screen origin (1 = none). */
 void graphics_set_zoom(float zoom);
+/* Textured quad with alpha 0..255 multiplied in; u/v may be swapped to flip. */
+void graphics_sprite_alpha(GXTexObj *texture, float x, float y, float width, float height,
+                           float u0, float v0, float u1, float v1, unsigned char alpha);
 void graphics_present(void);
 void graphics_shutdown(void);
 

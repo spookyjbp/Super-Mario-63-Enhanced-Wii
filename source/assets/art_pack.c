@@ -7,12 +7,14 @@ static int16_t s16(const unsigned char *p) {unsigned v=u16(p);return (int16_t)(v
 bool art_pack_parse(const unsigned char *d,size_t n,ArtPack *p)
 {
     memset(p,0,sizeof(*p));
-    if(n<32 || memcmp(d,"SM63ART1",8) || u32(d+8)!=ART_PACK_VERSION) return false;
+    const unsigned version=n>=32 ? u32(d+8) : 0;
+    if(n<32 || memcmp(d,"SM63ART1",8) || (version!=ART_PACK_VERSION && version!=ART_PACK_VERSION_COMPRESSED)) return false;
     const unsigned width=u32(d+12),height=u32(d+16),clips=u32(d+20),frames=u32(d+24),bytes=u32(d+28);
     if(width<4 || width>1024 || height<4 || height>1024 || (width&(width-1)) ||
-       (height&(height-1)) || clips>ART_CLIP_COUNT || !frames || frames>ART_MAX_FRAMES || bytes!=width*height*4) return false;
+       (height&(height-1)) || clips>ART_CLIP_COUNT || !frames || frames>ART_MAX_FRAMES) return false;
+    if(version==ART_PACK_VERSION && bytes!=width*height*4) return false;
     const size_t metadata=32+clips*8+frames*16,offset=(metadata+31)&~(size_t)31;
-    if(offset>n || n-offset!=bytes) return false;
+    if(offset>n || n-offset<bytes || (version==ART_PACK_VERSION && n-offset!=bytes)) return false;
     p->width=width;p->height=height;p->frame_count=frames;
     for(unsigned i=0;i<clips;++i) {
         const unsigned char *c=d+32+i*8;
@@ -29,7 +31,10 @@ bool art_pack_parse(const unsigned char *d,size_t n,ArtPack *p)
            frame.offset_y<-8192 || frame.offset_y>8192) return false;
         p->frames[i]=frame;
     }
-    p->texture=d+offset;return true;
+    if(version==ART_PACK_VERSION) {p->texture=d+offset;return true;}
+    if(bytes<8 || u32(d+offset)!=width*height*2) return false;
+    p->rgb5a3=true;p->packed=d+offset+4;p->packed_size=bytes-4;p->raw_size=width*height*2;
+    return true;
 }
 const ArtFrame *art_pack_frame(const ArtPack *p,unsigned id,float seconds)
 {

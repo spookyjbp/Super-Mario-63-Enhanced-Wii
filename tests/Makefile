@@ -14,8 +14,9 @@ COURSE := $(ROOT)/build/host/course_pack_tests
 PLAY := $(ROOT)/build/host/course_play_tests
 SESSION := $(ROOT)/build/host/course_session_tests
 CART := $(ROOT)/build/host/course_art_tests
+OBJS := $(ROOT)/build/host/course_objects_tests
 .PHONY: test clean
-test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(ART)
+test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART)
 	$(OUTPUT)
 	$(ORIENTATION)
 	$(RENDER)
@@ -27,6 +28,7 @@ test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) 
 	cd $(ROOT)/build/host && ./course_play_tests
 	cd $(ROOT)/build/host && ./course_session_tests
 	cd $(ROOT)/build/host && ./course_art_tests
+	cd $(ROOT)/build/host && ./course_objects_tests
 $(OUTPUT): $(SOURCES) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated $(SOURCES) -lm -o $@
@@ -60,5 +62,8 @@ $(SESSION): course_session_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 $(CART): course_art_test.c $(ROOT)/source/assets/course_art.c $(ROOT)/source/assets/lz4_block.c $(ROOT)/source/game/course_pack.c
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include course_art_test.c $(ROOT)/source/assets/course_art.c $(ROOT)/source/assets/lz4_block.c $(ROOT)/source/game/course_pack.c -lm -o $@
+$(OBJS): course_objects_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated course_objects_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
 clean:
-	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(ART)
+	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART)

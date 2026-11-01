@@ -43,6 +43,10 @@ static void enter_area(CourseSession *s, const CourseArea *a, float cx, float cy
     camera_init(&s->game.camera, &s->game.player, &s->world, s->view_width);
     s->state = SESSION_PLAY;
     s->hint = (CourseString){0};
+    CoursePickups *taken = NULL;
+    for (unsigned i = 0; i < s->pack->area_count; ++i) if (&s->pack->areas[i] == a) taken = &s->pickups[i];
+    course_objects_init(&s->objects, a, taken, s->back_frame, 0x5363u + (unsigned)a->object_count);
+    s->runtime.objects = &s->objects;
     s->camera_override = false;
     /* 8-E1-1 Ground: barrier frame while TotalStars == 0 and Char is left of the start sign. */
     s->runtime.platform_frame = 1;
@@ -64,6 +68,7 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     memset(s, 0, sizeof(*s));
     s->pack = pack; s->view_width = view_width; s->warp_target = -1;
     s->game.player.has_fludd = false; /* StartChar(..., Fluddpow "") */
+    s->progress.hp = 8;                 /* _root.CharHP = 8 */
     enter_area(s, a, cx, cy);
     return true;
 }
@@ -162,6 +167,37 @@ static void try_read_sign(CourseSession *s, GameInput in, bool z_pressed)
         if (inside(b, fx, fy)) {open_sign(s, o); return;}
     }
 }
+static CoursePickups *pickups_for(CourseSession *s)
+{
+    for (unsigned i = 0; i < s->pack->area_count; ++i) if (&s->pack->areas[i] == s->runtime.area) return &s->pickups[i];
+    return NULL;
+}
+/* Toad Main Clip: pages M1..M6; a page whose MnTxt is undefined ends the talk. */
+static bool toad_page(CourseSession *s, unsigned page)
+{
+    char key[8] = {'M', (char)('0' + page), 'T', 'x', 't', 0};
+    CourseString t;
+    if (page > 9 || !course_object_param(s->toad->src, key, &t) || course_string_equals(t, "undefined")) return false;
+    s->toad_text = t;
+    key[2] = 'M'; key[3] = 'o'; key[4] = 'o';
+    if (!course_object_param(s->toad->src, key, &s->toad_mood)) s->toad_mood = (CourseString){0};
+    return true;
+}
+static void try_talk(CourseSession *s, bool z_pressed)
+{
+    const Player *p = &s->game.player;
+    if (!z_pressed || !p->grounded || p->action != ACTION_NONE) return;
+    const LiveObject *t = course_objects_near(&s->objects, LIVE_TOAD, course_cx(&s->runtime, p->x + PLAYER_WIDTH / 2),
+                                              course_cy(&s->runtime, p->y + player_height(p)));
+    if (!t) return;
+    s->toad = t; s->toad_page = 1;
+    if (!toad_page(s, 1)) return;
+    s->state = SESSION_TALK;
+    s->camera_override = true; s->camera_target_x = t->x; s->camera_target_y = t->y; /* Camcenter = this */
+    Player *pm = &s->game.player;
+    pm->vx = pm->vy = 0;
+    pm->facing_left = course_cx(&s->runtime, pm->x + PLAYER_WIDTH / 2) > t->x; /* face Toad */
+}
 void course_session_step(CourseSession *s, GameInput in)
 {
     /* KeyZ(): Z (read/talk/stomp). The port maps it to the pound button. */
@@ -203,12 +239,22 @@ void course_session_step(CourseSession *s, GameInput in)
         }
         break;
     }
+    case SESSION_TALK:
+        p->vx = p->vy = 0;
+        game_step(&s->game, &s->world, (GameInput){0}, s->view_width);
+        if (z_pressed && !toad_page(s, ++s->toad_page)) {
+            s->state = SESSION_PLAY; s->toad = NULL; s->camera_override = false;
+        }
+        break;
     case SESSION_PLAY:
         game_step(&s->game, &s->world, in, s->view_width);
         try_read_sign(s, in, z_pressed);
+        if (s->state == SESSION_PLAY) try_talk(s, z_pressed);
         if (s->state == SESSION_PLAY) check_exits(s, in);
         break;
     }
+    if (s->state != SESSION_WARP)
+        course_objects_step(&s->objects, &s->runtime, &s->game.player, &s->progress, pickups_for(s), false);
     if (s->camera_override) {
         /* Camcenter = another clip: centre moves 1/10 of the way each frame. */
         Camera *c = &s->game.camera;

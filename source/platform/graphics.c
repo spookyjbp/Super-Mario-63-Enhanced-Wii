@@ -92,12 +92,16 @@ void graphics_set_zoom(float zoom)
 
 void graphics_rect(float x, float y, float width, float height, GXColor color)
 {
+    /* Translucent fills (water, message boxes) need blending; opaque ones keep
+       the original no-blend path. */
+    if (color.a < 255) GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
     GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
     GX_Position3f32(x, y, 0);                GX_Color4u8(color.r, color.g, color.b, color.a);
     GX_Position3f32(x + width, y, 0);        GX_Color4u8(color.r, color.g, color.b, color.a);
     GX_Position3f32(x + width, y + height, 0); GX_Color4u8(color.r, color.g, color.b, color.a);
     GX_Position3f32(x, y + height, 0);       GX_Color4u8(color.r, color.g, color.b, color.a);
     GX_End();
+    if (color.a < 255) GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
 }
 
 void graphics_present(void)
@@ -186,6 +190,31 @@ void graphics_sprite_rotated(GXTexObj *texture, float x, float y, float width, f
     GX_SetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
 }
 
+void graphics_sprite_alpha(GXTexObj *texture, float x, float y, float width, float height,
+                           float u0, float v0, float u1, float v1, unsigned char alpha)
+{
+    GX_SetNumTexGens(1);
+    GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+    GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+    GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+    GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+    GX_SetTevOp(GX_TEVSTAGE0, GX_MODULATE);
+    GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
+    GX_SetAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    GX_LoadTexObj(texture, GX_TEXMAP0);
+    GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
+    GX_Position3f32(x, y, 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u0, v0);
+    GX_Position3f32(x + width, y, 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u1, v0);
+    GX_Position3f32(x + width, y + height, 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u1, v1);
+    GX_Position3f32(x, y + height, 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(u0, v1);
+    GX_End();
+    GX_SetVtxDesc(GX_VA_TEX0, GX_NONE);
+    GX_SetNumTexGens(0);
+    GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORDNULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+    GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
+    GX_SetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+}
 void graphics_sprite(GXTexObj *t,float x,float y,float w,float h,float u0,float v0,float u1,float v1)
 { graphics_sprite_rotated(t,x,y,w,h,u0,v0,u1,v1,0); }
 void graphics_triangle(float x0,float y0,float x1,float y1,float x2,float y2,GXColor color)

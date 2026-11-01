@@ -41,6 +41,16 @@ def matrix(b):
     return m
 
 
+def cxform(b):
+    """Skip a CXFORMWITHALPHA."""
+    has_add, has_mult, n = b.ub(1), b.ub(1), b.ub(4)
+    if has_mult:
+        for _ in range(4): b.sb(n)
+    if has_add:
+        for _ in range(4): b.sb(n)
+    b.align()
+
+
 def tags(data, pos, end):
     while pos + 2 <= end:
         header = struct.unpack_from('<H', data, pos)[0]; pos += 2
@@ -80,6 +90,12 @@ def sprites(swf):
                     entry = {'id': struct.unpack_from('<H', raw, q)[0]}; q += 2
                 if flags & 0x04:
                     b = Bits(raw, q); entry['matrix'] = matrix(b); q = b.byte
+                if flags & 0x08:
+                    b = Bits(raw, q); cxform(b); q = b.byte
+                if flags & 0x10:
+                    q += 2  # ratio
+                if flags & 0x20:
+                    end = raw.index(0, q); entry['name'] = raw[q:end].decode('latin-1'); q = end + 1
                 display[depth] = entry
             elif c == 28:  # RemoveObject2
                 display.pop(struct.unpack_from('<H', raw, p)[0], None)

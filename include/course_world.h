@@ -11,8 +11,10 @@ extern "C" {
 #define COURSE_SCALE 1.375f
 /* Original stage: 450x300 course pixels at CameraZoom 100 (DOMDocument.xml:11815). */
 #define COURSE_VIEW_HEIGHT 300.0f
+struct CourseObjects;
 typedef struct CourseRuntime {
     const CourseArea *area;
+    const struct CourseObjects *objects; /* moving one-way platforms, or NULL */
     unsigned platform_frame; /* Course.Platforms._currentframe - 1 */
     float ox, oy;            /* course pixel at world (0,0) */
 } CourseRuntime;

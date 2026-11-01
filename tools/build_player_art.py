@@ -12,6 +12,10 @@ import struct
 from pathlib import Path
 from PIL import Image, ImageOps
 from build_mario_atlas import rgba8_tiles
+try:
+    import lz4.block as lz4block
+except ImportError:  # only needed for compressed (v3) packs
+    lz4block = None
 
 VERSION = 2
 MAX_CLIPS = 192
@@ -37,7 +41,21 @@ def _pack(sizes, width, height):
     return spots
 
 
-def build(data, root):
+def rgb5a3_tiles(image):
+    """GX RGB5A3 4x4 tiles, big-endian."""
+    import numpy as np  # only needed for compressed (v3) packs
+    a = np.asarray(image.convert('RGBA'), dtype=np.uint16)
+    h, w = a.shape[:2]
+    r, g, b, al = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
+    opaque = (0x8000 | ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)).astype(np.uint16)
+    trans = (((al >> 5) << 12) | ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4)).astype(np.uint16)
+    px = np.where(al >= 0xE0, opaque, trans).astype('>u2')
+    return px.reshape(h // 4, 4, w // 4, 4).transpose(0, 2, 1, 3).tobytes()
+
+
+def build(data, root, compressed=False):
+    """Version 2: raw GX RGBA8 texture. Version 3 (compressed=True): GX RGB5A3
+    texture, LZ4 block compressed, preceded by its u32 decoded size."""
     images, index, clips, frames, seen = [], {}, [], [], set()
     for clip in data['clips']:
         ident = clip['id']
@@ -58,7 +76,7 @@ def build(data, root):
             ox, oy = ox + box[0] * 20, oy + box[1] * 20
             if not -OFFSET_LIMIT <= ox <= OFFSET_LIMIT or not -OFFSET_LIMIT <= oy <= OFFSET_LIMIT:
                 raise ValueError('Offset out of range')
-            if not 1 <= im.width <= 256 or not 1 <= im.height <= 256:
+            if not 1 <= im.width <= 1024 or not 1 <= im.height <= 1024:
                 raise ValueError('Frame too large')
             key = hashlib.sha256(im.tobytes() + struct.pack('>2H', *im.size)).digest()
             if key not in index:
@@ -81,8 +99,16 @@ def build(data, root):
     atlas = Image.new('RGBA', (width, height))
     for i, im in enumerate(images):
         atlas.paste(im, spots[i])
-    output = bytearray(struct.pack('>8s6I', b'SM63ART1', VERSION, width, height, len(clips), len(frames),
-                                   width * height * 4))
+    if compressed:
+        raw = rgb5a3_tiles(atlas)
+        packed = lz4block.compress(raw, store_size=False)
+        texture = struct.pack('>I', len(raw)) + packed
+        version = 3
+    else:
+        texture = rgba8_tiles(atlas)
+        version = VERSION
+    output = bytearray(struct.pack('>8s6I', b'SM63ART1', version, width, height, len(clips), len(frames),
+                                   len(texture)))
     for c in clips:
         output.extend(struct.pack('>4H', *c))
     for image, ox, oy, duration in frames:
@@ -90,7 +116,8 @@ def build(data, root):
         w, h = sizes[image]
         output.extend(struct.pack('>4H2h2H', x, y, w, h, ox, oy, duration, 0))
     output.extend(bytes((-len(output)) % 32))
-    output.extend(rgba8_tiles(atlas))
+    output.extend(texture)
+    output.extend(bytes((-len(output)) % 32))
     return bytes(output)
 
 

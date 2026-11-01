@@ -7,6 +7,12 @@
 #include "lz4_block.h"
 #include "user_art.h"
 #include "course_8e1_art_bin.h"
+#include "art_pack.h"
+#include "object_art_ids.h"
+#include "object_select.h"
+#include "objects_8e1_0_bin.h"
+#include "objects_8e1_1_bin.h"
+#include "objects_8e1_2_bin.h"
 #include <gccore.h>
 #include <math.h>
 #include <stdio.h>
@@ -14,12 +20,67 @@
 
 #define MEM2_RESERVE (26u * 1024 * 1024)
 #define PICTURE_BYTES (1024u * 1024)
+#define OBJECT_BYTES (5u * 1024 * 1024)
 static CourseArtPack art;
 static unsigned char *mem2, *picture_mem;
 static GXTexObj layer_tex[ART_LAYER_PICTURE][COURSE_ART_MAX_TILES];
 static const CourseArtLayer *layers[ART_LAYER_PICTURE];
 static const CourseArea *loaded_area;
 static GXTexObj picture_tex;
+static ArtPack object_packs[OBJECT_ART_PACKS];
+static GXTexObj object_tex[OBJECT_ART_PACKS];
+static bool objects_ready;
+
+/* Decode the three compressed object packs (art pack v3) into MEM2 once. */
+static bool load_objects(unsigned char *dst, size_t cap)
+{
+    const unsigned char *blobs[OBJECT_ART_PACKS] = {objects_8e1_0_bin, objects_8e1_1_bin, objects_8e1_2_bin};
+    const unsigned sizes[OBJECT_ART_PACKS] = {objects_8e1_0_bin_size, objects_8e1_1_bin_size, objects_8e1_2_bin_size};
+    size_t used = 0;
+    for (unsigned i = 0; i < OBJECT_ART_PACKS; ++i) {
+        ArtPack *p = &object_packs[i];
+        if (!art_pack_parse(blobs[i], sizes[i], p) || !p->rgb5a3 || p->raw_size > cap - used) return false;
+        if (lz4_block_decode(p->packed, p->packed_size, dst + used, p->raw_size) != (long)p->raw_size) return false;
+        p->texture = dst + used;
+        DCFlushRange(dst + used, p->raw_size);
+        GX_InitTexObj(&object_tex[i], dst + used, p->width, p->height, GX_TF_RGB5A3, GX_CLAMP, GX_CLAMP, GX_FALSE);
+        GX_InitTexObjLOD(&object_tex[i], GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
+        used = (used + p->raw_size + 31) & ~(size_t)31;
+    }
+    GX_InvalidateTexAll();
+    return true;
+}
+/* Draw one object-art frame; (wx, wy) is the object's registration point in
+   screen-space world px (before the course zoom). */
+static void draw_object_frame(const ObjectDraw *d, float wx, float wy)
+{
+    if (!objects_ready || d->clip < 0 || d->clip >= OBJ_CLIP_COUNT || d->alpha <= 0) return;
+    const unsigned pack = object_art_pack_of[d->clip];
+    const ArtPack *p = &object_packs[pack];
+    const ArtFrame *f = art_pack_frame_index(p, (unsigned)d->clip, d->frame);
+    if (!f) return;
+    const float k = COURSE_SCALE / OBJECT_ART_ZOOM * d->scale;  /* world px per image px */
+    const float t = COURSE_SCALE / 20.0f * d->scale;            /* world px per twip */
+    const float w = f->width * k, h = f->height * k;
+    float x = f->offset_x * t, y = f->offset_y * t;
+    float u0 = (float)f->x / p->width, u1 = (float)(f->x + f->width) / p->width;
+    float v0 = (float)f->y / p->height, v1 = (float)(f->y + f->height) / p->height;
+    if (d->flip_x) { x = -x - w; const float s = u0; u0 = u1; u1 = s; }
+    if (d->flip_y) { y = -y - h; const float s = v0; v0 = v1; v1 = s; }
+    const float a = fminf(100, d->alpha) * 2.55f;
+    graphics_sprite_alpha(&object_tex[pack], wx + x + d->dx * COURSE_SCALE, wy + y + d->dy * COURSE_SCALE, w, h,
+                          u0, v0, u1, v1, (unsigned char)a);
+}
+static void draw_objects(const CourseSession *s, float ox, float oy, bool front)
+{
+    for (unsigned i = 0; i < s->objects.count; ++i) {
+        const LiveObject *l = &s->objects.live[i];
+        if (!l->alive || course_string_equals(l->src->layer, "FrontGFX") != front) continue;
+        ObjectDraw d[OBJECT_DRAW_MAX];
+        const unsigned n = object_select(l, d);
+        for (unsigned k = 0; k < n; ++k) draw_object_frame(&d[k], ox + l->x * COURSE_SCALE, oy + l->y * COURSE_SCALE);
+    }
+}
 static const CourseArtLayer *loaded_picture;
 
 bool course_render_init(void)
@@ -28,8 +89,10 @@ bool course_render_init(void)
     /* Reserve MEM2 for one area's textures plus a picture page, once. */
     unsigned char *lo = (unsigned char *)(((uintptr_t)SYS_GetArena2Lo() + 31) & ~(uintptr_t)31);
     if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES)) return false;
+    if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES)) return false;
     mem2 = lo; picture_mem = lo + MEM2_RESERVE;
-    SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES);
+    SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES);
+    objects_ready = load_objects(lo + MEM2_RESERVE + PICTURE_BYTES, OBJECT_BYTES);
     user_art_set_scale(COURSE_SCALE);
     return true;
 }
@@ -114,6 +177,7 @@ void course_render(const CourseSession *s, float t)
     draw_layer(ART_LAYER_CLOSE, sx - ccx * 0.5f * COURSE_SCALE, sy - ccy * 0.5f * COURSE_SCALE, 1);
     const float ox = course_wx(c, 0) - camx, oy = course_wy(c, 0) - camy; /* course origin on screen */
     draw_layer(ART_LAYER_BACK, ox, oy, 1);
+    draw_objects(s, ox, oy, false);
     const Player *p = &g->player;
     const float px = p->previous_x + (p->x - p->previous_x) * t - camx;
     const float py = p->previous_y + (p->y - p->previous_y) * t - camy;
@@ -125,11 +189,22 @@ void course_render(const CourseSession *s, float t)
                       (GXColor){40, 110, 220, 110});
     }
     draw_layer(ART_LAYER_FRONT, ox, oy, 1);
+    draw_objects(s, ox, oy, true);
     graphics_set_zoom(1);
     const GXColor white = {255, 255, 255, 255};
     if (s->hint.length) {
         graphics_rect(20, 420, width - 40, 40, (GXColor){0, 0, 0, 150});
         text_block(30, 428, s->hint, 1.5f, white, (unsigned)((width - 60) / 9));
+    }
+    { /* HUD (placeholder layout; original Stats clip art still to be ported) */
+        char hud[48];
+        snprintf(hud, sizeof(hud), "COINS %u   HP %u", s->progress.coins, s->progress.hp);
+        graphics_rect(14, 14, 220, 22, (GXColor){0, 0, 0, 140});
+        graphics_text(22, 19, hud, 2, white);
+    }
+    if (s->state == SESSION_TALK && s->toad_text.length) {
+        graphics_rect(40, 330, width - 80, 120, (GXColor){20, 20, 40, 220});
+        text_block(56, 346, s->toad_text, 2, white, (unsigned)((width - 112) / 12));
     }
     if (s->area_title_time > 0)
         text_block(width / 2 - 100, 60, s->area_title, 3, white, 30);

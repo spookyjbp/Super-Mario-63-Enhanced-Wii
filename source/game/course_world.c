@@ -3,6 +3,7 @@
    port's existing velocities. Collision probes run in course pixels against the
    exported hitTest masks; see docs/course-collision.md. */
 #include "course_world.h"
+#include "course_objects.h"
 #include <math.h>
 
 #define V 44.0f /* port px/s per original px/frame */
@@ -10,7 +11,7 @@
 void course_runtime_init(CourseRuntime *c, const CourseArea *a)
 {
     const CourseMask *edge = course_area_mask(a, COURSE_CAMEDGE, 0);
-    *c = (CourseRuntime){.area = a, .ox = edge ? (float)edge->x0 : 0, .oy = edge ? (float)edge->y0 : 0};
+    *c = (CourseRuntime){.area = a, .objects = NULL, .ox = edge ? (float)edge->x0 : 0, .oy = edge ? (float)edge->y0 : 0};
 }
 World course_world(CourseRuntime *c)
 {
@@ -22,7 +23,10 @@ World course_world(CourseRuntime *c)
 bool course_solid(const CourseRuntime *c, float x, float y)
 { return course_area_hit(c->area, COURSE_PLATFORMS, c->platform_frame, x, y); }
 bool course_bsolid(const CourseRuntime *c, float x, float y)
-{ return course_area_hit(c->area, COURSE_BPLATFORMS, 0, x, y); }
+{
+    return course_area_hit(c->area, COURSE_BPLATFORMS, 0, x, y) ||
+           (c->objects && course_objects_platform(c->objects, x, y));
+}
 void course_place_player(const CourseRuntime *c, Player *p, float cx, float cy)
 {
     p->x = p->previous_x = course_wx(c, cx) - PLAYER_WIDTH / 2;

@@ -4,10 +4,11 @@
    the scripted opening and the completion boundary. Sources and rules are in
    docs/original-tutorial-reference.md and docs/course-session.md. */
 #include "course_world.h"
+#include "course_objects.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
-typedef enum { SESSION_PLAY, SESSION_OPENING, SESSION_SIGN, SESSION_WARP, SESSION_COMPLETE } SessionState;
+typedef enum { SESSION_PLAY, SESSION_OPENING, SESSION_SIGN, SESSION_TALK, SESSION_WARP, SESSION_COMPLETE } SessionState;
 typedef struct {
     const CoursePack *pack;
     CourseRuntime runtime;
@@ -29,6 +30,11 @@ typedef struct {
     int warp_target; float warp_time;
     const char *warp_area; float warp_x, warp_y;
     float view_width;
+    CourseObjects objects;
+    CourseProgress progress;
+    CoursePickups pickups[COURSE_MAX_AREAS];
+    /* Toad dialogue: Phase (1-based page), text of the current page */
+    const LiveObject *toad; unsigned toad_page; CourseString toad_text; CourseString toad_mood;
 } CourseSession;
 bool course_session_start(CourseSession *s, const CoursePack *pack, const char *area, float cx, float cy, float view_width);
 void course_session_step(CourseSession *s, GameInput input);
