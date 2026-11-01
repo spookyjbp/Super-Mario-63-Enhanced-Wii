@@ -53,6 +53,11 @@ void graphics_triangle(float a,float b,float c,float d,float e,float f,GXColor c
 { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)color;++draws.triangles; }
 void graphics_sprite_rotated(GXTexObj *t,float x,float y,float w,float h,float u0,float v0,float u1,float v1,float rotation)
 { (void)rotation;graphics_sprite(t,x,y,w,h,u0,v0,u1,v1); }
+void user_art_init(void) {}
+bool user_art_available(void) {return false;}
+bool user_art_fludd_available(const Player *p) {(void)p;return false;}
+bool user_art_draw_player(const Player *p,float x,float y) {(void)p;(void)x;(void)y;return false;}
+void user_art_draw_equipment(const Player *p,float x,float y) {(void)p;(void)x;(void)y;}
 static void near(float a, float b) { assert(fabsf(a - b) < 0.001f); }
 static void record(const Game *game, const World *world, float alpha)
 {

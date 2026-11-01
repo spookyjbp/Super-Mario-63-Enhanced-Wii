@@ -2,6 +2,7 @@
 #include "graphics.h"
 #include "player_sprite.h"
 #include "world_query.h"
+#include "user_art.h"
 #include <math.h>
 #include "mario_atlas.h"
 #include "mario_rgba8_bin.h"
@@ -17,6 +18,7 @@ void render_init(void)
     GX_InitTexObjLOD(&mario_texture, GX_NEAR, GX_NEAR, 0, 0, 0,
                      GX_FALSE, GX_FALSE, GX_ANISO_1);
     GX_InvalidateTexAll();
+    user_art_init();
 }
 
 static void draw_player(const Player *p, float x, float y)
@@ -83,7 +85,8 @@ void render_game(const Game *game, const World *world, float interpolation)
     }
     const float x = lerp(p->previous_x, p->x, interpolation) - camera_x;
     const float y = lerp(p->previous_y, p->y, interpolation) - camera_y;
-    draw_player(p, x, y);
+    if(!user_art_draw_player(p,x,y)) draw_player(p, x, y);
+    user_art_draw_equipment(p,x,y);
     if (p->landing_time > 0) {
         const float spread = (0.18f - p->landing_time) * 220;
         graphics_rect(x - spread, y + PLAYER_HEIGHT - 5, 10, 5, white);
@@ -93,9 +96,11 @@ void render_game(const Game *game, const World *world, float interpolation)
         "HOVER", "CHARGING", "ROCKET", "TURBO", "BONK"};
     char hud[100];
     static const char *nozzles[]={"H","R","T"};
-    snprintf(hud, sizeof(hud), "V0.4 %s %s W%u P%u", states[p->animation], nozzles[p->nozzle], (unsigned)p->water, (unsigned)p->power);
+    snprintf(hud, sizeof(hud), "V0.4.1 %s %s W%u P%u", states[p->animation], nozzles[p->nozzle], (unsigned)p->water, (unsigned)p->power);
     graphics_rect(14, 14, width - 28, 28, (GXColor){28, 40, 65, 255});
     graphics_text(22, 21, hud, 2, white);
+    if(!user_art_available()) graphics_text(22,46,"PRIVATE ART PACK MISSING",1,white);
+    else if(!user_art_fludd_available(p)) graphics_text(22,46,"FLUDD ART NOT LOADED",1,white);
     if (game->paused) {
         const float left = width / 2 - 155;
         graphics_rect(left, 135, 310, 210, (GXColor){25, 30, 55, 255});

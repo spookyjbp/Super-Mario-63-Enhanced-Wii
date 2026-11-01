@@ -130,7 +130,8 @@ void player_step(Player *p, const World *world, GameInput input)
     else if (p->landing_time > 0) p->animation = PLAYER_LAND;
     else if (p->pounding) p->animation = p->pound_windup > 0 ? PLAYER_POUND_WINDUP : PLAYER_POUND;
     else if (p->spin_time > 0) p->animation = PLAYER_SPIN;
-    else if (!p->grounded) p->animation = p->vy < 0 ? PLAYER_RISE : PLAYER_FALL;
+    else if (p->normal_land_time>0 && p->grounded) p->animation=PLAYER_LAND;
+    else if (!p->grounded) p->animation = p->vy<=2*44 ? PLAYER_RISE : PLAYER_FALL;
     else p->animation = fabsf(p->vx) > 8 ? PLAYER_RUN : PLAYER_IDLE;
 }
 

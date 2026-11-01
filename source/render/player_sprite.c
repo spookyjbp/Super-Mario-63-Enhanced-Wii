@@ -9,8 +9,8 @@ PlayerSprite player_sprite_select(const Player *p)
     float rotation=0, height_scale=1;
     switch (p->animation) {
     case PLAYER_RUN: frame = 1 + (unsigned)(p->animation_time * 12) % 8; break;
-    case PLAYER_RISE: frame = 9; break;
-    case PLAYER_FALL: frame = 10; break;
+    case PLAYER_RISE: frame = 10; break;
+    case PLAYER_FALL: frame = 9; break;
     case PLAYER_SPIN: {
         /* Mirror flags are per occurrence, not per image: the Flash clip reuses
            the same side/back PNGs to show opposite halves of a complete turn.
@@ -27,14 +27,11 @@ PlayerSprite player_sprite_select(const Player *p)
     case PLAYER_POUND_WINDUP: frame = p->pound_windup > 0.06f ? 16 : 17; break;
     case PLAYER_POUND: frame = 18; break;
     case PLAYER_LAND: frame = 19; break;
-    case PLAYER_CROUCH: frame=19; height_scale=0.6f; break;
+    case PLAYER_CROUCH: frame=0; break;
     case PLAYER_DIVE: frame=9; rotation=p->facing_left ? -70 : 70; height_scale=0.8f; break;
     case PLAYER_BACKFLIP:
-    case PLAYER_ROLL:
-        frame=9;
-        rotation=p->action_time*720*(p->facing_left ? -1 : 1)*(p->animation==PLAYER_BACKFLIP ? -1 : 1);
-        break;
-    case PLAYER_SWIM: frame=10; rotation=p->facing_left ? -50 : 50; break;
+    case PLAYER_ROLL: frame=10; break; /* Authored tween requires a rendered clip pack. */
+    case PLAYER_SWIM: frame=10; break; /* Original stroke poses come from the private pack. */
     case PLAYER_HOVER: frame=10; break;
     case PLAYER_ROCKET_CHARGE: frame=0; break;
     case PLAYER_ROCKET: frame=9; break;

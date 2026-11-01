@@ -64,9 +64,9 @@ static void test_airborne_facing(void)
     for (unsigned left = 0; left < 2; ++left) {
         p.facing_left = left != 0;
         p.animation = PLAYER_RISE;
-        expect(&p, 9, left == 0);
-        p.animation = PLAYER_FALL;
         expect(&p, 10, left == 0);
+        p.animation = PLAYER_FALL;
+        expect(&p, 9, left == 0);
     }
     /* Exercise direction changes through the existing physics, including the
        reversal interval where facing follows input before velocity crosses 0. */
@@ -74,14 +74,14 @@ static void test_airborne_facing(void)
     player_init(&p, 100, 100); p.vy = -300;
     player_step(&p, &empty, (GameInput){.horizontal = 1, .jump_held = true});
     assert(p.animation == PLAYER_RISE && !p.facing_left);
-    expect(&p, 9, true);
+    expect(&p, 10, true);
     player_step(&p, &empty, (GameInput){.horizontal = -1, .jump_held = true});
     assert(p.animation == PLAYER_RISE && p.facing_left);
-    expect(&p, 9, false);
+    expect(&p, 10, false);
     p.vy = 200;
     player_step(&p, &empty, (GameInput){.horizontal = 1});
     assert(p.animation == PLAYER_FALL && !p.facing_left);
-    expect(&p, 10, true);
+    expect(&p, 9, true);
 }
 
 static void test_spin_keyframe_mirroring(void)
@@ -121,7 +121,7 @@ static void test_spin_exit_preserves_facing(void)
             player_step(&p, &empty, (GameInput){.horizontal = axis, .jump_held = true});
         }
         assert(p.spin_time == 0 && p.facing_left == (left != 0));
-        const unsigned frame = p.animation == PLAYER_RISE ? 9 : 10;
+        const unsigned frame = p.animation == PLAYER_RISE ? 10 : 9;
         expect(&p, frame, left == 0);
     }
 }
@@ -135,7 +135,7 @@ static void test_v04_pose_orientation(void)
             const PlayerSprite pose=player_sprite_select(&p);
             assert(pose.frame<20 && pose.height_scale>0 && pose.height_scale<=1);
             assert(pose.flip_x==((left!=0)!=(mario_frames[pose.frame].mirror_for_right!=0)));
-            if(state==PLAYER_BACKFLIP || state==PLAYER_ROLL || state==PLAYER_SWIM || state==PLAYER_DIVE) {
+            if(state==PLAYER_DIVE) {
                 const float angle=pose.rotation;
                 p.facing_left=!p.facing_left;
                 assert(player_sprite_select(&p).rotation==-angle);

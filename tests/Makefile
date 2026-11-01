@@ -8,13 +8,15 @@ ORIENTATION := $(ROOT)/build/host/orientation_tests
 RENDER := $(ROOT)/build/host/render_tests
 MOVEMENT := $(ROOT)/build/host/movement_v04_tests
 CORRECTIONS := $(ROOT)/build/host/corrections_tests
+ART := $(ROOT)/build/host/art_pack_tests
 .PHONY: test clean
-test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS)
+test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(ART)
 	$(OUTPUT)
 	$(ORIENTATION)
 	$(RENDER)
 	$(MOVEMENT)
 	$(CORRECTIONS)
+	cd $(ROOT)/build/host && ./art_pack_tests
 $(OUTPUT): $(SOURCES) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated $(SOURCES) -lm -o $@
@@ -30,5 +32,8 @@ $(MOVEMENT): movement_v04_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 $(CORRECTIONS): corrections_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated corrections_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
+$(ART): art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(HEADERS) stubs/fat.h stubs/graphics.h
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Istubs -I$(ROOT)/include art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(wildcard $(ROOT)/source/game/*.c) -I$(ROOT)/assets/generated -lm -o $@
 clean:
-	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS)
+	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(ART)

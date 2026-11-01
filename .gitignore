@@ -4,3 +4,7 @@
 /boot.elf
 /boot.elf.map
 __pycache__/
+
+# User-owned artwork exports are private and never published by CI.
+/private-art/
+*.art

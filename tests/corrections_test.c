@@ -61,6 +61,13 @@ static void test_repeated_spins_are_bounded(void)
         assert(isfinite(spin.vy) && spin.y>=1000 && spin.spin_speed<100);
     }
     assert(starts>2 && spin.y<plain.y && spin.vy>0);
+    Player boosted;player_init(&boosted,1000,1000);int dir=1;
+    for(int i=0;i<360;++i) {
+        if(boosted.source_phase+32>=60) dir=-dir;
+        player_step(&boosted,&w,(GameInput){.spin_held=true,.spin_pressed=true,.horizontal=(float)dir});
+        assert(isfinite(boosted.vy) && boosted.y>=1000 && boosted.spin_speed<100);
+    }
+    assert(boosted.vy>0);
     Player p;player_init(&p,1000,1000);p.source_step=true;p.spin_requested=true;p.vy=-200;
     player_spin_prepare(&p,(GameInput){0});assert(p.spin_time==0);
     p.spin_requested=true;p.vy=0;player_spin_prepare(&p,(GameInput){0});assert(p.spin_speed==15);
