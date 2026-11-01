@@ -1,4 +1,5 @@
 #include "world_query.h"
+#include "course_world.h"
 #include <math.h>
 
 static bool intersects(Rect a, Rect b)
@@ -44,6 +45,12 @@ float world_shape_surface(WorldShape s, float x)
 }
 bool world_water_at(const World *w, float x, float y, float *surface)
 {
+    if(w->course) {
+        float s=0;
+        if(!course_area_water(w->course->area,course_cx(w->course,x),course_cy(w->course,y),&s)) return false;
+        if(surface) *surface=course_wy(w->course,s);
+        return true;
+    }
     WorldQuery q; WorldShape s;
     world_query_begin(&q,w,(Rect){x,y,0,0});
     while(world_query_next(&q,&s)) if(s.type==TILE_WATER) {
@@ -57,6 +64,7 @@ bool world_water_at(const World *w, float x, float y, float *surface)
 }
 bool world_hazard_at(const World *w,float x,float y)
 {
+    if(w->course) return course_area_hit(w->course->area,COURSE_LAVA,0,course_cx(w->course,x),course_cy(w->course,y));
     WorldQuery q; WorldShape s;
     world_query_begin(&q,w,(Rect){x,y,0,0});
     while(world_query_next(&q,&s)) if(s.type==TILE_HAZARD) return true;

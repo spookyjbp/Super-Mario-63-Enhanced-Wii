@@ -20,7 +20,7 @@ void player_init(Player *p, float x, float y)
     p->y = p->previous_y = y;
     p->animation = PLAYER_FALL;
     p->source_phase=28;
-    p->height=PLAYER_HEIGHT; p->water=100; p->power=100; p->nozzle=NOZZLE_HOVER;
+    p->height=PLAYER_HEIGHT; p->water=100; p->power=100; p->nozzle=NOZZLE_HOVER; p->has_fludd=true;
 }
 
 void player_step(Player *p, const World *world, GameInput input)
@@ -30,6 +30,7 @@ void player_step(Player *p, const World *world, GameInput input)
     p->animation_time += GAME_DT;
     p->jump_time+=GAME_DT;
     p->normal_land_time=decay(p->normal_land_time);
+    p->input_horizontal=input.horizontal;
     player_source_begin(p,input);
     const bool was_grounded = p->grounded;
     p->coyote = was_grounded ? 0.1f : decay(p->coyote);

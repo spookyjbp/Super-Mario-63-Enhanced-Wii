@@ -14,11 +14,13 @@ extern "C" {
 #define PLAYER_HEIGHT 44.0f
 
 typedef struct { float x, y, w, h; } Rect;
+struct CourseRuntime;
 typedef struct {
     const Rect *solids;
     size_t count;
     float width, height, spawn_x, spawn_y;
     const Level *level;
+    struct CourseRuntime *course; /* original course area; NULL for tile levels */
 } World;
 
 typedef struct {
@@ -63,6 +65,8 @@ typedef struct {
     float water, power, rocket_charge, rocket_boost, tap_window;
     int wall_normal, last_tap, bonk_direction;
     bool submerged, jet_active, dashing, tap_released;
+    bool has_fludd;          /* false until the FLUDD box (StartChar Fluddpow "") */
+    float input_horizontal;  /* held direction this tick, for wall rules */
     TileType material;
     PlayerAction action;
     Nozzle nozzle;
@@ -75,7 +79,7 @@ typedef struct {
     PlayerAnimation animation;
 } Player;
 
-typedef struct { float x, y, previous_x, previous_y; } Camera;
+typedef struct { float x, y, previous_x, previous_y; float cx, cy, ychange; } Camera;
 typedef struct {
     Player player;
     Camera camera;

@@ -68,29 +68,29 @@ static void test_parser(void)
 }
 static void test_selection_rules(void)
 {
-    Player p={.nozzle=NOZZLE_HOVER,.grounded=true,.walk_frame=40.4f};
+    Player p={.has_fludd=true,.nozzle=NOZZLE_HOVER,.grounded=true,.walk_frame=40.4f};
     ArtPick a=player_art_select(&p);
     assert(a.state==ART_WALK && a.variant==1 && a.index==39 && !a.timed);
     p.nozzle=NOZZLE_TURBO;p.blast_level=3;p.blast_parity=true;a=player_art_select(&p);
     assert(a.variant==3 && a.effect_index==7);
     p.nozzle=NOZZLE_ROCKET;p.rocket_charge=5.0f/32;a=player_art_select(&p);assert(a.effect_index==5);
     p.rocket_boost=8.0f/32-3.0f/32;a=player_art_select(&p);assert(a.effect_index==18);
-    p=(Player){.grounded=true,.dashing=true,.run_count=3};assert(player_art_select(&p).index==3);
+    p=(Player){.has_fludd=true,.grounded=true,.dashing=true,.run_count=3};assert(player_art_select(&p).index==3);
     p.run_count=6;p.run_frame=10;a=player_art_select(&p);assert(a.state==ART_RUN && a.index==16);
-    p=(Player){.vy=3*44.0f};assert(player_art_select(&p).state==ART_FALL);
+    p=(Player){.has_fludd=true,.vy=3*44.0f};assert(player_art_select(&p).state==ART_FALL);
     p.vy=2*44.0f;assert(player_art_select(&p).state==ART_RISE);
     p.jump_stage=3;p.jump_time=0.5f;a=player_art_select(&p);assert(a.state==ART_FRONTFLIP && a.timed);
-    p=(Player){.spin_time=1,.spin_frame=12,.spin_speed=11};assert(player_art_select(&p).index==12);
+    p=(Player){.has_fludd=true,.spin_time=1,.spin_frame=12,.spin_speed=11};assert(player_art_select(&p).index==12);
     p.spin_speed=9;assert(player_art_select(&p).index==52);
-    p=(Player){.pounding=true,.pound_frame=20};a=player_art_select(&p);assert(a.state==ART_GROUND && a.index==20);
-    p=(Player){.landing_time=0.2f,.pound_frame=30,.grounded=true};assert(player_art_select(&p).index==30);
-    p=(Player){.action=ACTION_DIVE,.dive_frame=2,.dive_rotation=-30,.nozzle=NOZZLE_HOVER};
+    p=(Player){.has_fludd=true,.pounding=true,.pound_frame=20};a=player_art_select(&p);assert(a.state==ART_GROUND && a.index==20);
+    p=(Player){.has_fludd=true,.landing_time=0.2f,.pound_frame=30,.grounded=true};assert(player_art_select(&p).index==30);
+    p=(Player){.has_fludd=true,.action=ACTION_DIVE,.dive_frame=2,.dive_rotation=-30,.nozzle=NOZZLE_HOVER};
     a=player_art_select(&p);assert(a.state==ART_DIVE && a.index==2 && a.rotation==-30 && a.pivot_y==-393);
-    p=(Player){.action=ACTION_BACKFLIP,.action_time=0.25f};a=player_art_select(&p);
+    p=(Player){.has_fludd=true,.action=ACTION_BACKFLIP,.action_time=0.25f};a=player_art_select(&p);
     assert(a.state==ART_BACKFLIP && a.timed && a.seconds==0.25f);
-    p=(Player){.submerged=true,.swim_stroke=true,.vy=-44};a=player_art_select(&p);
+    p=(Player){.has_fludd=true,.submerged=true,.swim_stroke=true,.vy=-44};a=player_art_select(&p);
     assert(a.state==ART_SWIM_STROKE && a.index==0);
-    p=(Player){.grounded=true,.normal_land_time=1.0f/32};assert(player_art_select(&p).state==ART_LAND);
+    p=(Player){.has_fludd=true,.grounded=true,.normal_land_time=1.0f/32};assert(player_art_select(&p).state==ART_LAND);
 }
 static void test_loader_and_drawing(void)
 {
@@ -100,7 +100,7 @@ static void test_loader_and_drawing(void)
     /* Pack embedded in boot.dol is used when no SD/USB file exists. */
     player_art_bin=bytes;player_art_bin_size=(unsigned)n;
     user_art_init();assert(user_art_available());
-    Player p={.height=44,.nozzle=NOZZLE_HOVER,.grounded=true,.walk_frame=1,.facing_left=true};
+    Player p={.has_fludd=true,.height=44,.nozzle=NOZZLE_HOVER,.grounded=true,.walk_frame=1,.facing_left=true};
     assert(user_art_fludd_available(&p));
     calls=0;assert(user_art_draw_player(&p,100,100));
     /* Back blast first (frame 1 of its clip: +20 twips), then body (frame 0: -40). */
@@ -112,11 +112,11 @@ static void test_loader_and_drawing(void)
     /* Crouched collider: still anchored at the feet. */
     p.height=26;calls=0;user_art_draw_player(&p,100,100);near(draws[1].y,100+26-6);
     /* Missing FLUDD variant falls back to the no-FLUDD clip; no effects drawn. */
-    p=(Player){.height=44,.nozzle=NOZZLE_TURBO,.vy=0,.facing_left=true};
+    p=(Player){.has_fludd=true,.height=44,.nozzle=NOZZLE_TURBO,.vy=0,.facing_left=true};
     calls=0;assert(user_art_draw_player(&p,0,0) && calls==1);
     assert(!user_art_fludd_available(&p));
     /* Ground pound frames come from the Hover Ground clip, unrotated. */
-    p=(Player){.height=44,.nozzle=NOZZLE_HOVER,.pounding=true,.pound_frame=0,.facing_left=true};
+    p=(Player){.has_fludd=true,.height=44,.nozzle=NOZZLE_HOVER,.pounding=true,.pound_frame=0,.facing_left=true};
     calls=0;assert(user_art_draw_player(&p,0,0) && calls==1 && draws[0].deg==0);
     user_art_shutdown();assert(!user_art_available());
     player_art_bin_size=0;user_art_init();assert(!user_art_available());

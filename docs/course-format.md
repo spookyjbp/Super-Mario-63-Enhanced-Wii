@@ -44,6 +44,6 @@ the "controls" sign) stores one mask per frame; later frames hold the last
 keyframe, as Flash does. Parameter values are the `onClipEvent(load)` assignments
 with string expressions (`"a"+newline+"b"`, `_root.CurrentPlayer`) evaluated.
 
-`source/assets/course_pack.c` validates the whole blob once and then reads it in
+`source/game/course_pack.c` validates the whole blob once and then reads it in
 place: no copies or allocation. A point test is one row lookup plus a binary search
 over that row's runs.

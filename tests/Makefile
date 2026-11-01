@@ -11,8 +11,9 @@ CORRECTIONS := $(ROOT)/build/host/corrections_tests
 ART := $(ROOT)/build/host/art_pack_tests
 CONTROLS := $(ROOT)/build/host/controls_tests
 COURSE := $(ROOT)/build/host/course_pack_tests
+PLAY := $(ROOT)/build/host/course_play_tests
 .PHONY: test clean
-test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(ART)
+test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(ART)
 	$(OUTPUT)
 	$(ORIENTATION)
 	$(RENDER)
@@ -21,6 +22,7 @@ test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) 
 	$(CONTROLS)
 	cd $(ROOT)/build/host && ./art_pack_tests
 	cd $(ROOT)/build/host && ./course_pack_tests
+	cd $(ROOT)/build/host && ./course_play_tests
 $(OUTPUT): $(SOURCES) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated $(SOURCES) -lm -o $@
@@ -42,8 +44,11 @@ $(ART): art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform
 $(CONTROLS): controls_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated controls_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
-$(COURSE): course_pack_test.c $(ROOT)/source/assets/course_pack.c $(ROOT)/include/course_pack.h
+$(COURSE): course_pack_test.c $(ROOT)/source/game/course_pack.c $(ROOT)/include/course_pack.h
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -I$(ROOT)/include course_pack_test.c $(ROOT)/source/assets/course_pack.c -lm -o $@
+	$(CC) $(CFLAGS) -I$(ROOT)/include course_pack_test.c $(ROOT)/source/game/course_pack.c -lm -o $@
+$(PLAY): course_play_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated course_play_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
 clean:
-	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(ART)
+	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(ART)

@@ -13,7 +13,7 @@ static unsigned clampu(float v,unsigned hi)
 
 ArtPick player_art_select(const Player *p)
 {
-    ArtPick a={.variant=1u+(unsigned)p->nozzle};
+    ArtPick a={.variant=p->has_fludd ? 1u+(unsigned)p->nozzle : 0u};
     const float vy=p->vy/44.0f;
     /* FLUDD water layers (Mario Main H1-H4/T1-T4/R1-R4 and swim frames). */
     if(p->nozzle==NOZZLE_ROCKET)

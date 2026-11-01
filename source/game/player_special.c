@@ -21,7 +21,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
 {
     p->action_time+=GAME_DT;
     p->jet_active=false;
-    if(in.nozzle_next_pressed && p->action==ACTION_NONE && !p->pounding && p->spin_time==0) {
+    if(p->has_fludd && in.nozzle_next_pressed && p->action==ACTION_NONE && !p->pounding && p->spin_time==0) {
         p->nozzle=(Nozzle)((p->nozzle+1)%NOZZLE_COUNT);
         p->rocket_charge=p->rocket_boost=0;
     }
@@ -98,7 +98,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
                play() runs recovery frames 3..9; frame 9 sets attack=false. */
             if(p->dive_recovering || p->dive_frame<2) ++p->dive_frame;
             /* Slide (Hover).xml clears attack at frame 7; None/Turbo/Rocket at 9. */
-            const unsigned end=p->nozzle==NOZZLE_HOVER ? 7 : 9;
+            const unsigned end=p->has_fludd && p->nozzle==NOZZLE_HOVER ? 7 : 9;
             if(p->dive_frame>=end) {
                 if(player_stand_clear(p,w)) {
                     resize(p,PLAYER_HEIGHT);p->action=ACTION_NONE;
@@ -120,6 +120,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
 }
 void player_fludd_step(Player *p,GameInput in)
 {
+    if(!p->has_fludd) {p->jet_active=false;p->rocket_charge=p->rocket_boost=0;return;}
     if(!in.nozzle_held || p->water<=0 || p->action==ACTION_BONK || p->pounding || p->spin_time>0) {
         p->rocket_charge=fmaxf(0,p->rocket_charge-GAME_DT);
         if(!in.nozzle_held && p->rocket_boost<=0) p->power=fminf(100,p->power+32*GAME_DT);

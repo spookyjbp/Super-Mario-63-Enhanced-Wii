@@ -1,4 +1,5 @@
 #include "world_query.h"
+#include "course_world.h"
 #include <math.h>
 
 float player_height(const Player *p) { return p->height>0 ? p->height : PLAYER_HEIGHT; }
@@ -8,6 +9,7 @@ static bool solid(TileType t) { return t!=TILE_EMPTY && t!=TILE_WATER; }
 static bool slope(TileType t) {return t==TILE_SLOPE_UP || t==TILE_SLOPE_DOWN;}
 bool player_stand_clear(const Player *p,const World *w)
 {
+    if(w->course) return course_stand_clear(p,w);
     float feet=p->y+player_height(p);
     Rect head={p->x,feet-PLAYER_HEIGHT,PLAYER_WIDTH,PLAYER_HEIGHT-0.1f};
     WorldQuery q;WorldShape s; world_query_begin(&q,w,head);
@@ -21,6 +23,7 @@ bool player_stand_clear(const Player *p,const World *w)
 }
 void player_collision_step(Player *p,const World *w)
 {
+    if(w->course) {course_collision_step(p,w);return;}
     const float h=player_height(p), original_dx=p->vx*GAME_DT;
     float dx=original_dx;
     WorldQuery q;WorldShape s;
