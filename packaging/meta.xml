@@ -2,7 +2,7 @@
 <app version="1">
   <name>Super Mario 63: Enhanced Wii Edition</name>
   <coder>Super Mario 63: Enhanced Wii Edition contributors</coder>
-  <version>0.1.0-dev</version>
-  <short_description>Wii build pipeline test scene</short_description>
-  <long_description>Development scaffold only. Move the red square with the Nunchuk stick, Classic Controller stick or D-pad, or GameCube stick or D-pad. Jump with Wii Remote A, Nunchuk Z, Classic A or GameCube A. Exit with HOME or GameCube START. Story Mode is not implemented.</long_description>
+  <version>0.3.0</version>
+  <short_description>Movement and physics playground</short_description>
+  <long_description>v0.3 movement playground with placeholder graphics. Move with the Nunchuk, Classic or GameCube stick or D-pad. Hold A to jump higher; jump again soon after landing for double and triple jumps. Spin with Remote B or Nunchuk C, Classic X or GameCube B. Ground pound with Nunchuk Z, Classic ZR or GameCube Z. Pause with PLUS, HOME or GameCube START; select Exit to Loader to quit. Story Mode is not implemented.</long_description>
 </app>

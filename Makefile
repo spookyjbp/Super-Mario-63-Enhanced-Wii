@@ -10,12 +10,12 @@ include $(DEVKITPPC)/wii_rules
 
 TARGET := boot
 BUILD := build
-SOURCES := source source/platform
+SOURCES := source source/platform source/game
 INCLUDES := include
 APP := super-mario-63-enhanced-wii
 
-CFLAGS = -g -O2 -Wall -Wextra $(MACHDEP) $(INCLUDE) -std=gnu11
-CXXFLAGS = -g -O2 -Wall -Wextra $(MACHDEP) $(INCLUDE) -std=gnu++17
+CFLAGS = -g -O2 -Wall -Wextra -Werror $(MACHDEP) $(INCLUDE) -std=gnu11
+CXXFLAGS = -g -O2 -Wall -Wextra -Werror $(MACHDEP) $(INCLUDE) -std=gnu++17
 LDFLAGS = -g $(MACHDEP) -Wl,-Map,$(OUTPUT).elf.map
 LIBS := -lwiiuse -lbte -logc -lm
 

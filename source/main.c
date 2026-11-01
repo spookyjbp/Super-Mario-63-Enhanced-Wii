@@ -1,5 +1,7 @@
 #include "graphics.h"
 #include "input.h"
+#include "game.h"
+#include "render.h"
 
 #include <ogc/lwp_watchdog.h>
 #include <stdlib.h>
@@ -26,33 +28,29 @@ int main(void)
     SYS_SetPowerCallback(on_power);
     WPAD_SetPowerButtonCallback(on_remote_power);
 
-    float x = graphics_width() / 2, y = 372, velocity_y = 0;
+    Game game;
+    game_init(&game, &movement_world, graphics_width());
+    GameInput pending = {0};
     u64 previous = gettime();
-    while (!exit_requested && !power_requested && SYS_MainLoop()) {
+    double accumulator = 0;
+    while (!exit_requested && !power_requested && !game.quit && SYS_MainLoop()) {
         const u64 now = gettime();
-        float dt = ticks_to_microsecs(now - previous) / 1000000.0f;
+        double elapsed = ticks_to_microsecs(now - previous) / 1000000.0;
         previous = now;
-        if (dt > 0.05f) dt = 0.05f;
-        const InputState input = input_poll();
-        if (input.exit_pressed) break;
-
-        /* Placeholder motion for input validation, not the original game physics. */
-        x += input.horizontal * 220 * dt;
-        if (x < 24) x = 24;
-        if (x > graphics_width() - 52) x = graphics_width() - 52;
-        if (input.jump_pressed && y >= 372) velocity_y = -400;
-        velocity_y += 1000 * dt;
-        y += velocity_y * dt;
-        if (y > 372) { y = 372; velocity_y = 0; }
-
-        const float width = graphics_width();
-        graphics_rect(0, 0, width, 480, (GXColor){100, 177, 235, 255});
-        graphics_rect(width - 130, 55, 48, 48, (GXColor){255, 226, 120, 255});
-        graphics_rect(55, 95, 115, 22, (GXColor){245, 250, 255, 255});
-        graphics_rect(160, 310, 190, 110, (GXColor){66, 150, 100, 255});
-        graphics_rect(0, 400, width, 80, (GXColor){138, 91, 55, 255});
-        graphics_rect(0, 400, width, 12, (GXColor){74, 188, 79, 255});
-        graphics_rect(x, y, 28, 28, (GXColor){226, 62, 65, 255});
+        if (elapsed > 0.25) elapsed = 0.25;
+        accumulator += elapsed;
+        game_input_latch(&pending, input_poll());
+        unsigned steps = 0;
+        while (accumulator >= GAME_DT && steps < 8) {
+            game_step(&game, &movement_world, pending, graphics_width());
+            game_input_consume(&pending);
+            accumulator -= GAME_DT;
+            ++steps;
+        }
+        /* Bound catch-up after a stall; never replace fixed ticks with a large dt.
+           PAL 50 Hz renders normally execute one or two 60 Hz simulation ticks. */
+        if (steps == 8 && accumulator >= GAME_DT) accumulator = 0;
+        render_game(&game, &movement_world, (float)(accumulator / GAME_DT));
         graphics_present();
     }
     graphics_shutdown();

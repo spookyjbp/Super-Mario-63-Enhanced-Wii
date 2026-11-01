@@ -9,7 +9,15 @@ permissions:
   contents: read
 
 jobs:
+  physics-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test platform-independent physics
+        run: make -C tests test
+
   build:
+    needs: physics-tests
     runs-on: ubuntu-latest
     container:
       image: devkitpro/devkitppc@sha256:d50f8a886f2ce1d3c22685a774afb0845379876b47d9b41a9b729f4f63a54813

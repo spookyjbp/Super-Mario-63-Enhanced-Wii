@@ -2,10 +2,39 @@
 
 A native Nintendo Wii homebrew project using C/C++, devkitPPC and libogc.
 
-**Milestone 1 is a build pipeline and interactive graphics test, not a playable
-port of Super Mario 63.** The repository was empty at initial inspection; no
-original source, levels, story data or art assets were available to port.
-The scene uses original placeholder rectangles and placeholder movement.
+**v0.3 — Movement and Physics** adds a responsive platforming playground with
+placeholder graphics. This is not yet the Story Mode port. The original game's
+source, assets and measured physics are not available in this repository; the
+movement constants here are independently tuned starting points, not a fidelity
+claim.
+
+## Movement playground
+
+- Accelerating ground/air movement, stronger braking when reversing, and stick dead zones.
+- Variable jump height: tap A for a short hop, hold A for the full arc.
+- Jump again within 0.28 seconds of landing to chain a double and then triple
+  jump. After the third jump or an expired window, the sequence restarts.
+- A 0.10 second jump buffer and coyote window make edges and landings forgiving.
+- Ground/midair spin lasts 0.32 seconds with a 0.50 second cooldown. Only one
+  aerial spin is allowed per landing; it briefly lifts/stalls descent. The active
+  attack rectangle is exposed for future targets; there are no enemies yet.
+- Ground pound has a 0.12 second windup, fast downward acceleration, an impact
+  effect and 0.18 second landing recovery. No jump chaining out of a pound.
+- Swept, axis-separated solid-rectangle collisions handle floors, ceilings and
+  walls, including thin platforms at pound speed. No slopes, moving platforms
+  or one-way surfaces are implemented. Falling into the gap respawns the player.
+- Smoothed, world-bounded camera with render interpolation. The HUD displays the
+  current animation state and jump stage. Running feet, spin sparks and pound
+  landing dust are placeholder animations.
+- Pause menu: Resume, Restart (at the spawn) and Exit to Loader. Simulation and
+  animation timers freeze while paused.
+
+Physics advances at fixed 60 Hz with a bounded accumulator and up to eight
+catch-up ticks per rendered frame. Input presses survive frames with no tick
+and are consumed once during catch-up. PAL 50 Hz rendering still runs 60 Hz
+simulation. A prolonged stall drops excess catch-up time to avoid a spiral;
+this is not a guarantee of real-time 60 FPS on hardware. There are no gameplay
+heap allocations; GX framebuffers/FIFO are allocated only at startup.
 
 ## Scope
 
@@ -80,16 +109,22 @@ SD:/apps/super-mario-63-enhanced-wii/meta.xml
 ```
 
 Launch **Super Mario 63: Enhanced Wii Edition** in the Homebrew Channel. An icon
-is optional and is not supplied. Expect a blue sky, sun, cloud, hill, ground and
-a movable red square. The square is an input/graphics test, not Mario.
+is optional and is not supplied. Expect a scrolling platform playground with a colored placeholder player, a
+state HUD, platforms, a wall, a low ceiling and a gap. The colored player is not
+final Mario artwork.
 
 Use Wii Remote channel 1 or GameCube port 1:
 
-| Controller | Move | Jump | Return to loader |
-| --- | --- | --- | --- |
-| Wii Remote + Nunchuk | Nunchuk stick / upright Remote D-pad | A or Nunchuk Z | HOME |
-| Classic Controller | Left stick / D-pad | A | HOME |
-| GameCube | Stick / D-pad | A | START |
+| Controller | Move | Jump (hold for height) | Spin | Ground pound | Pause |
+| --- | --- | --- | --- | --- | --- |
+| Wii Remote + Nunchuk | Nunchuk stick / upright Remote D-pad | A | B or Nunchuk C | Nunchuk Z | PLUS or HOME |
+| Classic Controller | Left stick / D-pad | A | X | ZR | PLUS or HOME |
+| GameCube | Stick / D-pad | A | B | Z | START |
+
+Menu: D-pad up/down to choose, A to confirm, B to resume, or the pause button to
+resume. To exit normally, choose **Exit to Loader** in the pause menu. HOME and
+START now open the menu rather than immediately exiting. Nunchuk Z is now pound,
+not jump. Remote-only fallback uses D-pad movement and Down to pound.
 
 The Wii RESET button requests a clean exit. Console and Wii Remote power
 callbacks request shutdown from the main loop. Controller hot-plugging is polled
@@ -98,27 +133,42 @@ each frame. Stick dead zones reduce idle drift.
 ## Layout
 
 ```text
-source/main.c               Application lifecycle and placeholder test scene
-source/platform/graphics.c  GX rendering, video mode and frame presentation
-source/platform/input.c     Controller polling and common input state
-include/                    Platform interfaces
+source/main.c               Lifecycle, fixed-step accumulator and input latching
+source/game/player.c        Platform-independent movement, attacks and collision
+source/game/game.c          Pause/restart/respawn and input edge handling
+source/game/camera.c        Camera smoothing and world limits
+source/game/world.c         Static collision playground (not a Story Mode level)
+source/platform/input.c     Wii/Classic/GameCube mappings
+source/platform/graphics.c  GX video, rectangles and small built-in text font
+source/platform/render.c    Interpolated scene, placeholder animation and menu
+include/                    Game and platform interfaces
+tests/                      Host-side physics tests, no Wii SDK required
 packaging/meta.xml          Homebrew Channel metadata
-.github/workflows/build.yml Official-toolchain build and artifact upload
+.github/workflows/build.yml Host tests, Wii compilation and artifact upload
 ```
 
 ## Validation
 
-The initial scaffold compiled successfully without warnings using the official
-image pinned above. `boot.elf` was identified as a 32-bit, big-endian PowerPC
-executable, and `make package` generated `boot.dol` and Homebrew Channel metadata.
-No hosted GitHub Actions run, Dolphin run or Wii hardware test has been verified.
+Run platform-independent tests with the host C compiler (no devkitPro needed):
 
-Compile with the official container and check that `make package` succeeds before
-testing. A second `make package` should reuse existing objects; `make clean` then
-`make package` checks the complete build again.
+```sh
+make -C tests test
+```
 
-Hardware validation remains required: check scene visibility, each input device,
-disconnect/reconnect, HOME/START and RESET exits, power handling, 4:3 and 16:9
-proportions, and PAL/NTSC video modes. Dolphin can provide an additional smoke
-test but cannot establish original Wii performance or controller behavior.
-Story Mode fidelity and 60 FPS performance are future milestones.
+Nine test groups exercise acceleration/braking/reversal, variable jump height,
+consecutive jump windows, input buffering and coyote time, floor/wall/ceiling
+and edge collisions, high-speed pounds, spin limits and attack bounds, landing
+recovery, camera clamps, pause/restart/exit/respawn and one-shot input latching.
+Tests compile with `-Wall -Wextra -Werror -pedantic`. CI runs these tests before
+building the Wii application; Wii compilation also treats warnings as errors.
+All gameplay calculations tested are the same C sources linked into `boot.dol`.
+
+The v0.3 source compiled using the pinned official toolchain without errors or
+warnings and generated `boot.dol`. Host tests passed. This establishes build and
+calculation checks, not gameplay verification.
+
+Dolphin and original Wii testing remain required: responsiveness, controller
+mapping and hot-plugging, jump/spin/pound timing, collision corners, pause and
+loader return, power/reset handling, camera smoothness, 4:3/16:9 proportions,
+PAL/NTSC pacing and performance. No Dolphin or Wii gameplay test has been
+performed in this environment. Story Mode fidelity remains a future milestone.
