@@ -53,9 +53,11 @@ def rgb5a3_tiles(image):
     return px.reshape(h // 4, 4, w // 4, 4).transpose(0, 2, 1, 3).tobytes()
 
 
-def build(data, root, compressed=False):
+def build(data, root, compressed=False, px_twips=20):
     """Version 2: raw GX RGBA8 texture. Version 3 (compressed=True): GX RGB5A3
-    texture, LZ4 block compressed, preceded by its u32 decoded size."""
+    texture, LZ4 block compressed, preceded by its u32 decoded size.
+    px_twips: twips per image pixel, for the offset added when frames are
+    trimmed (20 for art rendered at 1 px per px; 20 / zoom otherwise)."""
     images, index, clips, frames, seen = [], {}, [], [], set()
     for clip in data['clips']:
         ident = clip['id']
@@ -73,7 +75,7 @@ def build(data, root, compressed=False):
                 raise ValueError('Invalid offset/duration')
             box = im.getbbox() or (0, 0, 1, 1)  # fully transparent: one clear pixel
             im = im.crop(box)
-            ox, oy = ox + box[0] * 20, oy + box[1] * 20
+            ox, oy = ox + round(box[0] * px_twips), oy + round(box[1] * px_twips)
             if not -OFFSET_LIMIT <= ox <= OFFSET_LIMIT or not -OFFSET_LIMIT <= oy <= OFFSET_LIMIT:
                 raise ValueError('Offset out of range')
             if not 1 <= im.width <= 1024 or not 1 <= im.height <= 1024:

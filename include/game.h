@@ -62,6 +62,7 @@ typedef struct {
     int spin_combo_direction;
     float spin_speed, spin_frame, spin_combo_window, jump_time, normal_land_time;
     float height, action_time, wall_speed, ground_slope;
+    float ground_angle;      /* course ground angle under the feet (degrees; Dive.xml groundrot) */
     float water, power, rocket_charge, rocket_boost, tap_window;
     int wall_normal, last_tap, bonk_direction;
     bool submerged, jet_active, dashing, tap_released;

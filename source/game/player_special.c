@@ -40,8 +40,17 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
         return true;
     }
     if(p->action==ACTION_BACKFLIP || p->action==ACTION_ROLL) {
-        if(grounded) p->action=ACTION_NONE;
-        else if(p->action_time<22.0f/32) {
+        /* Mario Backflip.xml: attack = false at frame 21, or from frame 14 on
+           landing (air == false && yspeed > -3); from frame 14 KeyDOWN dives.
+           Mario Diveflip.xml: attack = false at frame 8, after which the air
+           dive is available again (dive, flip, dive... chains). The takeoff
+           tick still touches the ground, hence the yspeed test. */
+        const bool backflip=p->action==ACTION_BACKFLIP;
+        const float end=backflip ? 21.0f/32 : 8.0f/32;
+        const bool late=backflip && p->action_time>=14.0f/32;
+        if(p->action_time>=end || (late && grounded && p->vy>-3*ORIGINAL_VELOCITY)) p->action=ACTION_NONE;
+        else if(late && in.crouch_held && !p->submerged) p->action=ACTION_NONE; /* dive below */
+        else {
             if(p->source_step) {
                 float vx=p->vx/44;
                 if(in.horizontal>0) vx-=fminf((vx-5)/(20.0f/3),0)/1.5f;
@@ -51,7 +60,6 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
             p->facing_left=p->backflip_facing_left;
             return true;
         }
-        else p->action=ACTION_NONE;
     }
     if(in.crouch_held && p->spin_time==0 && !p->pounding && p->landing_time==0 && p->action==ACTION_NONE) {
         p->action=ACTION_DIVE;p->action_time=0;p->spin_time=0;p->dashing=false;
@@ -66,7 +74,8 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
         if(player_height(p)!=26) resize(p,26);
         const float speed=fabsf(p->vx);
         const bool backwards=(p->facing_left && in.horizontal>0)||(!p->facing_left && in.horizontal<0);
-        const bool level=p->ground_slope==0; /* Clip requires |ground rotation|<=15; port slopes are 45. */
+        /* Diveflip needs |rotation| < 25 (the dive's ground angle); tile slopes are 45. */
+        const bool level=w->course ? fabsf(p->ground_angle)<25 : p->ground_slope==0;
         /* Mario (None) Dive.xml onEnterFrame, lines 136-160. Both checks run on every
            source frame of the clip, including the recovery frames, and test KeyUP() as
            a held state. A fresh press is not required: Down, hold Jump, then push away
@@ -78,7 +87,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
                 p->vx*=0.75f;
                 const float target=(p->facing_left ? 1 : -1)*30*ORIGINAL_VELOCITY;
                 p->vx+=(target-p->vx)/5;p->vy=-12*ORIGINAL_VELOCITY;
-            } else if(p->dive_frame>=2 && speed>3*ORIGINAL_VELOCITY && level) {
+            } else if(p->dive_frame>=2 && speed>3*ORIGINAL_VELOCITY && level && !backwards) {
                 resize(p,PLAYER_HEIGHT);
                 p->action=ACTION_ROLL;p->action_time=0;p->backflip_facing_left=p->facing_left;
                 const float target=(p->facing_left ? -1 : 1)*15*ORIGINAL_VELOCITY;

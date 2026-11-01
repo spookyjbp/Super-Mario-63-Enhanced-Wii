@@ -23,6 +23,7 @@ jobs:
           python tests/test_atlas.py
           python tests/test_player_art.py
           python tests/test_course.py
+          python tests/test_object_art.py
           python tools/build_level.py --check
           python tests/test_level.py
       - name: Test platform-independent physics

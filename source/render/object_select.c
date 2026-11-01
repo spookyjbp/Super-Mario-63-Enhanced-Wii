@@ -64,12 +64,17 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         case CHEEP_CHASE: o[0] = base(l, OBJ_CHEEP_CHASE, f % 11); break;
         case CHEEP_TURN: o[0] = base(l, OBJ_CHEEP_TURN, f < 3 ? f : 3); break;
         case CHEEP_JUMP: o[0] = base(l, OBJ_CHEEP_JUMP, f < 23 ? f : 22); break;
-        case CHEEP_SPIN: o[0] = base(l, OBJ_CHEEP_SPIN, 0); o[0].rotation = l->tumblerot; break;
+        case CHEEP_SPIN: o[0] = base(l, OBJ_CHEEP_SPIN, 0); break;
         case CHEEP_GONE: o[0] = base(l, OBJ_CHEEP_GONE, f < 7 ? f : 7); break;
         default: o[0] = base(l, OBJ_CHEEP_SWIM, f % 19); break;
         }
+        /* Flash composes _rotation after the _xscale mirror (Rotate * Mirror), as the
+           renderer does, so the fish's own rotation is used as is; the spin
+           clip's clip.frame._rotation sits inside the mirror, so it reverses. */
         o[0].flip_x = !l->facing_left;
-        if (l->frame_label != CHEEP_SPIN) o[0].rotation = l->facing_left ? l->rotation : -l->rotation;
+        o[0].flip_y = false;
+        o[0].rotation = l->rotation;
+        if (l->frame_label == CHEEP_SPIN) o[0].rotation += l->facing_left ? l->tumblerot : -l->tumblerot;
         return 1;
     case LIVE_BOMB: { /* clip 3310: Walkleft, Walkright (mirrored), tumble, explode, explode2 */
         const unsigned dead = l->deadcount > 0 ? (unsigned)l->deadcount - 1 : 0;

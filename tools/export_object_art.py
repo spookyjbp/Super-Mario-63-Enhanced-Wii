@@ -10,7 +10,7 @@ v3 (GX RGB5A3, LZ4); clips are split over several 1024x1024 packs as needed.
 
     python export_object_art.py <checkout> <ffdec.jar> <out_dir>
 """
-import argparse, hashlib, json, struct, subprocess
+import argparse, hashlib, json, re, struct, subprocess
 from pathlib import Path
 from PIL import Image
 import swf_states as S
@@ -198,6 +198,15 @@ def export(source, jar, out_dir):
         if sx <= 0 or sy <= 0:
             raise ValueError(f'{name}: mirrored placement {sx},{sy}')
         ox, oy = A.origin(work, ident)  # course px of the canvas (0,0) in the sprite
+        # FFDec pads the PNG canvas around filters (Toad's head, the Stats clip):
+        # the SVG is the unpadded frame, so move the origin by half the difference.
+        svg_text = (C.sprite_dir(work / 'svg', ident) / '1.svg').read_text()[:2000]
+        sw = float(re.search(r'width="([\d.]+)px"', svg_text).group(1))
+        sh = float(re.search(r'height="([\d.]+)px"', svg_text).group(1))
+        with Image.open(C.sprite_dir(work / 'png', ident) / '1.png') as im0:
+            mx, my = (im0.width / ZOOM - sw) / 2, (im0.height / ZOOM - sh) / 2
+        if mx > 1 or my > 1:
+            ox, oy = ox - mx, oy - my
         count = sprites[ident]['frames']
         picks = list(frames) if frames is not None else list(range(count))
         picks = picks[::step]
@@ -222,7 +231,7 @@ def export(source, jar, out_dir):
         trial = current + [clip]
         try:
             build({'clips': [dict(c, frames=[dict(f, offset_twips=[f['offset_twips'][0] * 0, 0]) for f in c['frames']])
-                             for c in trial]}, Path('/'), compressed=False)
+                             for c in trial]}, Path('/'), compressed=False, px_twips=20 / ZOOM)
             current = trial
         except ValueError:
             packs.append(current); current = [clip]
@@ -231,7 +240,7 @@ def export(source, jar, out_dir):
               '#define SM63_OBJECT_ART_IDS_H', f'#define OBJECT_ART_ZOOM {ZOOM}f',
               f'#define OBJECT_ART_PACKS {len(packs)}', 'enum {']
     for p, pack in enumerate(packs):
-        blob = build({'clips': pack}, Path('/'), compressed=True)
+        blob = build({'clips': pack}, Path('/'), compressed=True, px_twips=20 / ZOOM)
         (out_dir / f'objects_8e1_{p}.bin').write_bytes(blob)
         for c in pack:
             header.append(f'    OBJ_{c["name"]} = {c["id"]}, /* pack {p} */')

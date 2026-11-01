@@ -100,6 +100,97 @@ static void test_area_chain_and_completion(void)
     ticks((GameInput){.crouch_held = true, .vertical = 1}, 1);
     assert(s.state == SESSION_COMPLETE);
 }
+/* Bug 1: reading a sign (Start looks at sign2 near the CamEdge) must not shake. */
+static void test_sign_camera_steady(void)
+{
+    assert(course_session_start(&s, &pack, "8-E1-1", 0, 0, 854));
+    for (int t = 0; t < 2000 && s.state != SESSION_SIGN; ++t) course_session_step(&s, (GameInput){0});
+    assert(s.state == SESSION_SIGN && s.camera_override);
+    float lx = s.game.camera.x, ly = s.game.camera.y, ldx = 0, ldy = 0;
+    for (int i = 0; i < 400; ++i) {
+        course_session_step(&s, (GameInput){0});
+        const float dx = s.game.camera.x - lx, dy = s.game.camera.y - ly;
+        assert(!(dx * ldx < 0) && !(dy * ldy < 0) && fabsf(dx) < 8 && fabsf(dy) < 8); /* no reversals or jumps */
+        if (dx != 0) ldx = dx;
+        if (dy != 0) ldy = dy;
+        lx = s.game.camera.x; ly = s.game.camera.y;
+    }
+    /* Closing eases back to Mario (1/10 a frame, as the original) without reversing. */
+    course_session_step(&s, (GameInput){.pound_pressed = true});
+    assert(s.state == SESSION_PLAY && !s.camera_override);
+    ldx = 0;
+    for (int i = 0; i < 90; ++i) {
+        course_session_step(&s, (GameInput){0});
+        const float dx = s.game.camera.x - s.game.camera.previous_x;
+        assert(!(dx * ldx < -0.01f));
+        if (fabsf(dx) > 0.01f) ldx = dx;
+    }
+}
+/* Bug 3 on the tutorial's real (sloped) ground. */
+static Player *tutorial_mario(float x)
+{
+    assert(course_session_start(&s, &pack, "8-E1-1", 0, 0, 854));
+    s.state = SESSION_PLAY; s.runtime.platform_frame = 1;
+    course_place_player(&s.runtime, &s.game.player, x, 60);
+    for (int i = 0; i < 40; ++i) course_session_step(&s, (GameInput){0});
+    return &s.game.player;
+}
+static void test_triple_jump_chain(void)
+{
+    Player *p = tutorial_mario(300);
+    bool was = p->grounded;
+    unsigned stages[4] = {0}; int n = 0;
+    float flip_vx = 0;
+    for (int i = 0; i < 400 && n < 3; ++i) {
+        GameInput in = {.horizontal = 1};
+        const bool landed = p->grounded && !was; was = p->grounded;
+        if (i == 60 || landed) in.jump_pressed = in.jump_held = true;
+        course_session_step(&s, in);
+        if (in.jump_pressed) { stages[n++] = p->jump_stage; if (p->jump_stage == 3) flip_vx = p->vx; }
+    }
+    for (int i = 0; i < 6; ++i) course_session_step(&s, (GameInput){.horizontal = 1});
+    assert(p->jump_stage == 3 && !p->grounded); /* still the frontflip (its art) in the air */
+    assert(stages[0] == 1 && stages[1] == 2 && stages[2] == 3); /* the takeoff tick no longer resets it */
+    assert(flip_vx > 300);                                       /* xspeed -= (xspeed - 15) / 5 */
+    /* After the frontflip the chain starts over; a late jump also starts over. */
+    for (int i = 0; i < 200 && !p->grounded; ++i) course_session_step(&s, (GameInput){0});
+    for (int i = 0; i < 30; ++i) course_session_step(&s, (GameInput){0}); /* > 9 frames on the ground */
+    course_session_step(&s, (GameInput){.jump_pressed = true, .jump_held = true, .horizontal = 1});
+    assert(p->jump_stage == 1);
+}
+static void test_crouch_backflip_on_slope(void)
+{
+    Player *p = tutorial_mario(300); /* a hill: the old stand-up check failed here */
+    p->facing_left = false;
+    for (int i = 0; i < 10; ++i) course_session_step(&s, (GameInput){.crouch_held = true, .vertical = 1});
+    assert(p->action == ACTION_DIVE && p->grounded);
+    for (int i = 0; i < 4 && p->action != ACTION_BACKFLIP; ++i)
+        course_session_step(&s, (GameInput){.crouch_held = true, .vertical = 1, .horizontal = -1, .jump_pressed = i == 0,
+                                            .jump_held = true});
+    assert(p->action == ACTION_BACKFLIP);
+    for (int i = 0; i < 6; ++i) course_session_step(&s, (GameInput){.jump_held = true});
+    assert(p->action == ACTION_BACKFLIP && !p->grounded && p->vy < 0 && !p->facing_left); /* not cut off at takeoff */
+    for (int i = 0; i < 40; ++i) course_session_step(&s, (GameInput){0});
+    assert(p->action == ACTION_NONE); /* frame 21 or landing */
+}
+static void test_dive_flip_chain(void)
+{
+    Player *p = tutorial_mario(200);
+    for (int i = 0; i < 60; ++i) course_session_step(&s, (GameInput){.horizontal = 1});
+    int flips = 0, air_dives = 0;
+    unsigned last = ACTION_NONE;
+    for (int i = 0; i < 600 && flips < 3; ++i) {
+        GameInput in = {.horizontal = 0};
+        if (p->action == ACTION_NONE && p->grounded) in = (GameInput){.crouch_held = true, .vertical = 1, .horizontal = 1};
+        else if (p->action == ACTION_DIVE && p->grounded && p->dive_frame >= 2) in = (GameInput){.jump_pressed = true, .jump_held = true};
+        else if (!p->grounded && p->action == ACTION_NONE) in = (GameInput){.crouch_held = true, .vertical = 1};
+        course_session_step(&s, in);
+        if (p->action == ACTION_ROLL && last != ACTION_ROLL) ++flips;
+        if (p->action == ACTION_DIVE && last == ACTION_NONE && !p->grounded) ++air_dives;
+        last = p->action;
+    }
+    assert(flips >= 3 && air_dives >= 2); /* dive, flip, dive, flip... */
+}
 static void test_hud_power_meter(void)
 {
     HudState h;
@@ -123,5 +214,6 @@ int main(void)
     const size_t n = fread(blob, 1, sizeof(blob), f); fclose(f);
     assert(course_pack_parse(blob, n, &pack));
     test_opening_and_controls_sign(); test_hints(); test_area_chain_and_completion(); test_hud_power_meter();
-    puts("4 course session (tutorial flow, HUD) test groups passed"); return 0;
+    test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
+    puts("8 course session (tutorial flow, HUD, sign camera, movement) test groups passed"); return 0;
 }

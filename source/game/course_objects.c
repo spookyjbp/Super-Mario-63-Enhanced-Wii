@@ -1160,6 +1160,9 @@ static void step_cheep(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player
         if (l->frame_label == CHEEP_GONE && far) cheep_reset(o, l);
         return;
     }
+    /* The turn clip (2220) frame 4 sets _parent._parent.frame = "swim". */
+    if (l->frame_label == CHEEP_TURN && l->frame >= 3) l->frame_label = CHEEP_SWIM;
+    const int label_before = l->frame_label;
     const float mx = course_cx(c, p->x + PLAYER_WIDTH / 2), my = course_cy(c, p->y + player_height(p));
     if (l->frame_label != CHEEP_SPIN && l->frame_label != CHEEP_GONE) {
         const float distance = sqrtf((my - l->y) * (my - l->y) + (mx - l->x) * (mx - l->x));
@@ -1256,6 +1259,8 @@ static void step_cheep(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player
         l->vx = -l->vx * 0.7f;
     }
     l->x += l->vx; l->y += l->vy;
+    /* clip.gotoAndStop(frame): a new label starts its clip from frame 1. */
+    if (l->frame_label != label_before) l->frame = 0;
 }
 static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *p, CourseProgress *g,
                      CoursePickups *taken, const float body[4], float fx, float fy)

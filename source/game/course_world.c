@@ -44,7 +44,10 @@ bool course_stand_clear(const Player *p, const World *w)
     const CourseRuntime *c = w->course;
     const float x = course_cx(c, p->x + PLAYER_WIDTH / 2), y = course_cy(c, p->y + player_height(p));
     const float tall = p->has_fludd ? 40.0f : 34.0f;
-    for (float k = 4; k <= tall; k += 2)
+    /* Only the part above the diving/crouching Mario (tall 25) can block standing
+       up; checking lower made every slope look like a ceiling, so crouch
+       backflips and diveflips failed on the tutorial's hills. */
+    for (float k = 26; k <= tall; k += 2)
         if (course_solid(c, x, y - k) || course_solid(c, x - 8, y - k) || course_solid(c, x + 8, y - k)) return false;
     return true;
 }
@@ -103,13 +106,14 @@ void course_collision_step(Player *p, const World *w)
     if (!grounded && p->vy >= 0) grounded = course_solid(c, x, y + 1) || course_bsolid(c, x, y + 1);
     p->grounded = grounded;
     if (grounded && p->vy > 0) p->vy = 0;
-    p->material = TILE_EMPTY; p->ground_slope = 0;
+    p->material = TILE_EMPTY; p->ground_slope = 0; p->ground_angle = 0;
     if (grounded) {
         p->material = course_area_hit(c->area, COURSE_ICE, 0, x, y + 1) ? TILE_ICE :
                       course_area_hit(c->area, COURSE_PUDDLE, 0, x, y + 1) ? TILE_PUDDLE : TILE_SOLID;
         const float left = surface_below(c, x - 5, y), right = surface_below(c, x + 5, y);
         if (isfinite(left) && isfinite(right) && fabsf(right - left) >= 3)
             p->ground_slope = right < left ? -1 : 1; /* port slide: -1 rises to the right */
+        if (isfinite(left) && isfinite(right)) p->ground_angle = atan2f(right - left, 10) * 57.29578f;
     }
     p->x = course_wx(c, x) - PLAYER_WIDTH / 2;
     p->y = course_wy(c, y) - player_height(p);
@@ -149,6 +153,21 @@ void course_camera_init(Camera *cam, const Player *p, const World *w, float view
     publish(cam, c, view_width);
     cam->previous_x = cam->x; cam->previous_y = cam->y;
 }
+/* One 32 Hz camera move toward `dx`, `dy` (course px), limited by CamEdge as in
+   the original: moving toward an edge the view already touches goes at most
+   1 px, then the edge midpoints are pushed out of CamEdge. */
+static void camera_move(Camera *cam, const CourseRuntime *c, float dx, float dy, float view_width)
+{
+    const float hw = half_width(view_width), hh = COURSE_VIEW_HEIGHT / 2;
+    const CourseArea *a = c->area;
+    if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx, cam->cy + hh + fmaxf(dy, 0) + 1)) dy = fminf(1, dy);
+    if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx, cam->cy - hh + fminf(dy, 0) - 1)) dy = fmaxf(-1, dy);
+    if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx + hw + fmaxf(dx, 0) + 1, cam->cy)) dx = fminf(1, dx);
+    if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx - hw + fminf(dx, 0) - 1, cam->cy)) dx = fmaxf(-1, dx);
+    if (fabsf(dx) >= 1) cam->cx += dx;
+    if (fabsf(dy) >= 1) cam->cy += dy;
+    edge_push(c, cam, hw);
+}
 void course_camera_step(Camera *cam, const Player *p, const World *w, float view_width)
 {
     const CourseRuntime *c = w->course;
@@ -163,18 +182,16 @@ void course_camera_step(Camera *cam, const Player *p, const World *w, float view
             cam->ychange = c->objects->cam_y_var + 50;
             xchange = c->objects->cam_x_var;
         } else cam->ychange = ((p->grounded ? 50.0f : 80.0f) - cam->ychange) / 10;
-        float dx = (mx - cam->cx - xchange) / 10 + p->vx / V / 4;
-        float dy = (my - cam->cy - cam->ychange) / 10 + p->vy / V / 4;
-        const float hw = half_width(view_width), hh = COURSE_VIEW_HEIGHT / 2;
-        const CourseArea *a = c->area;
-        /* Moving the view toward an edge it already touches is limited to 1 px. */
-        if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx, cam->cy + hh + fmaxf(dy, 0) + 1)) dy = fminf(1, dy);
-        if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx, cam->cy - hh + fminf(dy, 0) - 1)) dy = fmaxf(-1, dy);
-        if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx + hw + fmaxf(dx, 0) + 1, cam->cy)) dx = fminf(1, dx);
-        if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx - hw + fminf(dx, 0) - 1, cam->cy)) dx = fmaxf(-1, dx);
-        if (fabsf(dx) >= 1) cam->cx += dx;
-        if (fabsf(dy) >= 1) cam->cy += dy;
-        edge_push(c, cam, hw);
+        camera_move(cam, c, (mx - cam->cx - xchange) / 10 + p->vx / V / 4,
+                    (my - cam->cy - cam->ychange) / 10 + p->vy / V / 4, view_width);
     }
+    publish(cam, c, view_width);
+}
+void course_camera_step_to(Camera *cam, const CourseRuntime *c, float tx, float ty, bool source_step, float view_width)
+{
+    /* _root.Camcenter is another clip: camXspeed = -(Camcenter)/Camspeed, no
+       speed terms, the same CamEdge limits. */
+    cam->previous_x = cam->x; cam->previous_y = cam->y;
+    if (source_step) camera_move(cam, c, (tx - cam->cx) / 10, (ty - cam->cy) / 10, view_width);
     publish(cam, c, view_width);
 }

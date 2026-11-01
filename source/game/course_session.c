@@ -209,6 +209,7 @@ void course_session_step(CourseSession *s, GameInput in)
     const bool z_pressed = in.pound_pressed; /* already a button-down event */
     if (s->area_title_time > 0) s->area_title_time = fmaxf(0, s->area_title_time - GAME_DT);
     Player *p = &s->game.player;
+    const Camera camera_before = s->game.camera;
     switch (s->state) {
     case SESSION_COMPLETE:
         return;
@@ -273,16 +274,12 @@ void course_session_step(CourseSession *s, GameInput in)
         course_objects_step(&s->objects, &s->runtime, &s->game.player, &s->progress, pickups_for(s), false,
                             s->game.camera.cx, s->game.camera.cy, in.jump_held);
     if (s->game.player.source_step) hud_step(&s->hud, s->progress.hp);
-    if (s->camera_override) {
-        /* Camcenter = another clip: centre moves 1/10 of the way each frame. */
-        Camera *c = &s->game.camera;
-        if (p->source_step) {
-            c->cx += (s->camera_target_x - c->cx) / 10;
-            c->cy += (s->camera_target_y - c->cy) / 10;
-        }
-        const float zoom = course_view_zoom();
-        c->x = course_wx(&s->runtime, c->cx) - s->view_width / zoom / 2;
-        c->y = course_wy(&s->runtime, c->cy) - 480.0f / zoom / 2;
+    if (s->camera_override && s->state != SESSION_WARP) {
+        /* Camcenter = another clip: the only camera move this frame (following
+           Mario as well made the two moves and the CamEdge push fight: shake). */
+        s->game.camera = camera_before;
+        course_camera_step_to(&s->game.camera, &s->runtime, s->camera_target_x, s->camera_target_y, p->source_step,
+                              s->view_width);
     }
     update_hint(s);
 }

@@ -35,15 +35,23 @@ void player_step(Player *p, const World *world, GameInput input)
     player_source_begin(p,input);
     const bool was_grounded = p->grounded;
     p->coyote = was_grounded ? 0.1f : decay(p->coyote);
-    p->chain_window = decay(p->chain_window);
-    p->jump_buffer = input.jump_pressed ? 0.1f : decay(p->jump_buffer);
+    /* CharCode doublejumpcount: set to 9 by a jump, counted down only on the
+       ground; at 0 the chain (doublejump) resets. */
+    if (p->grounded) p->chain_window = decay(p->chain_window);
+    p->jump_buffer = input.jump_pressed ? 7.0f / 32 : decay(p->jump_buffer); /* _root.JumpPress = 7 */
 
     p->landing_time = decay(p->landing_time);
     if (p->landing_time > 0 && p->source_step && p->pound_frame < POUND_END_FRAME) ++p->pound_frame;
-    if (was_grounded && p->chain_window == 0) p->jump_stage = 0;
+    /* The takeoff tick still touches the ground (yspeed < -3): not a landing. */
+    if (was_grounded && p->vy > -3 * 44.0f && p->chain_window == 0) p->jump_stage = 0;
+    /* `if(attack == true && attackFrame !== "Land") doublejump = 0`. */
+    if (p->action != ACTION_NONE || p->pounding || p->spin_time > 0) p->jump_stage = 0;
 
     const bool special = player_special_step(p,world,input,was_grounded);
-    if(input.pound_pressed && !p->submerged && !was_grounded && p->action!=ACTION_BONK && !p->pounding) {
+    /* Ground pound in the air: not during the diveflip clip, nor before frame 14 of
+       Backflip.xml (its KeyZ handler). */
+    const bool pound_ok = p->action!=ACTION_ROLL && !(p->action==ACTION_BACKFLIP && p->action_time<14.0f/32);
+    if(input.pound_pressed && pound_ok && !p->submerged && !was_grounded && p->action!=ACTION_BONK && !p->pounding) {
         p->action=ACTION_NONE;p->pounding=true;p->pound_windup=POUND_WINDUP_FRAMES/32.0f;p->pound_frame=0;
         p->spin_time=0;p->vx=p->vy=0;p->coyote=p->jump_buffer=0;
     }
@@ -72,15 +80,22 @@ void player_step(Player *p, const World *world, GameInput input)
         if (p->jump_buffer > 0 && p->coyote > 0) {
             p->jump_stage = p->chain_window > 0 && p->jump_stage < 3 ? p->jump_stage + 1 : 1;
             if(p->jump_stage==3 && fabsf(p->vx)<=3*44) p->jump_stage=1;
-            static const float jumps[] = {0, -430, -510, -610};
+            /* CharCode: yspeed = -jumpspeed, -jumpspeed - 2.5, -jumpspeed - 5
+               (10, 12.5, 15: the port's tuned first jump scaled by 1.25 and 1.5). */
+            static const float jumps[] = {0, -430, -537.5f, -645};
             p->vy = jumps[p->jump_stage];
+            if (p->jump_stage == 3) { /* frontflip: xspeed -= (xspeed -/+ 15) / 5 */
+                const float target = (p->facing_left ? -15 : 15) * 44.0f;
+                p->vx -= (p->vx - target) / 5;
+            }
             /* CharCode jump sounds: "Mario Jump-1"/"-1b" (random(2)), "Mario Jump-2", "Mario Tripple Jump". */
             sfx_play(p->jump_stage == 1 ? (sfx_coin_flip() ? SFX_JUMP1 : SFX_JUMP1B)
                                         : p->jump_stage == 2 ? SFX_JUMP2 : SFX_TRIPLE, 100, 0);
             p->jump_time=0;
             p->grounded = false;
-            p->coyote = p->jump_buffer = p->chain_window = 0;
-            p->jump_cut = false;
+            p->coyote = p->jump_buffer = 0;
+            p->chain_window = p->jump_stage < 3 ? 9.0f / 32 : 0; /* doublejumpcount = 9 (0 after the flip) */
+            p->jump_cut = p->jump_stage == 3; /* the frontflip is an attack: no short hop */
         }
         if (input.pound_pressed && !p->grounded) {
             p->pounding = true;
@@ -138,7 +153,6 @@ void player_step(Player *p, const World *world, GameInput input)
 
         if (!was_grounded) {
             p->normal_land_time=3.0f/32;
-            p->chain_window = p->jump_stage > 0 ? 0.28f : 0;
             if (p->pounding) {
                 /* "hit" (27) through frame 42: sixteen source frames of attack. */
                 p->landing_time = (POUND_END_FRAME + 1 - POUND_HIT_FRAME) / 32.0f;

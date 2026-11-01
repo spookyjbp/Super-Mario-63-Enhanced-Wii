@@ -1,5 +1,7 @@
 /* Original tutorial objects: coins, Toad dialogue, falling log, birds. */
 #include "course_session.h"
+#include "object_select.h"
+#include "object_art_ids.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -372,6 +374,38 @@ static void test_platforms_and_camera_boxes(void)
     ticks((GameInput){0}, 240);
     assert(s.objects.cam_y_var < -45 && s.game.camera.ychange < 5);
 }
+/* Bug 2: after a turn the fish swims again (turn clip frame 4), its swim clip
+   loops, and a chasing fish is drawn with its own rotation (Rotate * Mirror). */
+static void test_cheep_animation(void)
+{
+    play_area("8-E1-1");
+    LiveObject *ch = NULL;
+    for (unsigned i = 0; i < s.objects.count; ++i)
+        if (s.objects.live[i].kind == LIVE_CHEEP && s.objects.live[i].home_x == 619.95f) ch = &s.objects.live[i];
+    assert(ch);
+    course_place_player(&s.runtime, &s.game.player, 1150, -60);
+    int turns = 0, stuck = 0, t;
+    unsigned last_frame = 999, same = 0;
+    for (t = 0; t < 900; ++t) {
+        course_session_step(&s, (GameInput){0});
+        if (!s.game.player.source_step) continue;
+        if (ch->frame_label == CHEEP_TURN) { ++stuck; assert(stuck <= 4); }
+        else { if (stuck) ++turns; stuck = 0; }
+        ObjectDraw d[OBJECT_DRAW_MAX];
+        assert(object_select(ch, d) == 1);
+        if (ch->frame_label == CHEEP_SWIM) {
+            assert(d[0].clip == OBJ_CHEEP_SWIM && d[0].frame < 19);
+            same = d[0].frame == last_frame ? same + 1 : 0;
+            assert(same < 2);                         /* the swim clip keeps playing */
+            last_frame = d[0].frame;
+        }
+    }
+    assert(turns >= 2);
+    ch->facing_left = false; ch->rotation = 30; ch->frame_label = CHEEP_CHASE;
+    ObjectDraw d[OBJECT_DRAW_MAX];
+    object_select(ch, d);
+    assert(d[0].flip_x && d[0].rotation == 30);
+}
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
@@ -385,5 +419,6 @@ int main(void)
     test_fludd_box_and_bottle();
     test_breakable_box();
     test_platforms_and_camera_boxes();
-    puts("11 course object (coins/Toad/log/birds/Goomba/Cheep/Bob-omb/Koopa/FLUDD/boxes/platforms) test groups passed"); return 0;
+    test_cheep_animation();
+    puts("12 course object (coins/Toad/log/birds/Goomba/Cheep/Bob-omb/Koopa/FLUDD/boxes/platforms/Cheep animation) test groups passed"); return 0;
 }
