@@ -8,56 +8,13 @@ static float approach(float value, float target, float change)
     return fmaxf(value - change, target);
 }
 static float decay(float value) { return fmaxf(0, value - GAME_DT); }
-static bool overlap(float a, float length, float b, float other)
-{
-    return a < b + other && a + length > b;
-}
-
 void player_init(Player *p, float x, float y)
 {
     memset(p, 0, sizeof(*p));
     p->x = p->previous_x = x;
     p->y = p->previous_y = y;
     p->animation = PLAYER_FALL;
-}
-
-/* Sweep each axis against every solid and choose the closest contact, independent
-   of platform order. Sweeps prevent tunnelling even at ground-pound speed. */
-static void move_horizontal(Player *p, const World *world)
-{
-    float dx = p->vx * GAME_DT;
-    for (size_t i = 0; i < world->count; ++i) {
-        const Rect r = world->solids[i];
-        if (!overlap(p->y, PLAYER_HEIGHT, r.y, r.h)) continue;
-        if (dx > 0 && p->x + PLAYER_WIDTH <= r.x)
-            dx = fminf(dx, r.x - (p->x + PLAYER_WIDTH));
-        else if (dx < 0 && p->x >= r.x + r.w)
-            dx = fmaxf(dx, r.x + r.w - p->x);
-    }
-    float target = p->x + dx;
-    target = fmaxf(0, fminf(target, world->width - PLAYER_WIDTH));
-    if (fabsf(target - p->x - p->vx * GAME_DT) > 0.001f) p->vx = 0;
-    p->x = target;
-}
-
-static bool move_vertical(Player *p, const World *world)
-{
-    float dy = p->vy * GAME_DT;
-    bool landed = false;
-    for (size_t i = 0; i < world->count; ++i) {
-        const Rect r = world->solids[i];
-        if (!overlap(p->x, PLAYER_WIDTH, r.x, r.w)) continue;
-        if (dy >= 0 && p->y + PLAYER_HEIGHT <= r.y && p->y + PLAYER_HEIGHT + dy >= r.y) {
-            dy = r.y - (p->y + PLAYER_HEIGHT);
-            landed = true;
-        } else if (dy < 0 && p->y >= r.y + r.h && p->y + dy <= r.y + r.h) {
-            dy = r.y + r.h - p->y;
-        }
-    }
-    if (p->y + dy < 0) dy = -p->y;
-    if (landed || fabsf(dy - p->vy * GAME_DT) > 0.001f) p->vy = 0;
-    p->y += dy;
-    return landed;
+    p->height=PLAYER_HEIGHT; p->water=100; p->power=100; p->nozzle=NOZZLE_HOVER;
 }
 
 void player_step(Player *p, const World *world, GameInput input)
@@ -74,25 +31,43 @@ void player_step(Player *p, const World *world, GameInput input)
     p->landing_time = decay(p->landing_time);
     if (was_grounded && p->chain_window == 0) p->jump_stage = 0;
 
+    const bool special = player_special_step(p,world,input,was_grounded);
+    if(input.pound_pressed && !p->submerged && !was_grounded && p->action!=ACTION_BONK && !p->pounding) {
+        p->action=ACTION_NONE;p->pounding=true;p->pound_windup=0.12f;
+        p->spin_time=0;p->vx=p->vy=0;p->coyote=p->jump_buffer=0;
+    }
+    p->tap_window=decay(p->tap_window);
+    const int tap=input.horizontal>0.5f ? 1 : input.horizontal<-0.5f ? -1 : 0;
+    if(tap==0) p->tap_released=true;
+    else if(p->tap_released || p->last_tap!=tap) {
+        if(p->last_tap==tap && p->tap_window>0 && was_grounded) p->dashing=true;
+        p->last_tap=tap;p->tap_window=9.0f/32;p->tap_released=false;
+    }
+    if(tap==0 || (tap<0)!=p->facing_left || input.jump_pressed || input.crouch_held || input.nozzle_held)
+        p->dashing=false;
     const bool locked = p->pounding || p->landing_time > 0;
-    if (!locked) {
+    if (!locked && !special) {
         const float axis = fmaxf(-1, fminf(1, input.horizontal));
-        const float target = axis * 280;
+        float target = axis * (p->dashing ? 450 : 280);
+        if(input.nozzle_held && p->nozzle==NOZZLE_TURBO && p->water>0 && p->power>=100) target=p->vx;
         float acceleration = was_grounded ? 1700 : 950;
         if (axis == 0) acceleration = was_grounded ? 2000 : 300;
         else if (p->vx * axis < 0) acceleration = was_grounded ? 2400 : 1200;
+        if(was_grounded && p->material==TILE_ICE) acceleration/=5;
+        else if(was_grounded && p->material==TILE_PUDDLE) acceleration/=2.2f;
         p->vx = approach(p->vx, target, acceleration * GAME_DT);
-        if (axis != 0) p->facing_left = axis < 0;
+        if (axis != 0 && p->action!=ACTION_BACKFLIP && p->action!=ACTION_ROLL) p->facing_left = axis < 0;
 
         if (p->jump_buffer > 0 && p->coyote > 0) {
             p->jump_stage = p->chain_window > 0 && p->jump_stage < 3 ? p->jump_stage + 1 : 1;
+            if(p->jump_stage==3 && fabsf(p->vx)<=3*44) p->jump_stage=1;
             static const float jumps[] = {0, -430, -510, -610};
             p->vy = jumps[p->jump_stage];
             p->grounded = false;
             p->coyote = p->jump_buffer = p->chain_window = 0;
             p->jump_cut = false;
         }
-        if (input.spin_pressed && p->spin_cooldown == 0 &&
+        if (p->action==ACTION_NONE && input.spin_pressed && p->spin_cooldown == 0 &&
             (p->grounded || !p->air_spin_used)) {
             p->spin_time = 0.32f;
             p->spin_cooldown = 0.5f;
@@ -108,7 +83,7 @@ void player_step(Player *p, const World *world, GameInput input)
             p->vx = p->vy = 0;
             p->jump_buffer = p->coyote = 0;
         }
-    } else {
+    } else if (locked) {
         p->vx = approach(p->vx, 0, 2400 * GAME_DT);
     }
 
@@ -117,7 +92,7 @@ void player_step(Player *p, const World *world, GameInput input)
             p->pound_windup = decay(p->pound_windup);
             p->vy = 0;
         } else p->vy = fminf(1200, p->vy + 3600 * GAME_DT);
-    } else {
+    } else if (!p->submerged && p->action!=ACTION_BONK) {
         if (!input.jump_held && p->vy < 0 && !p->jump_cut) {
             p->vy *= 0.45f;
             p->jump_cut = true;
@@ -125,8 +100,14 @@ void player_step(Player *p, const World *world, GameInput input)
         const float gravity = input.jump_held && p->vy < 0 ? 1050 : 1600;
         p->vy = fminf(800, p->vy + gravity * GAME_DT);
     }
-    move_horizontal(p, world);
-    p->grounded = move_vertical(p, world);
+    if(p->grounded) p->power=100;
+    if(p->material==TILE_PUDDLE) p->water=fminf(100,p->water+80*GAME_DT);
+    player_fludd_step(p,input);
+    player_collision_step(p,world);
+    if(p->wall_normal && (fabsf(p->wall_speed)>11*44 || (p->dashing && fabsf(p->wall_speed)>5*44)) && !p->submerged && p->action!=ACTION_BONK) {
+        p->action=ACTION_BONK;p->action_time=0;p->bonk_direction=p->wall_normal;
+        p->vx=p->vy=0;p->rocket_boost=0;p->dashing=false;
+    }
     if (p->grounded) {
         p->air_spin_used = false;
         if (!was_grounded) {
@@ -140,7 +121,14 @@ void player_step(Player *p, const World *world, GameInput input)
         p->pounding = false;
         p->pound_windup = 0;
     }
-    if (p->landing_time > 0) p->animation = PLAYER_LAND;
+    if(p->submerged) p->animation=p->spin_time>0 ? PLAYER_SPIN : PLAYER_SWIM;
+    else if(p->action==ACTION_BONK) p->animation=PLAYER_BONK;
+    else if(p->action==ACTION_DIVE) p->animation=fabsf(p->vx)<44 && p->grounded ? PLAYER_CROUCH : PLAYER_DIVE;
+    else if(p->action==ACTION_BACKFLIP) p->animation=PLAYER_BACKFLIP;
+    else if(p->action==ACTION_ROLL) p->animation=PLAYER_ROLL;
+    else if(p->rocket_boost>0) p->animation=PLAYER_ROCKET;
+    else if(p->jet_active) p->animation=p->nozzle==NOZZLE_HOVER ? PLAYER_HOVER : p->nozzle==NOZZLE_ROCKET ? PLAYER_ROCKET_CHARGE : PLAYER_TURBO;
+    else if (p->landing_time > 0) p->animation = PLAYER_LAND;
     else if (p->pounding) p->animation = p->pound_windup > 0 ? PLAYER_POUND_WINDUP : PLAYER_POUND;
     else if (p->spin_time > 0) p->animation = PLAYER_SPIN;
     else if (!p->grounded) p->animation = p->vy < 0 ? PLAYER_RISE : PLAYER_FALL;
@@ -151,11 +139,11 @@ void player_step(Player *p, const World *world, GameInput input)
 bool player_attack_hitbox(const Player *p, Rect *hitbox)
 {
     if (p->spin_time > 0) {
-        *hitbox = (Rect){p->x - 18, p->y - 4, PLAYER_WIDTH + 36, PLAYER_HEIGHT + 8};
+        *hitbox = (Rect){p->x - 18, p->y - 4, PLAYER_WIDTH + 36, player_height(p) + 8};
         return true;
     }
     if (p->pounding && p->pound_windup == 0) {
-        *hitbox = (Rect){p->x, p->y + PLAYER_HEIGHT - 4, PLAYER_WIDTH, 8};
+        *hitbox = (Rect){p->x, p->y + player_height(p) - 4, PLAYER_WIDTH, 8};
         return true;
     }
     return false;

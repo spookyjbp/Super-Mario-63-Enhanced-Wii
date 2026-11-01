@@ -70,7 +70,7 @@ static void test_airborne_facing(void)
     }
     /* Exercise direction changes through the existing physics, including the
        reversal interval where facing follows input before velocity crosses 0. */
-    const World empty = {NULL, 0, 2400, 960, 100, 100};
+    const World empty = {.solids=NULL, .count=0, .width=2400, .height=960, .spawn_x=100, .spawn_y=100};
     player_init(&p, 100, 100); p.vy = -300;
     player_step(&p, &empty, (GameInput){.horizontal = 1, .jump_held = true});
     assert(p.animation == PLAYER_RISE && !p.facing_left);
@@ -106,7 +106,7 @@ static void test_spin_keyframe_mirroring(void)
 
 static void test_spin_exit_preserves_facing(void)
 {
-    const World empty = {NULL, 0, 2400, 960, 100, 100};
+    const World empty = {.solids=NULL, .count=0, .width=2400, .height=960, .spawn_x=100, .spawn_y=100};
     for (unsigned left = 0; left < 2; ++left) {
         Player p;
         player_init(&p, 100, 100);
@@ -126,10 +126,26 @@ static void test_spin_exit_preserves_facing(void)
     }
 }
 
+static void test_v04_pose_orientation(void)
+{
+    Player p={0};
+    for(int state=PLAYER_CROUCH;state<PLAYER_ANIMATION_COUNT;++state)
+        for(unsigned left=0;left<2;++left) {
+            p.animation=(PlayerAnimation)state;p.facing_left=left!=0;p.action_time=0.125f;
+            const PlayerSprite pose=player_sprite_select(&p);
+            assert(pose.frame<20 && pose.height_scale>0 && pose.height_scale<=1);
+            assert(pose.flip_x==((left!=0)!=(mario_frames[pose.frame].mirror_for_right!=0)));
+            if(state==PLAYER_BACKFLIP || state==PLAYER_ROLL || state==PLAYER_SWIM || state==PLAYER_DIVE) {
+                const float angle=pose.rotation;
+                p.facing_left=!p.facing_left;
+                assert(player_sprite_select(&p).rotation==-angle);
+            }
+        }
+}
 int main(void)
 {
     test_native_metadata(); test_preserved_states(); test_airborne_facing();
-    test_spin_keyframe_mirroring(); test_spin_exit_preserves_facing();
-    puts("5 sprite orientation test groups passed");
+    test_spin_keyframe_mirroring(); test_spin_exit_preserves_facing(); test_v04_pose_orientation();
+    puts("6 sprite orientation test groups passed");
     return 0;
 }

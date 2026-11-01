@@ -1,6 +1,8 @@
 #include "render.h"
 #include "graphics.h"
 #include "player_sprite.h"
+#include "world_query.h"
+#include <math.h>
 #include "mario_atlas.h"
 #include "mario_rgba8_bin.h"
 #include <stdio.h>
@@ -22,14 +24,17 @@ static void draw_player(const Player *p, float x, float y)
     const PlayerSprite selected = player_sprite_select(p);
     const MarioFrame sprite = mario_frames[selected.frame];
     const float scale = 1.5f;
-    const float width = sprite.width * scale, height = sprite.height * scale;
+    const float width = sprite.width * scale, height = sprite.height * scale * selected.height_scale;
     float u0 = (float)sprite.x / MARIO_ATLAS_SIZE;
     float u1 = (float)(sprite.x + sprite.width) / MARIO_ATLAS_SIZE;
     if (selected.flip_x) { const float swap = u0; u0 = u1; u1 = swap; }
-    graphics_sprite(&mario_texture, x + (PLAYER_WIDTH - width) / 2,
-                    y + PLAYER_HEIGHT - height, width, height,
-                    u0, (float)sprite.y / MARIO_ATLAS_SIZE,
-                    u1, (float)(sprite.y + sprite.height) / MARIO_ATLAS_SIZE);
+    const float px=x+(PLAYER_WIDTH-width)/2, py=y+player_height(p)-height;
+    const float v0=(float)sprite.y/MARIO_ATLAS_SIZE;
+    const float v1=(float)(sprite.y+sprite.height)/MARIO_ATLAS_SIZE;
+    if(selected.rotation!=0)
+        graphics_sprite_rotated(&mario_texture,px,py,width,height,u0,v0,u1,v1,selected.rotation);
+    else graphics_sprite(&mario_texture,px,py,width,height,u0,v0,u1,v1);
+
 }
 
 static float lerp(float a, float b, float t) { return a + (b - a) * t; }
@@ -43,17 +48,38 @@ void render_game(const Game *game, const World *world, float interpolation)
     const GXColor white = {245, 248, 255, 255};
     graphics_rect(0, 0, width, 480, (GXColor){100, 177, 235, 255});
     graphics_rect(width - 110, 60, 48, 48, (GXColor){255, 226, 120, 255});
-    for (int i = 0; i < 8; ++i) {
-        const float x = i * 420 - camera_x * 0.3f;
-        graphics_rect(x, 290 - camera_y * 0.12f, 240, 200, (GXColor){66, 150, 100, 255});
-        graphics_rect(x + 60, 90, 95, 18, white);
+    if(world->level) {
+        const Level *l=world->level;
+        for(unsigned layer=0;layer<l->background_count;++layer) {
+            const BackgroundLayer bg=l->backgrounds[layer];
+            const float offset=fmodf(camera_x*bg.parallax,bg.spacing);
+            for(float bx=-offset-bg.width;bx<width;bx+=bg.spacing)
+                graphics_rect(bx,bg.y-camera_y*bg.parallax,bg.width,bg.height,(GXColor){bg.r,bg.g,bg.b,255});
+        }
+    } else {
+        for (int i=0;i<8;++i) {
+            const float bx=i*420-camera_x*0.3f;
+            graphics_rect(bx,290-camera_y*0.12f,240,200,(GXColor){66,150,100,255});
+            graphics_rect(bx+60,90,95,18,white);
+        }
     }
-    for (size_t i = 0; i < world->count; ++i) {
-        const Rect r = world->solids[i];
-        if (r.x + r.w < camera_x || r.x > camera_x + width ||
-            r.y + r.h < camera_y || r.y > camera_y + 480) continue;
-        graphics_rect(r.x - camera_x, r.y - camera_y, r.w, r.h, (GXColor){138, 91, 55, 255});
-        graphics_rect(r.x - camera_x, r.y - camera_y, r.w, 6, (GXColor){74, 188, 79, 255});
+    WorldQuery query;WorldShape shape;
+    world_query_begin(&query,world,(Rect){camera_x,camera_y,width,480});
+    while(world_query_next(&query,&shape)) {
+        const Rect r=shape.bounds;const float tx=r.x-camera_x,ty=r.y-camera_y;
+        GXColor color={138,91,55,255};
+        if(shape.type==TILE_WATER) color=(GXColor){45,120,200,255};
+        else if(shape.type==TILE_ICE) color=(GXColor){170,225,245,255};
+        else if(shape.type==TILE_PUDDLE) color=(GXColor){70,145,160,255};
+        else if(shape.type==TILE_HAZARD) color=(GXColor){220,70,45,255};
+        if(shape.type==TILE_SLOPE_UP)
+            graphics_triangle(tx,ty+r.h,tx+r.w,ty,tx+r.w,ty+r.h,color);
+        else if(shape.type==TILE_SLOPE_DOWN)
+            graphics_triangle(tx,ty,tx+r.w,ty+r.h,tx,ty+r.h,color);
+        else {
+            graphics_rect(tx,ty,r.w,shape.type==TILE_PLATFORM ? 12 : r.h,color);
+            if(shape.type!=TILE_WATER) graphics_rect(tx,ty,r.w,4,(GXColor){74,188,79,255});
+        }
     }
     const float x = lerp(p->previous_x, p->x, interpolation) - camera_x;
     const float y = lerp(p->previous_y, p->y, interpolation) - camera_y;
@@ -63,9 +89,11 @@ void render_game(const Game *game, const World *world, float interpolation)
         graphics_rect(x - spread, y + PLAYER_HEIGHT - 5, 10, 5, white);
         graphics_rect(x + PLAYER_WIDTH + spread, y + PLAYER_HEIGHT - 5, 10, 5, white);
     }
-    static const char *states[] = {"IDLE", "RUN", "RISE", "FALL", "SPIN", "WINDUP", "POUND", "LAND"};
-    char hud[80];
-    snprintf(hud, sizeof(hud), "V0.3.2  %s  JUMP %u", states[p->animation], p->jump_stage);
+    static const char *states[] = {"IDLE", "RUN", "RISE", "FALL", "SPIN", "WINDUP", "POUND", "LAND", "LOW DIVE", "DIVE", "BACKFLIP", "ROLL", "SWIM",
+        "HOVER", "CHARGING", "ROCKET", "TURBO", "BONK"};
+    char hud[100];
+    static const char *nozzles[]={"H","R","T"};
+    snprintf(hud, sizeof(hud), "V0.4 %s %s W%u P%u", states[p->animation], nozzles[p->nozzle], (unsigned)p->water, (unsigned)p->power);
     graphics_rect(14, 14, width - 28, 28, (GXColor){28, 40, 65, 255});
     graphics_text(22, 21, hud, 2, white);
     if (game->paused) {

@@ -18,6 +18,8 @@ void GX_InitTexObjLOD(GXTexObj *t, unsigned min, unsigned mag, float lo,
                       float hi, float bias, unsigned clamp, unsigned edge, unsigned aniso);
 void GX_InvalidateTexAll(void);
 float graphics_width(void);
+void graphics_triangle(float,float,float,float,float,float,GXColor);
+void graphics_sprite_rotated(GXTexObj*,float,float,float,float,float,float,float,float,float);
 void graphics_rect(float x, float y, float w, float h, GXColor color);
 void graphics_text(float x, float y, const char *text, float scale, GXColor color);
 void graphics_sprite(GXTexObj *t, float x, float y, float w, float h,

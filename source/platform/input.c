@@ -18,6 +18,12 @@ GameInput input_poll(void)
     PAD_ScanPads();
     const u16 gc_held = PAD_ButtonsHeld(0), gc_down = PAD_ButtonsDown(0);
     state.horizontal = stick_axis(PAD_StickX(0) / 80.0f);
+    state.vertical = -stick_axis(PAD_StickY(0) / 80.0f);
+    state.crouch_held = state.vertical>0.65f || (gc_held & PAD_BUTTON_DOWN)!=0;
+    state.nozzle_held = (gc_held & PAD_TRIGGER_R)!=0;
+    state.nozzle_next_pressed = (gc_down & PAD_TRIGGER_L)!=0;
+    if(gc_held & PAD_BUTTON_UP) state.vertical=-1;
+    if(gc_held & PAD_BUTTON_DOWN) state.vertical=1;
     state.jump_pressed = (gc_down & PAD_BUTTON_A) != 0;
     state.jump_held = (gc_held & PAD_BUTTON_A) != 0;
     state.spin_pressed = (gc_down & PAD_BUTTON_B) != 0;
@@ -44,6 +50,8 @@ GameInput input_poll(void)
             (type == WPAD_EXP_NUNCHUK ? WPAD_NUNCHUK_BUTTON_Z : WPAD_BUTTON_DOWN);
         const u32 pause = classic ? WPAD_CLASSIC_BUTTON_PLUS | WPAD_CLASSIC_BUTTON_HOME :
             WPAD_BUTTON_PLUS | WPAD_BUTTON_HOME;
+        const u32 nozzle = classic ? WPAD_CLASSIC_BUTTON_Y : WPAD_BUTTON_1;
+        const u32 next_nozzle = classic ? WPAD_CLASSIC_BUTTON_ZL : WPAD_BUTTON_2;
         const u32 cancel = classic ? WPAD_CLASSIC_BUTTON_B : WPAD_BUTTON_B;
         expansion_t expansion;
         WPAD_Expansion(0, &expansion);
@@ -52,7 +60,14 @@ GameInput input_poll(void)
         if (stick) {
             const float axis = stick_axis(stick->mag * sinf(stick->ang * (3.14159265f / 180)));
             if (fabsf(axis) > fabsf(state.horizontal)) state.horizontal = axis;
+            const float vertical=-stick_axis(stick->mag*cosf(stick->ang*(3.14159265f/180)));
+            if(fabsf(vertical)>fabsf(state.vertical)) state.vertical=vertical;
         }
+        if(held & up) state.vertical=-1;
+        if(held & below) state.vertical=1;
+        state.crouch_held |= state.vertical>0.65f;
+        state.nozzle_held |= (held & nozzle)!=0;
+        state.nozzle_next_pressed |= (down & next_nozzle)!=0;
         if (held & left) state.horizontal = -1;
         if (held & right) state.horizontal = 1;
         state.jump_pressed |= (down & jump) != 0;

@@ -10,7 +10,8 @@
 const unsigned char mario_rgba8_bin[1] = {0};
 const unsigned int mario_rgba8_bin_size = 1;
 static struct {
-    unsigned rects, sprites, yellow_squares;
+    unsigned rects, sprites, yellow_squares, triangles;
+    float first_parallax_x;
     float x, y, w, h, u0, v0, u1, v1;
 } draws;
 
@@ -31,6 +32,7 @@ float graphics_width(void) { return 640; }
 void graphics_rect(float x, float y, float w, float h, GXColor color)
 {
     (void)x; (void)y;
+    if(draws.rects==2) draws.first_parallax_x=x;
     ++draws.rects;
     if (w == 7 && h == 7 && color.r == 255 && color.g == 250 && color.b == 120)
         ++draws.yellow_squares;
@@ -47,6 +49,10 @@ void graphics_sprite(GXTexObj *t, float x, float y, float w, float h,
     draws.x = x; draws.y = y; draws.w = w; draws.h = h;
     draws.u0 = u0; draws.v0 = v0; draws.u1 = u1; draws.v1 = v1;
 }
+void graphics_triangle(float a,float b,float c,float d,float e,float f,GXColor color)
+{ (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)color;++draws.triangles; }
+void graphics_sprite_rotated(GXTexObj *t,float x,float y,float w,float h,float u0,float v0,float u1,float v1,float rotation)
+{ (void)rotation;graphics_sprite(t,x,y,w,h,u0,v0,u1,v1); }
 static void near(float a, float b) { assert(fabsf(a - b) < 0.001f); }
 static void record(const Game *game, const World *world, float alpha)
 {
@@ -60,7 +66,7 @@ static void record(const Game *game, const World *world, float alpha)
 }
 static void test_no_spin_placeholders(void)
 {
-    const World world = {NULL, 0, 2400, 960, 100, 100};
+    const World world = {.solids=NULL, .count=0, .width=2400, .height=960, .spawn_x=100, .spawn_y=100};
     Game game = {0};
     game.player.animation = PLAYER_IDLE;
     record(&game, &world, 0);
@@ -76,7 +82,7 @@ static void test_no_spin_placeholders(void)
 }
 static void test_spin_tracks_player_and_camera(void)
 {
-    const World world = {NULL, 0, 2400, 960, 100, 100};
+    const World world = {.solids=NULL, .count=0, .width=2400, .height=960, .spawn_x=100, .spawn_y=100};
     Game game = {0};
     game.player.animation = PLAYER_SPIN;
     game.player.spin_time = 0.30f;
@@ -100,7 +106,7 @@ static void test_spin_tracks_player_and_camera(void)
 }
 static void test_direction_reaches_uvs(void)
 {
-    const World world = {NULL, 0, 2400, 960, 100, 100};
+    const World world = {.solids=NULL, .count=0, .width=2400, .height=960, .spawn_x=100, .spawn_y=100};
     Game game = {0};
     for (unsigned left = 0; left < 2; ++left) {
         game.player.facing_left = left != 0;
@@ -120,12 +126,27 @@ static void test_direction_reaches_uvs(void)
         }
     }
 }
+static void test_tile_and_parallax_rendering(void)
+{
+    Game game={0};game.camera.y=game.camera.previous_y=480;
+    record(&game,&movement_world,0.5f);
+    assert(draws.triangles>0 && draws.rects>10);
+    const float parallax=draws.first_parallax_x;
+    game.camera.x=game.camera.previous_x=100;
+    record(&game,&movement_world,0.5f);
+    near(draws.first_parallax_x,parallax-15);
+    const unsigned visible=draws.rects;
+    game.camera.x=game.camera.previous_x=4000;
+    record(&game,&movement_world,0.5f);
+    assert(draws.rects<visible && draws.triangles==0);
+}
 int main(void)
 {
     render_init();
     test_no_spin_placeholders();
     test_spin_tracks_player_and_camera();
     test_direction_reaches_uvs();
-    puts("3 render command regression groups passed (not a visual/GX test)");
+    test_tile_and_parallax_rendering();
+    puts("4 render command regression groups passed (not a visual/GX test)");
     return 0;
 }

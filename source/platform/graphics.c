@@ -1,6 +1,7 @@
 #include "graphics.h"
 
 #include <malloc.h>
+#include <math.h>
 #include <string.h>
 
 #define FIFO_SIZE (256 * 1024)
@@ -146,8 +147,8 @@ void graphics_text(float x, float y, const char *text, float scale, GXColor colo
 }
 
 
-void graphics_sprite(GXTexObj *texture, float x, float y, float width, float height,
-                     float u0, float v0, float u1, float v1)
+void graphics_sprite_rotated(GXTexObj *texture, float x, float y, float width, float height,
+                     float u0, float v0, float u1, float v1, float degrees)
 {
     GX_SetNumTexGens(1);
     GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
@@ -158,11 +159,16 @@ void graphics_sprite(GXTexObj *texture, float x, float y, float width, float hei
     GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
     GX_SetAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
     GX_LoadTexObj(texture, GX_TEXMAP0);
+    const float radians=degrees*0.01745329252f, c=cosf(radians), s=sinf(radians);
+    const float cx=x+width/2, cy=y+height/2;
+    const float corners[4][2]={{-width/2,-height/2},{width/2,-height/2},{width/2,height/2},{-width/2,height/2}};
+    float vx[4],vy[4];
+    for(unsigned i=0;i<4;++i) {vx[i]=cx+corners[i][0]*c-corners[i][1]*s;vy[i]=cy+corners[i][0]*s+corners[i][1]*c;}
     GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
-    GX_Position3f32(x, y, 0); GX_Color4u8(255,255,255,255); GX_TexCoord2f32(u0, v0);
-    GX_Position3f32(x + width, y, 0); GX_Color4u8(255,255,255,255); GX_TexCoord2f32(u1, v0);
-    GX_Position3f32(x + width, y + height, 0); GX_Color4u8(255,255,255,255); GX_TexCoord2f32(u1, v1);
-    GX_Position3f32(x, y + height, 0); GX_Color4u8(255,255,255,255); GX_TexCoord2f32(u0, v1);
+    GX_Position3f32(vx[0], vy[0], 0); GX_Color4u8(255,255,255,255); GX_TexCoord2f32(u0, v0);
+    GX_Position3f32(vx[1], vy[1], 0); GX_Color4u8(255,255,255,255); GX_TexCoord2f32(u1, v0);
+    GX_Position3f32(vx[2], vy[2], 0); GX_Color4u8(255,255,255,255); GX_TexCoord2f32(u1, v1);
+    GX_Position3f32(vx[3], vy[3], 0); GX_Color4u8(255,255,255,255); GX_TexCoord2f32(u0, v1);
     GX_End();
     /* Restore the untextured path for terrain, effects, text and pause UI. */
     GX_SetVtxDesc(GX_VA_TEX0, GX_NONE);
@@ -171,4 +177,15 @@ void graphics_sprite(GXTexObj *texture, float x, float y, float width, float hei
     GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
     GX_SetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+}
+
+void graphics_sprite(GXTexObj *t,float x,float y,float w,float h,float u0,float v0,float u1,float v1)
+{ graphics_sprite_rotated(t,x,y,w,h,u0,v0,u1,v1,0); }
+void graphics_triangle(float x0,float y0,float x1,float y1,float x2,float y2,GXColor color)
+{
+    GX_Begin(GX_TRIANGLES,GX_VTXFMT0,3);
+    GX_Position3f32(x0,y0,0);GX_Color4u8(color.r,color.g,color.b,color.a);
+    GX_Position3f32(x1,y1,0);GX_Color4u8(color.r,color.g,color.b,color.a);
+    GX_Position3f32(x2,y2,0);GX_Color4u8(color.r,color.g,color.b,color.a);
+    GX_End();
 }

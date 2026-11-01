@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 static const Rect floor_rect[] = {{0, 400, 2400, 80}};
-static const World floor_world = {floor_rect, 1, 2400, 960, 100, 356};
+static const World floor_world = {.solids=floor_rect, .count=1, .width=2400, .height=960, .spawn_x=100, .spawn_y=356};
 static Player standing(void)
 {
     Player p;
@@ -62,6 +62,7 @@ static void test_jump_chain(void)
     Player p = standing();
     float previous_speed = 0;
     for (unsigned stage = 1; stage <= 3; ++stage) {
+        if(stage==3) p.vx=200; /* Original triple jump requires horizontal speed >3. */
         player_step(&p, &floor_world, (GameInput){.jump_pressed = true, .jump_held = true});
         assert(p.jump_stage == stage && -p.vy > previous_speed);
         previous_speed = -p.vy;
@@ -85,7 +86,7 @@ static void test_buffer_and_coyote(void)
         player_step(&p, &floor_world, (GameInput){.jump_held = true});
     assert(p.vy < 0 && p.jump_stage == 1);
     const Rect ledge[] = {{0, 400, 150, 50}};
-    const World w = {ledge, 1, 2400, 960, 0, 0};
+    const World w = {.solids=ledge, .count=1, .width=2400, .height=960, .spawn_x=0, .spawn_y=0};
     p = standing(); p.x = 149; p.vx = 280;
     player_step(&p, &w, (GameInput){.horizontal = 1});
     assert(!p.grounded);
@@ -99,7 +100,7 @@ static void test_buffer_and_coyote(void)
 static void test_collisions(void)
 {
     const Rect solids[] = {{0, 400, 800, 40}, {200, 200, 20, 200}, {50, 250, 90, 20}};
-    const World w = {solids, 3, 800, 960, 0, 0};
+    const World w = {.solids=solids, .count=3, .width=800, .height=960, .spawn_x=0, .spawn_y=0};
     Player p = standing();
     ticks(&p, &w, (GameInput){.horizontal = 1}, 100);
     assert(p.x == 200 - PLAYER_WIDTH && p.vx == 0 && p.grounded);
@@ -112,7 +113,7 @@ static void test_collisions(void)
     }
     assert(minimum >= 270 && p.grounded); /* Underside of low ceiling. */
     const Rect thin[] = {{0, 400, 800, 2}};
-    const World thin_world = {thin, 1, 800, 960, 0, 0};
+    const World thin_world = {.solids=thin, .count=1, .width=800, .height=960, .spawn_x=0, .spawn_y=0};
     player_init(&p, 100, 340); p.vy = 1200; p.pounding = true;
     player_step(&p, &thin_world, (GameInput){0});
     assert(p.y == 356 && p.grounded && p.vy == 0); /* No tunnelling. */
@@ -120,12 +121,12 @@ static void test_collisions(void)
     player_step(&p, &w, (GameInput){.horizontal = 1});
     assert(p.x <= 172); /* Horizontal sweep at excessive speed. */
     const Rect left_wall[] = {{50, 200, 20, 200}, {0, 400, 800, 40}};
-    const World left = {left_wall, 2, 800, 960, 0, 0};
+    const World left = {.solids=left_wall, .count=2, .width=800, .height=960, .spawn_x=0, .spawn_y=0};
     p = standing();
     ticks(&p, &left, (GameInput){.horizontal = -1}, 40);
     assert(p.x == 70 && p.vx == 0);
     const Rect edge[] = {{0, 400, 150, 30}};
-    const World edges = {edge, 1, 800, 960, 0, 0};
+    const World edges = {.solids=edge, .count=1, .width=800, .height=960, .spawn_x=0, .spawn_y=0};
     p = standing(); p.x = 150;
     player_step(&p, &edges, (GameInput){0});
     assert(!p.grounded && p.y > 356); /* Exact edge has no support. */
@@ -170,7 +171,7 @@ static void test_camera(void)
     p.x = 3000; p.y = 2000;
     for (int i = 0; i < 500; ++i) camera_step(&c, &p, &floor_world, 854);
     assert(c.x <= 1546 && c.y <= 480);
-    const World tiny = {NULL, 0, 320, 240, 10, 10};
+    const World tiny = {.solids=NULL, .count=0, .width=320, .height=240, .spawn_x=10, .spawn_y=10};
     camera_init(&c, &p, &tiny, 854);
     camera_step(&c, &p, &tiny, 854);
     assert(c.x == 0 && c.y == 0);

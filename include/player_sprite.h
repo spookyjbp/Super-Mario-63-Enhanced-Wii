@@ -6,6 +6,7 @@
 typedef struct {
     unsigned frame;
     bool flip_x;
+    float rotation, height_scale;
 } PlayerSprite;
 
 /* Pure presentation selection. Never change the authoritative player facing. */

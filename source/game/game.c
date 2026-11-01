@@ -35,7 +35,7 @@ void game_step(Game *g, const World *w, GameInput input, float width)
         return;
     }
     player_step(&g->player, w, input);
-    if (g->player.y > w->height + 100) {
+    if (g->player.y > w->height + 100 || g->player.material==TILE_HAZARD || world_hazard_at(w,g->player.x+PLAYER_WIDTH/2,g->player.y+player_height(&g->player)-1)) {
         player_init(&g->player, w->spawn_x, w->spawn_y);
         camera_init(&g->camera, &g->player, w, width);
     }
@@ -44,6 +44,10 @@ void game_step(Game *g, const World *w, GameInput input, float width)
 void game_input_latch(GameInput *p, GameInput current)
 {
     p->horizontal = current.horizontal;
+    p->vertical = current.vertical;
+    p->crouch_held = current.crouch_held;
+    p->nozzle_held = current.nozzle_held;
+    p->nozzle_next_pressed |= current.nozzle_next_pressed;
     p->jump_held = current.jump_held;
     p->jump_pressed |= current.jump_pressed;
     p->spin_pressed |= current.spin_pressed;
@@ -55,7 +59,8 @@ void game_input_latch(GameInput *p, GameInput current)
 }
 void game_input_consume(GameInput *p)
 {
-    const float horizontal = p->horizontal;
+    const float horizontal = p->horizontal, vertical = p->vertical;
+    const bool crouch=p->crouch_held, nozzle=p->nozzle_held;
     const bool held = p->jump_held;
-    *p = (GameInput){.horizontal = horizontal, .jump_held = held};
+    *p = (GameInput){.horizontal=horizontal, .vertical=vertical, .jump_held=held, .crouch_held=crouch, .nozzle_held=nozzle};
 }

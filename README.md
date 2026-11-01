@@ -1,67 +1,69 @@
 # Super Mario 63: Enhanced Wii Edition
 
-A native Nintendo Wii homebrew project using C/C++, devkitPPC and libogc.
+**v0.4 — Player Movement and Environment Foundation** is a native Wii homebrew
+movement lab built with C/C++, devkitPPC, libogc and GX. It starts from v0.3.2
+(`e061143`) and retains the corrected original Mario sprite directions and spin
+animation without yellow square particles.
 
-**v0.3.2 — Original Spin Effects** adds a responsive platforming playground with
-original animated Mario sprites from Runouw's source repository. This is not yet
-the Story Mode port. A small, attributed subset of original player artwork is
-included; levels, story and measured original physics are not ported. Movement
-constants here are independently tuned starting points, not a fidelity claim.
+This is an **experimental movement port and tested engine foundation**, not a
+complete faithful Story Mode port. New actions are grounded in the original
+source rather than borrowed from other Mario games. See the
+[source research, values and implementation-status report](docs/v0.4-movement.md).
 
-v0.3.2 removes the six yellow square spin placeholders. It retains the original
-Mario spin animation, with no additional particle effect; authentic extra spin
-effects were not imported. See the [source and license audit](docs/spin-effects.md).
-The user confirmed the preceding build's sprite directions in Dolphin; this
-release still needs a new Dolphin visual check.
+## What v0.4 adds
 
-## Movement playground
+- Low dive/slide, a source-confirmed backflip trigger, dive recovery roll,
+  double-tap run, material friction and slope momentum.
+- Swimming, vertical strokes, underwater spin, surface exit and water refill.
+- Hover thrust, charge/cancel/launch Rocket and ground/air/underwater Turbo,
+  including water/power limits and nozzle switching.
+- Original-style high-speed wall bonk/rebound. Conventional manual wall jumping
+  and a separate side somersault were not confirmed and have not been invented.
+- An immutable tile level with solid/one-way platforms, 45-degree slopes, water,
+  ice, shallow-puddle material, lab hazards and parallax backgrounds.
+- Explicit animation states. New action poses are temporary transformations of
+  existing sprites; complete original animation clips and FLUDD artwork remain
+  unfinished. Terrain/backgrounds use placeholders because redistribution
+  permission for new original environment art has not been established.
 
-- Accelerating ground/air movement, stronger braking when reversing, and stick dead zones.
-- Variable jump height: tap A for a short hop, hold A for the full arc.
-- Jump again within 0.28 seconds of landing to chain a double and then triple
-  jump. After the third jump or an expired window, the sequence restarts.
-- A 0.10 second jump buffer and coyote window make edges and landings forgiving.
-- Ground/midair spin lasts 0.32 seconds with a 0.50 second cooldown. Only one
-  aerial spin is allowed per landing; it briefly lifts/stalls descent. The active
-  attack rectangle is exposed for future targets; there are no enemies yet.
-- Ground pound has a 0.12 second windup, fast downward acceleration, an impact
-  effect and 0.18 second landing recovery. No jump chaining out of a pound.
-- Swept, axis-separated solid-rectangle collisions handle floors, ceilings and
-  walls, including thin platforms at pound speed. No slopes, moving platforms
-  or one-way surfaces are implemented. Falling into the gap respawns the player.
-- Smoothed, world-bounded camera with render interpolation. The HUD displays the
-  current animation state and jump stage. Original Mario frames animate walking,
-  jumping, falling, spinning and pounding. Spin square placeholders are removed;
-  landing dust remains a placeholder effect.
-- Pause menu: Resume, Restart (at the spawn) and Exit to Loader. Simulation and
-  animation timers freeze while paused.
+Existing acceleration, variable-height jumping, double/triple jumps, spin, pound,
+pause/restart/exit and camera following remain. Triple jumps now require momentum
+as in the original source. Normal jump speeds and comfort windows remain port
+tuning, not an exact original-physics claim. All three nozzles are enabled in the
+lab; Story Mode unlocks, health/oxygen, enemies, moving platforms and scripts are
+outside this milestone. There is no Level Designer.
 
-Physics advances at fixed 60 Hz with a bounded accumulator and up to eight
-catch-up ticks per rendered frame. Input presses survive frames with no tick
-and are consumed once during catch-up. PAL 50 Hz rendering still runs 60 Hz
-simulation. A prolonged stall drops excess catch-up time to avoid a spiral;
-this is not a guarantee of real-time 60 FPS on hardware. There are no gameplay
-heap allocations; GX framebuffers/FIFO are allocated only at startup.
+## Controls
 
-## Scope
+Use Wii Remote channel 1 or GameCube port 1. Analog sticks and D-pads work;
+vertical analog movement uses a dead zone.
 
-The intended game is the original Story Mode, preserving its gameplay, physics,
-levels, story and art style while improving presentation for Wii. Level Designer
-and all level-editing functionality are excluded. Future work must port the original level and story data and measure fidelity
-and performance on hardware. A small subset of original Mario PNGs is bundled; see [asset provenance and credits](assets/mario/README.md).
+| Action | Wii Remote + Nunchuk | Classic Controller | GameCube |
+| --- | --- | --- | --- |
+| Move / swim vertically | Nunchuk stick or upright Remote D-pad | Left stick / D-pad | Stick / D-pad |
+| Jump / rise in water | A (hold for higher jump) | A | A |
+| Spin | B or Nunchuk C | X | B |
+| Ground pound in air | Nunchuk Z | ZR | Z |
+| Low dive / slide / descend in water | Stick down or D-pad Down | Stick down or D-pad Down | Stick down or D-pad Down |
+| Activate selected FLUDD | Hold Remote 1 | Hold Y | Hold R |
+| Cycle Hover → Rocket → Turbo | Remote 2 | ZL | L |
+| Pause / resume | PLUS or HOME | PLUS or HOME | START |
+| Menu select / confirm / cancel | D-pad / A / B | D-pad / A / B | D-pad / A / B |
 
-The scaffold supports Wii Remote + Nunchuk, Classic Controller and GameCube
-controller input. It follows the console's preferred video mode and 4:3/16:9
-system setting; widescreen uses a wider logical view with anamorphic output.
-Rendering is synchronized to video refresh. The goal is 60 FPS where practical
-on Wii; PAL 50 Hz modes retain their native refresh. No hardware performance
-claim is made.
+Backflip: enter a slow low dive, then Jump while pressing opposite the stored
+facing direction. Jump from a forward dive to recover with a roll. For running,
+double-tap left or right within 9/32 s. Chain jumps within 0.28 s of landing;
+the third requires horizontal speed above 132 px/s. Hold FLUDD to Hover or Turbo;
+hold Rocket through its charge to launch, release early to cancel. The HUD shows
+H/R/T nozzle, water W and power P. Water refills in the pool and on puddle tiles;
+power recovers when grounded, in water, or while releasing the nozzle. Nozzle
+switching is allowed while neutral. RESET exits safely; power callbacks retain
+shutdown behavior. Remote-only fallback is also available through the D-pad,
+A/B, 1/2 and Down-to-pound fallback, but Nunchuk is the intended Wii control setup.
 
-## Build
+## Build and install
 
-Install the official [devkitPro toolchains](https://devkitpro.org/wiki/Getting_Started)
-and the `wii-dev` package group (devkitPPC, libogc and Wii tools). In a configured
-devkitPro shell:
+Install official [devkitPro](https://devkitpro.org/wiki/Getting_Started) `wii-dev`:
 
 ```sh
 export DEVKITPRO=/opt/devkitpro
@@ -70,7 +72,7 @@ export PATH="$DEVKITPRO/tools/bin:$DEVKITPPC/bin:$PATH"
 make -j2 package
 ```
 
-Alternatively use the official Linux container, also used by CI:
+Or use the same pinned official container as CI:
 
 ```sh
 docker run --rm -v "$PWD:/project" -w /project \
@@ -78,114 +80,57 @@ docker run --rm -v "$PWD:/project" -w /project \
   make -j2 package
 ```
 
-The image supplies devkitPPC, libogc and its supporting libraries. Both C (`.c`)
-and C++17 (`.cpp`) sources are discovered in the listed source directories; C++
-sources switch the linker to G++. Keep source basenames unique across directories.
-Add new module directories to `SOURCES` in the Makefile.
+Outputs are `boot.dol`, debug `boot.elf` / `boot.elf.map`, and
+`dist/apps/super-mario-63-enhanced-wii/`. Copy the `apps` folder to an SD card or
+supported USB device and launch through the installed Homebrew Channel.
+`make clean` removes generated build/package outputs. C11/C++17 modules are
+supported; source basenames must be unique across listed source directories.
 
-Outputs:
+The environment lab has a platform near spawn, a hill with both slope directions,
+a pool farther right, a tall wall, ice/puddle strips and a red respawn tile.
+Use the pause menu to restart. Original Story Mode levels are not included.
 
-- `boot.dol`: executable for the Wii loader.
-- `boot.elf` and `boot.elf.map`: debugging symbols and link map.
-- `dist/apps/super-mario-63-enhanced-wii/`: packaged application.
+## Architecture and data
 
-`make` builds the executable, `make package` refreshes the install folder, and
-`make clean` removes generated files. Build outputs are ignored by Git.
+- `source/game/player.c`: existing movement, action integration, animation choice.
+- `source/game/player_special.c`: source-derived dive/swim/FLUDD adapters.
+- `source/game/collision.c` / `world_query.c`: solid, one-way, slope and water queries.
+- `source/game/game.c` / `camera.c`: pause/restart/respawn, input latching, camera.
+- `source/platform/input.c`: device mappings; `graphics.c`: GX primitives;
+  `render.c`: viewport-culling, parallax, terrain and player rendering.
+- `source/render/player_sprite.c`: original pose selection/mirroring and temporary
+  new-action transformations. Original jump/spin orientation regressions retained.
+- `levels/movement.json`: [versioned level schema](docs/level-format.md), compiled by
+  `tools/build_level.py` into checked-in `assets/generated/movement_level.h`.
+- `assets/mario`: [original sprite subset and provenance](assets/mario/README.md).
+  `tools/build_mario_atlas.py` regenerates GX texture data using Pillow 11.3.0.
 
-## GitHub Actions
+Simulation remains fixed at 60 Hz with bounded catch-up and render interpolation.
+PAL 50 Hz rendering still runs 60 Hz simulation. Camera and presentation preserve
+4:3/16:9 system settings. No gameplay heap allocations are added. Immutable data
+and textures survive packaging; runtime services and external asset files are not
+needed. Actual Wii frame time and visual/controller behavior remain unmeasured.
 
-Every push and pull request builds in the official `devkitpro/devkitppc` image on Linux;
-the workflow can also be started manually from the Actions tab. A successful
-build uploads the `super-mario-63-enhanced-wii` artifact containing the application
-folder and its `boot.dol` and `meta.xml`. Download and extract the artifact after
-the workflow succeeds. Failed builds do not upload an application artifact.
-
-The workflow and local container command pin the same verified image digest.
-Update both together and validate a clean build when upgrading the toolchain.
-Local compilation alone does not establish that a hosted Actions run succeeded.
-
-## Install and run
-
-Use a Wii with the Homebrew Channel already installed. Copy the generated folder
-to the SD card (or a supported USB device), preserving this layout:
-
-```text
-SD:/apps/super-mario-63-enhanced-wii/boot.dol
-SD:/apps/super-mario-63-enhanced-wii/meta.xml
-```
-
-Launch **Super Mario 63: Enhanced Wii Edition** in the Homebrew Channel. An icon
-is optional and is not supplied. Expect a scrolling platform playground with original Mario artwork, a
-state HUD, platforms, a wall, a low ceiling and a gap. Mario now uses original
-sprites with transparency and facing direction; terrain is still placeholder art.
-
-Use Wii Remote channel 1 or GameCube port 1:
-
-| Controller | Move | Jump (hold for height) | Spin | Ground pound | Pause |
-| --- | --- | --- | --- | --- | --- |
-| Wii Remote + Nunchuk | Nunchuk stick / upright Remote D-pad | A | B or Nunchuk C | Nunchuk Z | PLUS or HOME |
-| Classic Controller | Left stick / D-pad | A | X | ZR | PLUS or HOME |
-| GameCube | Stick / D-pad | A | B | Z | START |
-
-Menu: D-pad up/down to choose, A to confirm, B to resume, or the pause button to
-resume. To exit normally, choose **Exit to Loader** in the pause menu. HOME and
-START now open the menu rather than immediately exiting. Nunchuk Z is now pound,
-not jump. Remote-only fallback uses D-pad movement and Down to pound.
-
-The Wii RESET button requests a clean exit. Console and Wii Remote power
-callbacks request shutdown from the main loop. Controller hot-plugging is polled
-each frame. Stick dead zones reduce idle drift.
-
-## Layout
-
-```text
-source/main.c               Lifecycle, fixed-step accumulator and input latching
-source/game/player.c        Platform-independent movement, attacks and collision
-source/game/game.c          Pause/restart/respawn and input edge handling
-source/game/camera.c        Camera smoothing and world limits
-source/game/world.c         Static collision playground (not a Story Mode level)
-source/platform/input.c     Wii/Classic/GameCube mappings
-source/platform/graphics.c  GX video, rectangles and small built-in text font
-source/platform/render.c    GX draw calls, interpolated scene and menu
-source/render/player_sprite.c Original frame selection and per-keyframe UV mirrors
-assets/mario/               Original PNG subset and provenance
-assets/generated/           Embedded GX texture atlas and frame metadata
-tools/build_mario_atlas.py  Reproducible PNG-to-GX conversion (optional Pillow tool)
-include/                    Game and platform interfaces
-tests/                      Host-side physics tests, no Wii SDK required
-packaging/meta.xml          Homebrew Channel metadata
-.github/workflows/build.yml Host tests, Wii compilation and artifact upload
-```
-
-## Validation
-
-Run platform-independent tests with the host C compiler (no devkitPro needed):
+## Tests and GitHub Actions
 
 ```sh
 make -C tests test
+python tools/build_level.py --check
+python tests/test_level.py
+# For optional atlas verification, install Pillow==11.3.0:
+python tools/build_mario_atlas.py --check
+python tests/test_atlas.py
 ```
 
-Nine physics test groups exercise acceleration/braking/reversal, variable jump height,
-consecutive jump windows, input buffering and coyote time, floor/wall/ceiling
-and edge collisions, high-speed pounds, spin limits and attack bounds, landing
-recovery, camera clamps, pause/restart/exit/respawn and one-shot input latching.
-Sprite conversion also verifies source checksums, atlas bounds and RGBA tile layout.
-Three render-command regression groups check that spin adds no rectangle draws,
-tracks movement and the camera, and preserves the corrected UV direction.
-These use a recording graphics interface, not actual GX rendering.
-Five additional sprite orientation test groups cover both facing directions,
-all spin keyframes, airborne reversals and unchanged facing after a spin.
-Tests compile with `-Wall -Wextra -Werror -pedantic`. CI runs these tests before
-building the Wii application; Wii compilation also treats warnings as errors.
-All gameplay calculations tested are the same C sources linked into `boot.dol`.
+Tests compile with warnings as errors. They run the actual game/presentation C
+sources on the host and record renderer commands without emulating GX. CI runs
+physics, orientation, movement/environment, renderer and asset/level checks before
+the Wii build, then uploads the Homebrew Channel application artifact.
+The pinned toolchain compiled v0.4 and produced `boot.dol`; host checks passed.
 
-The v0.3 source compiled using the pinned official toolchain without errors or
-warnings and generated `boot.dol`. Host tests passed. This establishes build and
-calculation checks, not gameplay verification.
-
-Dolphin and original Wii testing remain required: responsiveness, controller
-mapping and hot-plugging, jump/spin/pound timing, collision corners, pause and
-loader return, power/reset handling, camera smoothness, 4:3/16:9 proportions,
-PAL/NTSC pacing and performance. The user reported successful Dolphin testing of Mario artwork and jump/spin
-facing in the preceding build. v0.3.2 visual confirmation is still pending; no
-Dolphin or Wii gameplay test has been performed in this environment. Story Mode fidelity remains a future milestone.
+No v0.4 Dolphin or Wii test has been performed. Earlier user-confirmed Mario
+sprite/jump/spin direction results do not establish that the new mechanics or
+rendering work visually. The [v0.4 report](docs/v0.4-movement.md) includes the
+required playtest checklist and precise fidelity/animation limitations. Prior
+[spin-effect audit](docs/spin-effects.md) explains why extra spin particles remain
+absent. Publication/build success is not hardware or gameplay verification.

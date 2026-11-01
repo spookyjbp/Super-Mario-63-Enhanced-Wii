@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include "level.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,10 +18,12 @@ typedef struct {
     const Rect *solids;
     size_t count;
     float width, height, spawn_x, spawn_y;
+    const Level *level;
 } World;
 
 typedef struct {
-    float horizontal;
+    float horizontal, vertical;
+    bool crouch_held, nozzle_held, nozzle_next_pressed;
     bool jump_pressed, jump_held, spin_pressed, pound_pressed;
     bool pause_pressed, confirm_pressed, cancel_pressed;
     int menu_delta;
@@ -28,10 +31,23 @@ typedef struct {
 
 typedef enum {
     PLAYER_IDLE, PLAYER_RUN, PLAYER_RISE, PLAYER_FALL,
-    PLAYER_SPIN, PLAYER_POUND_WINDUP, PLAYER_POUND, PLAYER_LAND
+    PLAYER_SPIN, PLAYER_POUND_WINDUP, PLAYER_POUND, PLAYER_LAND,
+    PLAYER_CROUCH, PLAYER_DIVE, PLAYER_BACKFLIP, PLAYER_ROLL, PLAYER_SWIM,
+    PLAYER_HOVER, PLAYER_ROCKET_CHARGE, PLAYER_ROCKET, PLAYER_TURBO, PLAYER_BONK,
+    PLAYER_ANIMATION_COUNT
 } PlayerAnimation;
 
+typedef enum { ACTION_NONE, ACTION_DIVE, ACTION_BACKFLIP, ACTION_ROLL, ACTION_BONK } PlayerAction;
+typedef enum { NOZZLE_HOVER, NOZZLE_ROCKET, NOZZLE_TURBO, NOZZLE_COUNT } Nozzle;
+
 typedef struct {
+    float height, action_time, wall_speed, ground_slope;
+    float water, power, rocket_charge, rocket_boost, tap_window;
+    int wall_normal, last_tap, bonk_direction;
+    bool submerged, jet_active, dashing, tap_released;
+    TileType material;
+    PlayerAction action;
+    Nozzle nozzle;
     float x, y, previous_x, previous_y, vx, vy;
     bool grounded, facing_left, air_spin_used, jump_cut;
     unsigned jump_stage;
@@ -51,8 +67,15 @@ typedef struct {
 
 extern const World movement_world;
 void player_init(Player *player, float x, float y);
-/* One fixed 1/60 second step. Solid platforms are static, non-overlapping AABBs. */
+/* One fixed 1/60 second step over immutable rectangles/tiles and water volumes. */
 void player_step(Player *player, const World *world, GameInput input);
+float player_height(const Player *player);
+bool player_special_step(Player *player, const World *world, GameInput input, bool was_grounded);
+void player_fludd_step(Player *player, GameInput input);
+void player_collision_step(Player *player, const World *world);
+bool player_stand_clear(const Player *player, const World *world);
+bool world_water_at(const World *world, float x, float y, float *surface);
+bool world_hazard_at(const World *world, float x, float y);
 bool player_attack_hitbox(const Player *player, Rect *hitbox);
 void camera_init(Camera *camera, const Player *player, const World *world, float view_width);
 void camera_step(Camera *camera, const Player *player, const World *world, float view_width);
