@@ -2,6 +2,7 @@
    (FFDec export of the pinned SWF) it follows; see docs/course-objects.md.
    Units: course pixels and pixels per 32 Hz frame. */
 #include "course_objects.h"
+#include "sfx.h"
 #include <math.h>
 #include <string.h>
 
@@ -231,6 +232,10 @@ void course_mario_hit(Player *p, CourseProgress *g, int hp, int blink, float vy,
     }
     if (vy < 0) p->grounded = false;
     if (stun > 0) p->stun = stun;
+    /* Sound: none for a shove ("none"), "Mario - Ohhhhh" at 0 HP, the Bob-omb's
+       "Mario-Squish", otherwise "Mario - Doh" / "Mario - Uh" (random(2)). */
+    if (hp > 0 && g->hp <= 0) sfx_play(SFX_OHHH, 100, 0);
+    else if (hp > 0) sfx_play(add ? SFX_SQUISH : sfx_coin_flip() ? SFX_DOH : SFX_UH, 100, 0);
 }
 static bool overlap(const float a[4], const float b[4]) { return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]; }
 static bool inside(float x, float y, const float b[4]) { return x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]; }
@@ -537,14 +542,17 @@ static void step_goomba(CourseObjects *o, LiveObject *l, CourseRuntime *c, Playe
     eye_box(l, 1, -2.95f, eye);
     const float *mbody = M.body, *mfeet = M.feet;
     const float mx = M.mx, mxs = M.mxs;
-    if (overlap(eye, mbody) && !l->tumble) { if (!l->seeing) l->see = true; l->seeing = true; }
-    else { l->seeing = false; l->see = false; }
+    if (overlap(eye, mbody) && !l->tumble) {
+        if (!l->seeing) { l->see = true; sfx_at(SFX_GOOMBA_ATTENTION, l->x, l->y, cam_cx, cam_cy, 15); }
+        l->seeing = true;
+    } else { l->seeing = false; l->see = false; }
     eye_step(l);
     enemy_attacks(o, l, body, head, 1, false);
     if (overlap(body, mbody) && !(M.dive && fabsf(mxs) > 0.3f) && !l->tumble)
         course_mario_hit(p, g, 1, 90, -5, mx > l->x ? 7 : -7, 7, false);
     if (overlap(head, mfeet) && !p->grounded && p->vy > 0) {
         p->vy = 0; l->hurt = true; l->tumblerot = 0; l->bounce = true;
+        sfx_at(SFX_GOOMBA_STOMPED, l->x, l->y, cam_cx, cam_cy, 15);
         p->ejump = true; p->action = ACTION_NONE; p->spin_time = 0;
         l->p3 = jump_key ? 1 : 0; /* landtime 1 when Up is held on contact */
     }
@@ -709,7 +717,10 @@ static void step_bomb(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player 
             for (int n = 0; n < 64 && solid_any(c, l->x, l->y + 3) && !(course_solid(c, l->x, l->y - 1) || course_bsolid(c, l->x, l->y - 3)); ++n) l->y += 1;
             for (int n = 0; n < 64 && (course_solid(c, l->x, l->y - 1) || course_bsolid(c, l->x, l->y - 3)); ++n) l->y -= 1;
             if (l->hurt) {
-                if (!bomb_boom(l->frame_label)) enemy_hurt_box(o, l->x, l->y - 25, 0.35f, 0.5f, 6); /* + Explosion sound */
+                if (!bomb_boom(l->frame_label)) {
+                    enemy_hurt_box(o, l->x, l->y - 25, 0.35f, 0.5f, 6);
+                    sfx_at(SFX_EXPLOSION, l->x, l->y, cam_cx, cam_cy, 20);
+                }
                 l->frame_label = l->air ? BOMB_EXPLODE2 : BOMB_EXPLODE;
             }
             const bool boom = bomb_boom(l->frame_label);
@@ -722,7 +733,11 @@ static void step_bomb(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player 
                 bomb_move(c, l, l->dir);
                 if (l->count > (int)l->p0) { l->dir = -l->dir; l->count = 0; }
             }
-            if (l->see) { l->see = false; l->exploding = true; } /* fuse lit (fuse-lite sound) */
+            if (l->see) { /* fuse lit: "fuse-lite", then "fuse-loop" on each completion */
+                l->see = false;
+                if (!l->exploding) sfx_at(SFX_FUSE_LITE, l->x, l->y, cam_cx, cam_cy, 15);
+                l->exploding = true;
+            }
             const bool ground3 = solid_any(c, l->x, l->y + 3);
             if (!l->air && !bomb_boom(l->frame_label) && !l->tumble && fabsf(l->vx) > 0.3f && ground3)
                 l->frame_label = l->vx > 0 ? BOMB_WALKR : BOMB_WALKL;
@@ -745,8 +760,13 @@ static void step_bomb(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player 
             if (l->frame_label != BOMB_TUMBLE) l->tumblerot = 0;
             if (l->exploding) {
                 ++l->timer2; /* explodetimer; the red flash is drawn from it */
+                /* fuse-lite lasts 13 frames and fuse-loop 37 (at 32 Hz). */
+                if (l->timer2 == 13 || l->timer2 == 50 || l->timer2 == 87) sfx_at(SFX_FUSE_LOOP, l->x, l->y, cam_cx, cam_cy, 15);
                 if (l->timer2 >= 96) {
-                    if (!bomb_boom(l->frame_label)) enemy_hurt_box(o, l->x, l->y - 15, 0.3f, 0.3f, 6);
+                    if (!bomb_boom(l->frame_label)) {
+                        enemy_hurt_box(o, l->x, l->y - 15, 0.3f, 0.3f, 6);
+                        sfx_at(SFX_EXPLOSION, l->x, l->y, cam_cx, cam_cy, 15);
+                    }
                     l->frame_label = l->air ? BOMB_EXPLODE2 : BOMB_EXPLODE;
                 }
             }
@@ -839,13 +859,16 @@ static void step_koopa(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player
         /* Stomps (+ "flippers" sound). The boost is not cut by releasing Jump. */
         if (l->state == KOOPA_FLYING_STATE && overlap(head, M.feet) && mair && mys > 0) {
             mys = mys / 2 - 15; p->vy = mys * 44; p->jump_cut = true; l->state = KOOPA_WALK_STATE;
+            sfx_play(SFX_FLIPPERS, 100, 0);
         }
         if (l->state == KOOPA_WALK_STATE && overlap(head, M.feet) && mair && mys > 0) {
             mys = mys / 2 - 12; p->vy = mys * 44; p->jump_cut = true; l->vx = 0; l->state = KOOPA_SHELL_STATE;
+            sfx_play(SFX_FLIPPERS, 100, 0);
         }
         if (l->state == KOOPA_SHELL_STATE && overlap(body, M.feet) && mair && mys > 0) {
             if (l->air) l->vy += (mys - l->vy) * 0.5f;
             mys = mys / 4 - 12; p->vy = mys * 44; p->jump_cut = true;
+            sfx_play(SFX_FLIPPERS, 100, 0);
             l->vx += M.mx > l->x ? mys / 1.5f : -mys / 1.5f;
             l->vx += M.mxs / 2;
         }
@@ -946,7 +969,7 @@ static void step_box(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
         }
         if ((M.spin_on && overlap(box, M.spin)) || enemy_hurt_at(o, l->x, l->y - 5) || enemy_hurt_at(o, l->x + 10, l->y - 5) ||
             enemy_hurt_at(o, l->x - 10, l->y - 5) || enemy_hurt_at(o, l->x, l->y - 30)) brk = true;
-        if (brk) { l->state = 1; l->timer = 0; l->count = 0; } /* + "boxbreak" sound */
+        if (brk) { l->state = 1; l->timer = 0; l->count = 0; sfx_play(SFX_BOXBREAK, 100, 0); } /* frame 4 */
         return;
     }
     if (l->state == 1) { /* frames 4..25 (index 3..24) */
@@ -985,7 +1008,8 @@ static void step_fludd_box(CourseObjects *o, LiveObject *l, Player *p, float fx,
             p->vy = -6 * 44; p->grounded = false; p->jump_cut = true;
             l->state = 1; l->timer = 1;
             LiveObject *n = spawn(o, LIVE_NOZZLE, l->src, l->x, l->y + 10); /* attachMovie("Hnozzle") */
-            if (n) n->vy = -3;                                             /* + "Nozzle Box Break" */
+            if (n) n->vy = -3;
+            sfx_play(SFX_NOZZLE_BOX, 100, 0);
         }
     } else if (l->state == 1) {
         if (++l->timer >= 11) { l->state = 2; l->count = 0; }
@@ -996,7 +1020,9 @@ static void step_nozzle(LiveObject *l, const CourseRuntime *c, Player *p, float 
 {
     const float b[4] = {l->x - 16.0f, l->y - 21.95f, l->x + 16.0f, l->y + 21.05f};
     if (inside(fx, fy, b)) { /* Fluddpow = "H"; WaterAmount = TotalWater */
-        p->has_fludd = true; p->nozzle = NOZZLE_HOVER; p->water = 100; l->alive = false; return;
+        p->has_fludd = true; p->nozzle = NOZZLE_HOVER; p->water = 100; l->alive = false;
+        sfx_play(SFX_FLUDD_NOZZLE, 100, 0);
+        return;
     }
     if (!solid_any(c, l->x, l->y + 7)) { l->y += l->vy; l->vy += 0.5f; l->vy *= 0.95f; }
     for (int n = 0; n < 64 && solid_any(c, l->x, l->y + 5); ++n) { l->y -= 1; l->vy = fminf(0, l->vy); }
@@ -1015,7 +1041,8 @@ static void step_bottle(LiveObject *l, Player *p, float fx, float fy)
         l->alpha = on_screen ? 100 : 0;  /* _visible */
         const float b[4] = {l->x - 7.9f, l->y - 4.9f, l->x + 7.85f, l->y + 23.65f};
         if (on_screen && (overlap(b, M.body) || inside(fx, fy - 15, b))) {
-            p->water = fminf(100, p->water + 50); l->state = 2; l->timer = 3; l->alpha = 100; /* + "Fludd Nozzle" */
+            p->water = fminf(100, p->water + 50); l->state = 2; l->timer = 3; l->alpha = 100;
+            sfx_play(SFX_FLUDD_NOZZLE, 100, 0); /* frame 4 */
         }
         return;
     }
@@ -1056,7 +1083,8 @@ static void step_tip_log(LiveObject *l, Player *p, float fx, float fy)
     l->vx = drag(l->vx, 0.15f, 1.05f);                  /* rotspeed */
     const float distance = (fx - l->x) / k;
     if (in_rot_rect(fx, fy, l->x, l->y, l->rotation, k, 1, LOG_PL)) {
-        l->carrying = true;                             /* land (+ "step-wetwood") */
+        l->carrying = true;                             /* land */
+        sfx_set_step(SFX_STEP_WETWOOD, 3);              /* changestep = 3; StepSound = "step-wetwood" */
         p->x += l->rotation / 7 * COURSE_SCALE;
         l->vx += distance / 5 / w;
         l->vx -= l->rotation - drag(l->rotation, 0.3f / k, 0.07f / k + 1);
@@ -1245,6 +1273,7 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
         const float box[4] = {l->x - 7, l->y - (l->kind == LIVE_COIN ? 9 : 10), l->x + 7, l->y + (l->kind == LIVE_COIN ? 9 : 8)};
         if (overlap(box, body) || inside(fx, fy - 15, box)) {
             l->collected = true; l->frame = 0;
+            sfx_play(SFX_COIN, 100, 0); /* GoldCoin frame 4: "CoinJingle" */
             if (l->kind == LIVE_COIN) { g->coins += 1; g->coincount += 1; g->hpcoins += 1; }
             else { g->coins += 5; g->coincount += 5; g->hpcoins += 15; }
             heal(g);

@@ -1,4 +1,5 @@
 #include "game.h"
+#include "sfx.h"
 #include "source_movement.h"
 #include <math.h>
 #include <string.h>
@@ -73,6 +74,9 @@ void player_step(Player *p, const World *world, GameInput input)
             if(p->jump_stage==3 && fabsf(p->vx)<=3*44) p->jump_stage=1;
             static const float jumps[] = {0, -430, -510, -610};
             p->vy = jumps[p->jump_stage];
+            /* CharCode jump sounds: "Mario Jump-1"/"-1b" (random(2)), "Mario Jump-2", "Mario Tripple Jump". */
+            sfx_play(p->jump_stage == 1 ? (sfx_coin_flip() ? SFX_JUMP1 : SFX_JUMP1B)
+                                        : p->jump_stage == 2 ? SFX_JUMP2 : SFX_TRIPLE, 100, 0);
             p->jump_time=0;
             p->grounded = false;
             p->coyote = p->jump_buffer = p->chain_window = 0;

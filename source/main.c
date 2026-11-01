@@ -4,6 +4,7 @@
 #include "render.h"
 #include "course_render.h"
 #include "course_8e1_bin.h"
+#include "audio.h"
 
 #include <ogc/lwp_watchdog.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@ int main(void)
     static CourseSession session;
     const bool tutorial = course_pack_parse(course_8e1_bin, course_8e1_bin_size, &pack) && course_render_init() &&
                           course_session_start(&session, &pack, "8-E1-1", 0, 0, graphics_width());
+    if (tutorial) audio_init(); /* after the course renderer's MEM2 reservation */
     Game lab;
     if (!tutorial) game_init(&lab, &movement_world, graphics_width());
     Game *game = tutorial ? &session.game : &lab;
@@ -61,10 +63,12 @@ int main(void)
         /* Bound catch-up after a stall; never replace fixed ticks with a large dt.
            PAL 50 Hz renders normally execute one or two 60 Hz simulation ticks. */
         if (steps == 8 && accumulator >= GAME_DT) accumulator = 0;
+        if (tutorial) audio_update(session.game.paused);
         if (tutorial) course_render(&session, (float)(accumulator / GAME_DT));
         else render_game(&lab, &movement_world, (float)(accumulator / GAME_DT));
         graphics_present();
     }
+    audio_shutdown();
     graphics_shutdown();
     input_shutdown();
     if (power_requested) SYS_ResetSystem(SYS_POWEROFF, 0, 0);

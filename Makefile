@@ -18,7 +18,7 @@ APP := super-mario-63-enhanced-wii
 CFLAGS = -g -O2 -Wall -Wextra -Werror $(MACHDEP) $(INCLUDE) -std=gnu11
 CXXFLAGS = -g -O2 -Wall -Wextra -Werror $(MACHDEP) $(INCLUDE) -std=gnu++17
 LDFLAGS = -g $(MACHDEP) -Wl,-Map,$(OUTPUT).elf.map
-LIBS := -lfat -lwiiuse -lbte -logc -lm
+LIBS := -lfat -lwiiuse -lbte -lasnd -logc -lm
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)

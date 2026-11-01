@@ -1,4 +1,5 @@
 #include "source_movement.h"
+#include "sfx.h"
 #include <math.h>
 /* These recurrences execute once per original 32 Hz source frame. Collision and
    position integration remain at 60 Hz; no fractional damping approximation. */
@@ -23,7 +24,7 @@ bool player_swim_step(Player *p,const World *w,GameInput in)
     const bool down=in.crouch_held || in.vertical>0.5f;
     if(entered) {
         float v=p->vy/V;
-        if(v>7) v*=0.7f;
+        if(v>7) {v*=0.7f;sfx_play(SFX_SPLASH,100,0);} /* "sound - Splash" */
         p->vy=v*0.9f*V;
         p->pounding=false;p->action=ACTION_NONE;p->jump_stage=0;
     }
@@ -33,6 +34,7 @@ bool player_swim_step(Player *p,const World *w,GameInput in)
        world_water_at(w,p->x+PLAYER_WIDTH/2,feet+5*1.375f,&surface)) {
         p->vy=(p->vy/V*0.7f-10.0f/1.5f)*V;
         p->jump_cut=true;p->swim_stroke=false;surface_jump=true;
+        sfx_play(SFX_SPLASH,100,0);
     }
     if(!wet) {p->swim_stroke=false;p->swim_frames=0;return surface_jump;}
     p->action=ACTION_NONE;p->pounding=false;p->jump_stage=0;
@@ -55,7 +57,7 @@ bool player_swim_step(Player *p,const World *w,GameInput in)
             if(p->swim_stroke) vy-=0.2f;
             else {
                 p->swim_frames=0;
-                if(!surface_jump) vy-=down ? 4 : 6;
+                if(!surface_jump) {vy-=down ? 4 : 6;sfx_play(SFX_SWIM,100,0);} /* "sound - Water" */
                 /* Original uses xpseed (a typo) on the left; preserve the
                    actual script behavior rather than silently symmetrizing. */
                 if(in.horizontal>0) vx+=2;

@@ -1,4 +1,5 @@
 #include "course_session.h"
+#include "sfx.h"
 #include <math.h>
 #include <string.h>
 
@@ -69,6 +70,9 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     s->pack = pack; s->view_width = view_width; s->warp_target = -1;
     s->game.player.has_fludd = false; /* StartChar(..., Fluddpow "") */
     s->progress.hp = 8;                 /* _root.CharHP = 8 */
+    /* StartChar(..., resetmusic = true): _root["8-E1-1MusicIntro"], then "8-E1-1Music". */
+    if (course_string_equals(course_pack_area(pack, id)->id, "8-E1-1") || course_string_equals(course_pack_area(pack, id)->id, "8-E1-2-2"))
+        sfx_music(MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT);
     enter_area(s, a, cx, cy);
     return true;
 }

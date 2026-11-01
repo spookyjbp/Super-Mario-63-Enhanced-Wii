@@ -69,6 +69,8 @@ typedef struct {
     int blink, stun;         /* MarioHit: invulnerable blink and stun, 32 Hz frames */
     bool ejump;              /* attackFrame "EJump": held on a stomped enemy */
     float input_horizontal;  /* held direction this tick, for wall rules */
+    int hurtfall;            /* CharCode hurtfallcount (0..7); "Mario-Fall" at 5 */
+    bool fall_sfx;           /* fallingsfx: once per fall */
     TileType material;
     PlayerAction action;
     Nozzle nozzle;

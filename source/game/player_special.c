@@ -1,4 +1,5 @@
 #include "game.h"
+#include "sfx.h"
 #include "source_movement.h"
 #include <math.h>
 /* Original game is 32 Hz. Its velocity unit at the chosen logical collider scale is 32*1.375=44
@@ -54,6 +55,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
     }
     if(in.crouch_held && p->spin_time==0 && !p->pounding && p->landing_time==0 && p->action==ACTION_NONE) {
         p->action=ACTION_DIVE;p->action_time=0;p->spin_time=0;p->dashing=false;
+        sfx_play(SFX_DIVE,100,0); /* "Mario-Dive" */
         p->dive_frame=0;p->dive_recovering=false;
         if(!grounded) {
             float target=(p->facing_left ? -1 : 1)*35*ORIGINAL_VELOCITY;

@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Export the tutorial's original sounds into one IMA ADPCM sound pack.
+
+Each sound is the SWF's DefineSound (by its linkage name), decoded with
+ffmpeg at its own sample rate (mono), trimmed to the DefineSound sample count,
+and IMA ADPCM encoded (4 bits a sample). The Wii decodes the pack once into
+16-bit PCM (source/platform/audio.c).
+
+Pack (big-endian): "SM63SND1", u32 version 1, u32 count, then per sound
+u32 rate, u32 samples, u32 offset, u32 size; each sound's data is s16 initial
+predictor, u8 step index, u8 0, then nibbles (high nibble first).
+
+    python export_audio.py <checkout> <out_dir>
+"""
+import argparse, hashlib, struct, subprocess, tempfile
+from pathlib import Path
+import numpy as np
+import swf_states as S
+import export_course as C
+
+# Order matches SfxId in include/sfx.h.
+SOUNDS = [
+    'CoinJingle', 'Mario Jump-1', 'Mario Jump-1b', 'Mario Jump-2', 'Mario Tripple Jump', 'Mario-Dive',
+    'Mario-Step', 'step - Water', 'step-wetwood', 'sound - Splash', 'sound - Water', 'Mario-Fall',
+    'Mario - Doh', 'Mario - Uh', 'Mario-Squish', 'Mario - Ohhhhh', 'Goomba-Attention', 'Goomba-Stomped',
+    'Explosion', 'fuse-lite', 'fuse-loop', 'flippers', 'boxbreak', 'Nozzle Box Break', 'Fludd Nozzle',
+    'fluddrepeat', 'FluddSwitch', 'PrincessPeachesCastle-Intro', 'PrincessPeachesCastle-Repeat',
+]
+RATES = [5512, 11025, 22050, 44100]
+STEPS = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80,
+         88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544,
+         598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749,
+         3024, 3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487,
+         12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767]
+INDEX = [-1, -1, -1, -1, 2, 4, 6, 8]
+
+
+def linkage(raw, start):
+    names = {}
+    for code, pos, length in S.tags(raw, start, len(raw)):
+        if code == 56:
+            count = struct.unpack_from('<H', raw, pos)[0]
+            q = pos + 2
+            for _ in range(count):
+                ident = struct.unpack_from('<H', raw, q)[0]
+                end = raw.index(b'\0', q + 2)
+                names[raw[q + 2:end].decode('latin1')] = ident
+                q = end + 1
+    return names
+
+
+def sounds(raw, start):
+    out = {}
+    for code, pos, length in S.tags(raw, start, len(raw)):
+        if code == 14:
+            ident, flags, samples = struct.unpack_from('<HBI', raw, pos)
+            out[ident] = (flags >> 4, RATES[(flags >> 2) & 3], flags & 1, samples, raw[pos + 7:pos + length])
+    return out
+
+
+def decode(fmt, rate, stereo, samples, data):
+    if fmt != 2:
+        raise ValueError('Only MP3 sounds are used by the tutorial')
+    seek = struct.unpack_from('<h', data)[0]
+    with tempfile.TemporaryDirectory() as tmp:
+        mp3 = Path(tmp) / 's.mp3'
+        mp3.write_bytes(data[2:])
+        pcm = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(mp3), '-f', 's16le', '-ac', '1', '-ar', str(rate), '-'],
+                             check=True, capture_output=True).stdout
+    a = np.frombuffer(pcm, dtype='<i2').astype(np.int32)
+    a = a[max(seek, 0):]
+    return a[:samples] if len(a) >= samples else np.pad(a, (0, samples - len(a)))
+
+
+def adpcm(samples):
+    pred, index = int(samples[0]) if len(samples) else 0, 0
+    out = bytearray(struct.pack('>hBB', pred, 0, 0))
+    nibbles = []
+    for s in samples:
+        step = STEPS[index]
+        diff = int(s) - pred
+        code = 0
+        if diff < 0:
+            code = 8; diff = -diff
+        delta = step >> 3
+        if diff >= step: code |= 4; diff -= step; delta += step
+        step >>= 1
+        if diff >= step: code |= 2; diff -= step; delta += step
+        step >>= 1
+        if diff >= step: code |= 1; delta += step
+        pred = max(-32768, min(32767, pred - delta if code & 8 else pred + delta))
+        index = max(0, min(88, index + INDEX[code & 7]))
+        nibbles.append(code)
+    if len(nibbles) & 1:
+        nibbles.append(0)
+    out.extend(bytes((nibbles[i] << 4) | nibbles[i + 1] for i in range(0, len(nibbles), 2)))
+    return bytes(out)
+
+
+def export(source, out_dir):
+    swf = (source / 'Publish/Super_Mario_63_2010.swf').read_bytes()
+    if hashlib.sha256(swf).hexdigest() != C.SOURCE_SHA:
+        raise ValueError('Unsupported SWF revision')
+    raw, start = S.body(swf)
+    names, defined = linkage(raw, start), sounds(raw, start)
+    entries, blobs = [], []
+    for name in SOUNDS:
+        fmt, rate, stereo, count, data = defined[names[name]]
+        pcm = decode(fmt, rate, stereo, count, data)
+        blob = adpcm(pcm)
+        entries.append((rate, len(pcm), blob))
+    header = bytearray(b'SM63SND1' + struct.pack('>II', 1, len(entries)))
+    offset = len(header) + 16 * len(entries)
+    offset += (-offset) % 32
+    body = bytearray()
+    for rate, count, blob in entries:
+        header += struct.pack('>4I', rate, count, offset + len(body), len(blob))
+        body += blob + bytes((-len(blob)) % 32)
+    header += bytes((-len(header)) % 32)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / 'sounds_8e1.bin').write_bytes(bytes(header + body))
+    return len(header) + len(body)
+
+
+if __name__ == '__main__':
+    p = argparse.ArgumentParser()
+    p.add_argument('source', type=Path)
+    p.add_argument('out_dir', type=Path)
+    a = p.parse_args()
+    print('Wrote sound pack,', export(a.source, a.out_dir), 'bytes')
