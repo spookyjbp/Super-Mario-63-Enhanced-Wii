@@ -2,7 +2,7 @@
 <app version="1">
   <name>Super Mario 63: Enhanced Wii Edition</name>
   <coder>Super Mario 63: Enhanced Wii Edition contributors</coder>
-  <version>0.3.0</version>
+  <version>0.3.2</version>
   <short_description>Movement and physics playground</short_description>
-  <long_description>v0.3 movement playground with original Mario sprites from Runouw's source repository and placeholder terrain. Move with the Nunchuk, Classic or GameCube stick or D-pad. Hold A to jump higher; jump again soon after landing for double and triple jumps. Spin with Remote B or Nunchuk C, Classic X or GameCube B. Ground pound with Nunchuk Z, Classic ZR or GameCube Z. Pause with PLUS, HOME or GameCube START; select Exit to Loader to quit. Story Mode is not implemented.</long_description>
+  <long_description>v0.3.2 movement playground with original Mario sprites from Runouw's source repository and placeholder terrain. Yellow square spin placeholders have been removed; no additional spin effect assets are included. Move with the Nunchuk, Classic or GameCube stick or D-pad. Hold A to jump higher; jump again soon after landing for double and triple jumps. Spin with Remote B or Nunchuk C, Classic X or GameCube B. Ground pound with Nunchuk Z, Classic ZR or GameCube Z. Pause with PLUS, HOME or GameCube START; select Exit to Loader to quit. Story Mode is not implemented.</long_description>
 </app>

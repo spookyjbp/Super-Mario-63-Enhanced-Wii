@@ -2,11 +2,17 @@
 
 A native Nintendo Wii homebrew project using C/C++, devkitPPC and libogc.
 
-**v0.3 — Movement and Physics** adds a responsive platforming playground with
+**v0.3.2 — Original Spin Effects** adds a responsive platforming playground with
 original animated Mario sprites from Runouw's source repository. This is not yet
 the Story Mode port. A small, attributed subset of original player artwork is
 included; levels, story and measured original physics are not ported. Movement
 constants here are independently tuned starting points, not a fidelity claim.
+
+v0.3.2 removes the six yellow square spin placeholders. It retains the original
+Mario spin animation, with no additional particle effect; authentic extra spin
+effects were not imported. See the [source and license audit](docs/spin-effects.md).
+The user confirmed the preceding build's sprite directions in Dolphin; this
+release still needs a new Dolphin visual check.
 
 ## Movement playground
 
@@ -25,8 +31,8 @@ constants here are independently tuned starting points, not a fidelity claim.
   or one-way surfaces are implemented. Falling into the gap respawns the player.
 - Smoothed, world-bounded camera with render interpolation. The HUD displays the
   current animation state and jump stage. Original Mario frames animate walking,
-  jumping, falling, spinning and pounding; spin sparks and landing dust remain
-  placeholder effects.
+  jumping, falling, spinning and pounding. Spin square placeholders are removed;
+  landing dust remains a placeholder effect.
 - Pause menu: Resume, Restart (at the spawn) and Exit to Loader. Simulation and
   animation timers freeze while paused.
 
@@ -164,6 +170,9 @@ consecutive jump windows, input buffering and coyote time, floor/wall/ceiling
 and edge collisions, high-speed pounds, spin limits and attack bounds, landing
 recovery, camera clamps, pause/restart/exit/respawn and one-shot input latching.
 Sprite conversion also verifies source checksums, atlas bounds and RGBA tile layout.
+Three render-command regression groups check that spin adds no rectangle draws,
+tracks movement and the camera, and preserves the corrected UV direction.
+These use a recording graphics interface, not actual GX rendering.
 Five additional sprite orientation test groups cover both facing directions,
 all spin keyframes, airborne reversals and unchanged facing after a spin.
 Tests compile with `-Wall -Wextra -Werror -pedantic`. CI runs these tests before
@@ -177,5 +186,6 @@ calculation checks, not gameplay verification.
 Dolphin and original Wii testing remain required: responsiveness, controller
 mapping and hot-plugging, jump/spin/pound timing, collision corners, pause and
 loader return, power/reset handling, camera smoothness, 4:3/16:9 proportions,
-PAL/NTSC pacing and performance. No Dolphin or Wii gameplay test has been
-performed in this environment. Story Mode fidelity remains a future milestone.
+PAL/NTSC pacing and performance. The user reported successful Dolphin testing of Mario artwork and jump/spin
+facing in the preceding build. v0.3.2 visual confirmation is still pending; no
+Dolphin or Wii gameplay test has been performed in this environment. Story Mode fidelity remains a future milestone.

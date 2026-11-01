@@ -35,8 +35,9 @@ nearest-neighbor filtering, and flips UVs when facing left. Pound poses are
 mirrored by default as in the original Flash clip. Walking/spin pose order
 comes from the original clips; timings and foot anchors are adapted to the Wii
 physics rather than a full recreation of the Flash animation timeline.
-Terrain, sky and attack effects still use the test playground's placeholder
-shapes. FLUDD, Luigi, enemies and Story Mode scenery have not been imported.
+Terrain, sky and landing dust still use the test playground's placeholder
+shapes. v0.3.2 removes the yellow square spin particles without adding replacement
+effect artwork; see [the spin-effects audit](../../docs/spin-effects.md). FLUDD, Luigi, enemies and Story Mode scenery have not been imported.
 
 ## Facing and spin keyframes
 
@@ -71,7 +72,8 @@ physics tests. These cover both directions, every spin phase, existing ground
 poses, actual airborne input reversals and facing after a spin ends. They test
 selection and mirroring calculations, not Dolphin's displayed result.
 
-Dolphin verification is still required after this correction: jump left/right,
+The user confirmed jumping and spinning face correctly in Dolphin after the
+orientation correction. For the v0.3.2 particle removal, recheck: jump left/right,
 reverse in the air, spin from both directions and reverse during a spin, then
 check the direction after landing. Also check standing, walking and pounds to
 confirm their existing presentation is retained.

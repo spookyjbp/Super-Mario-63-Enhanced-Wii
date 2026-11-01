@@ -3,7 +3,6 @@
 #include "player_sprite.h"
 #include "mario_atlas.h"
 #include "mario_rgba8_bin.h"
-#include <math.h>
 #include <stdio.h>
 
 static GXTexObj mario_texture;
@@ -59,13 +58,6 @@ void render_game(const Game *game, const World *world, float interpolation)
     const float x = lerp(p->previous_x, p->x, interpolation) - camera_x;
     const float y = lerp(p->previous_y, p->y, interpolation) - camera_y;
     draw_player(p, x, y);
-    if (p->spin_time > 0) {
-        for (int i = 0; i < 6; ++i) {
-            const float phase = p->animation_time * 24 + i * 1.0472f;
-            graphics_rect(x + 10 + cosf(phase) * 30, y + 20 + sinf(phase) * 15, 7, 7,
-                          (GXColor){255, 250, 120, 255});
-        }
-    }
     if (p->landing_time > 0) {
         const float spread = (0.18f - p->landing_time) * 220;
         graphics_rect(x - spread, y + PLAYER_HEIGHT - 5, 10, 5, white);
@@ -73,7 +65,7 @@ void render_game(const Game *game, const World *world, float interpolation)
     }
     static const char *states[] = {"IDLE", "RUN", "RISE", "FALL", "SPIN", "WINDUP", "POUND", "LAND"};
     char hud[80];
-    snprintf(hud, sizeof(hud), "V0.3  %s  JUMP %u", states[p->animation], p->jump_stage);
+    snprintf(hud, sizeof(hud), "V0.3.2  %s  JUMP %u", states[p->animation], p->jump_stage);
     graphics_rect(14, 14, width - 28, 28, (GXColor){28, 40, 65, 255});
     graphics_text(22, 21, hud, 2, white);
     if (game->paused) {
