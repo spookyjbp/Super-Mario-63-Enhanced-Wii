@@ -57,7 +57,7 @@ static bool parse_area(Reader *r,CourseArea *a)
     for(unsigned i=0;i<a->object_count;++i) {
         CourseObject *o=&a->objects[i];
         o->type=takes(r);o->name=takes(r);o->layer=takes(r);
-        o->x=takef(r);o->y=takef(r);o->sx=takef(r);o->sy=takef(r);
+        o->x=takef(r);o->y=takef(r);o->a=takef(r);o->b=takef(r);o->c=takef(r);o->d=takef(r);
         o->frame_start=take16(r);o->frame_end=take16(r);
         o->param_count=take16(r);o->params=r->p;
         for(unsigned k=0;k<o->param_count*2u;++k) takes(r);
@@ -69,7 +69,7 @@ static bool parse_area(Reader *r,CourseArea *a)
 bool course_pack_parse(const unsigned char *d,size_t n,CoursePack *pack)
 {
     memset(pack,0,sizeof(*pack));
-    if(n<16 || memcmp(d,"SM63CRS1",8) || u32(d+8)!=1) return false;
+    if(n<16 || memcmp(d,"SM63CRS1",8) || u32(d+8)!=2) return false;
     pack->area_count=u32(d+12);
     if(!pack->area_count || pack->area_count>COURSE_MAX_AREAS) return false;
     Reader r={d+16,d+n,true};
@@ -131,4 +131,13 @@ bool course_object_param(const CourseObject *o,const char *key,CourseString *val
         if(course_string_equals(name,key)) {if(value) *value=v;return true;}
     }
     return false;
+}
+void course_object_bounds(const CourseObject *o,float u0,float v0,float u1,float v1,float out[4])
+{
+    const float us[2]={u0,u1},vs[2]={v0,v1};
+    out[0]=out[1]=INFINITY;out[2]=out[3]=-INFINITY;
+    for(unsigned i=0;i<2;++i) for(unsigned k=0;k<2;++k) {
+        const float x=o->a*us[i]+o->c*vs[k]+o->x,y=o->b*us[i]+o->d*vs[k]+o->y;
+        out[0]=fminf(out[0],x);out[1]=fminf(out[1],y);out[2]=fmaxf(out[2],x);out[3]=fmaxf(out[3],y);
+    }
 }

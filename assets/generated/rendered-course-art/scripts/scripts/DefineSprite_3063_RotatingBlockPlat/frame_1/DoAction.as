@@ -1,0 +1,230 @@
+stop();
+if(DirectionX == undefined)
+{
+   DirectionX = "Right";
+}
+if(DirectionY == undefined)
+{
+   DirectionY = "Up";
+}
+if(distanceX == undefined)
+{
+   distanceX = 0;
+}
+if(distanceY == undefined)
+{
+   distanceY = 0;
+}
+if(accelX == undefined)
+{
+   accelX = 0;
+}
+if(accelY == undefined)
+{
+   accelY = 0;
+}
+if(speedX == undefined)
+{
+   speedX = 0;
+}
+if(speedY == undefined)
+{
+   speedY = 0;
+}
+if(Xoffstart == undefined)
+{
+   Xoffstart = 0;
+}
+if(Yoffstart == undefined)
+{
+   Yoffstart = 0;
+}
+if(DirectionY == "Up")
+{
+   _Y = _Y - speedY;
+}
+else
+{
+   _Y = _Y + speedY;
+}
+if(DirectionY == "Right")
+{
+   _X = _X - speedX;
+}
+else
+{
+   _X = _X + speedX;
+}
+if(scale == undefined)
+{
+   scale = 80;
+}
+if(blocktype == undefined)
+{
+   blocktype = 1;
+}
+if(rotdirection == undefined)
+{
+   rotdirection = "Left";
+}
+if(rotspeed == undefined)
+{
+   rotspeed = 3;
+}
+if(rotwait == undefined)
+{
+   rotwait = 72;
+}
+if(quake == undefined && rotwait > 20)
+{
+   quake = true;
+}
+else
+{
+   quake = true;
+}
+_yscale = scale;
+_xscale = scale;
+gotoAndStop(blocktype);
+depth = _root.Course.Platforms.getNextHighestDepth();
+_root.Course.Platforms.attachMovie("Rotating Block Plat Code","Rotating Block Plat Code" + depth,depth,{_x:_X,_y:_Y,_yscale:_yscale,_xscale:_xscale,count:0,spincount:0,DirectionX:DirectionX,distanceX:distanceX,accelX:accelX,speedX:speedX,DirectionY:DirectionY,distanceY:distanceY,accelY:accelY,speedY:speedY,Xoffstart:Xoffstart,Yoffstart:Yoffstart});
+tellTarget(_root.Course.Platforms["Rotating Block Plat Code" + depth])
+{
+   landedon = false;
+   lessthan = false;
+   morethan = false;
+}
+currentspeedX = 0;
+distancecountX = speedX + Xoffstart;
+currentspeedY = 0;
+distancecountY = speedY + Yoffstart;
+onEnterFrame = function()
+{
+   if(_root.PauseGame == false && _root.playpause == false)
+   {
+      tellTarget(_root.Course.Platforms["Rotating Block Plat Code" + depth])
+      {
+         count++;
+         if(count > this.rotwait)
+         {
+            spincount++;
+            if(spincount * this.rotspeed <= 90)
+            {
+               if(this.rotdirection == "Right")
+               {
+                  _rotation = _rotation + this.rotspeed;
+               }
+               if(this.rotdirection == "Left")
+               {
+                  _rotation = _rotation - this.rotspeed;
+               }
+               if(hitTest(_root.Course.Char._x * _root.coursescale / 100 + _root.Course._x,_root.Course.Char._y * _root.coursescale / 100 + _root.Course._y,true))
+               {
+                  if(this.rotdirection == "Right")
+                  {
+                     _root.Course.Char._x += this.rotspeed;
+                  }
+                  if(this.rotdirection == "Left")
+                  {
+                     _root.Course.Char._x -= this.rotspeed;
+                  }
+               }
+            }
+            else
+            {
+               count = 0;
+               spincount = 0;
+               _rotation = Math.round(_rotation / 90) * 90;
+            }
+         }
+         if(count + 20 > this.rotwait && count < this.rotwait)
+         {
+            _rotation = Math.round(_rotation / 90) * 90;
+            _rotation = _rotation + (Math.random() * 5 - 2.5);
+         }
+         this._rotation = _rotation;
+      }
+      distancecountX++;
+      if(distancecountX >= distanceX)
+      {
+         distancecountX = 0;
+         if(DirectionX == "Right")
+         {
+            DirectionX = "Left";
+         }
+         else
+         {
+            DirectionX = "Right";
+         }
+      }
+      if(DirectionX == "Right")
+      {
+         currentspeedX += accelX;
+      }
+      else
+      {
+         currentspeedX -= accelX;
+      }
+      distancecountY++;
+      if(distancecountY >= distanceY)
+      {
+         distancecountY = 0;
+         if(DirectionY == "Up")
+         {
+            DirectionY = "Down";
+         }
+         else
+         {
+            DirectionY = "Up";
+         }
+      }
+      if(DirectionY == "Up")
+      {
+         currentspeedY -= accelY;
+      }
+      else
+      {
+         currentspeedY += accelY;
+      }
+      currentspeedX = Math.max(- speedX,currentspeedX);
+      currentspeedX = Math.min(speedX,currentspeedX);
+      currentspeedY = Math.max(- speedY,currentspeedY);
+      currentspeedY = Math.min(speedY,currentspeedY);
+      _X = _X + currentspeedX;
+      _Y = _Y + currentspeedY;
+      if(Math.abs(_root.currentCamX - (_X + _parent._x)) < 600 && Math.abs(_root.currentCamY - (_Y + _parent._y)) < 600)
+      {
+         tellTarget(_root.Course.Platforms["Rotating Block Plat Code" + depth])
+         {
+            if(hitTest(_root.Course.Char._x * _root.coursescale / 100 + _root.Course._x,_root.Course.Char._y * _root.coursescale / 100 + _root.Course._y,true) && _root.Course.Char.air == false)
+            {
+               _root.changestep = 3;
+               _root.StepSound = "Mario-Step";
+               _root.Course.Char._x += this.currentspeedX;
+               _root.Course.Char._y += this.currentspeedY;
+               _root.Course.Char.xspeed = _root.groundFriction(_root.Course.Char.xspeed,0.15,1.05);
+               if(landedon == false)
+               {
+                  _root.Course.Char.xspeed -= this.currentspeedX;
+               }
+               landedon = true;
+            }
+            else
+            {
+               if(landedon == true)
+               {
+                  _root.Course.Char.xspeed += this.currentspeedX;
+                  _root.Course.Char.yspeed += this.currentspeedY / 2;
+               }
+               landedon = false;
+            }
+            _Y = this._y;
+            _X = this._x;
+            if(this.currentspeedY < 0)
+            {
+               _Y = _Y + this.currentspeedY;
+            }
+         }
+      }
+   }
+};

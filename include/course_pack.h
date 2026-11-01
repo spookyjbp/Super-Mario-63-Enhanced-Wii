@@ -1,6 +1,6 @@
 #ifndef SM63_COURSE_PACK_H
 #define SM63_COURSE_PACK_H
-/* Original course areas exported by tools/export_course.py (format v1).
+/* Original course areas exported by tools/export_course.py (format v2).
    All coordinates are original course pixels (Char at (0,0) for StartChar(a,0,0,0,0)).
    Parsing keeps pointers into the immutable blob: no copies or allocation. */
 #include <stdbool.h>
@@ -24,7 +24,7 @@ typedef struct {
 typedef struct { float x, y, w, h; } CourseWater;
 typedef struct {
     CourseString type, name, layer;
-    float x, y, sx, sy;
+    float x, y, a, b, c, d; /* placement: x' = a*u + c*v + x, y' = b*u + d*v + y */
     unsigned frame_start, frame_end; /* keyframe range [start,end) in its layer symbol */
     unsigned param_count;
     const unsigned char *params, *params_end;
@@ -49,6 +49,13 @@ bool course_area_hit(const CourseArea *area, CourseLayer layer, unsigned frame, 
 bool course_area_water(const CourseArea *area, float x, float y, float *surface);
 /* Parameter value of an object's onClipEvent(load) assignment, or false. */
 bool course_object_param(const CourseObject *object, const char *key, CourseString *value);
+/* Axis-aligned bounds of the object's local box (u0,v0)-(u1,v1) after placement. */
+void course_object_bounds(const CourseObject *object, float u0, float v0, float u1, float v1, float out[4]);
+/* The 53x16 shape of Xtra/Blank Movieclip (SWF 839), used for warps and hint zones. */
+#define COURSE_BLANK_U0 -26.5f
+#define COURSE_BLANK_V0 -8.0f
+#define COURSE_BLANK_U1 26.5f
+#define COURSE_BLANK_V1 8.0f
 #ifdef __cplusplus
 }
 #endif

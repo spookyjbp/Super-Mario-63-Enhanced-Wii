@@ -1,4 +1,4 @@
-# Course pack format (v1)
+# Course pack format (v2)
 
 `assets/generated/course_8e1.bin` holds the original tutorial areas `8-E1-1`,
 `8-E1-1-2`, `8-E1-2`, `8-E1-2-2`, built by `tools/export_course.py` from a pinned
@@ -24,7 +24,7 @@ port's movement constants already use).
 ## Layout (big-endian)
 
 ```
-"SM63CRS1" u32 version=1 u32 area_count
+"SM63CRS1" u32 version=2 u32 area_count
 per area: u32 byte_size, then
   string id
   u32 mask_count, per mask:
@@ -33,7 +33,7 @@ per area: u32 byte_size, then
     u32 row_offset[height]; u32 run_bytes; per row: u16 n, n x (u16 start, u16 length)
   u32 water_count, per water: f32 x y w h        (Water Code: WaterLength x WaterDeepness)
   u32 object_count, per object:
-    string type, name, layer; f32 x y sx sy; u16 frame_start frame_end
+    string type, name, layer; f32 x y a b c d (placement matrix); u16 frame_start frame_end
     u16 param_count, per param: string key, string value
 string = u16 length + UTF-8 bytes
 ```

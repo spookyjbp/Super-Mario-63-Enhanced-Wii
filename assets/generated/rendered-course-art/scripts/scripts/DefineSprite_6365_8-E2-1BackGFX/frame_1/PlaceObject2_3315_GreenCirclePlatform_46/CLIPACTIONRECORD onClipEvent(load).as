@@ -1,0 +1,7 @@
+onClipEvent(load){
+   distance = 85;
+   armscale = 85;
+   speed = 2;
+   angle = 0;
+   dotdistance = 15;
+}

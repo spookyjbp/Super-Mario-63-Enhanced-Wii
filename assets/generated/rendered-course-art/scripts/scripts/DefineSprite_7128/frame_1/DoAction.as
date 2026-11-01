@@ -1,0 +1,5 @@
+onEnterFrame = function()
+{
+   nextFrame();
+};
+stop();

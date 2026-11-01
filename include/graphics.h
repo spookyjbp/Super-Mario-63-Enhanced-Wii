@@ -17,6 +17,8 @@ void graphics_sprite_rotated(GXTexObj *texture,float x,float y,float width,float
 void graphics_text(float x, float y, const char *text, float scale, GXColor color);
 void graphics_sprite(GXTexObj *texture, float x, float y, float width, float height,
                      float u0, float v0, float u1, float v1);
+/* Scale all following geometry about the screen origin (1 = none). */
+void graphics_set_zoom(float zoom);
 void graphics_present(void);
 void graphics_shutdown(void);
 

@@ -1,0 +1,2 @@
+gotoAndStop("noo");
+play();

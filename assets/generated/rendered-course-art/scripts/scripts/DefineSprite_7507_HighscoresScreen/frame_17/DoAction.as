@@ -1,0 +1,2 @@
+stop();
+stopnum = _currentframe;

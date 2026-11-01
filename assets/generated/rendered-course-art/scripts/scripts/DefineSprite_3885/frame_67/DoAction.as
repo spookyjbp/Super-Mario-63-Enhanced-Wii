@@ -1,0 +1,10 @@
+stop();
+onEnterFrame = null;
+_root.playpause = false;
+_root.Course.Char.attack = false;
+_root.StopBGsong();
+_root.PlayBGSong(_root["1-1Music"]);
+_root.SongRepeat = _root["1-1Music"];
+_root.kingBombdefeated = true;
+_root.Course.Edge.gotoAndStop(1);
+_root.Course.CamEdge.gotoAndStop(1);

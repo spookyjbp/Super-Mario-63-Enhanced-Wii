@@ -1,0 +1,1 @@
+_root.Course.BackGFX.attachMovie("BlueCoin","BlueCoin" + _root.Course.BackGFX.getNextHighestDepth(),_root.Course.BackGFX.getNextHighestDepth(),{_x:425 + random(500),_y:-300 - random(50),bounce:true});

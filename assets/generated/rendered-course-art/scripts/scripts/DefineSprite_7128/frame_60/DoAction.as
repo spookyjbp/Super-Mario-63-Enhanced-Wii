@@ -1,0 +1,4 @@
+onEnterFrame = function()
+{
+   prevFrame();
+};

@@ -14,6 +14,8 @@ static ArtPack art;
 static GXTexObj texture;
 static unsigned char *storage;          /* SD/USB override, if one was loaded. */
 static const unsigned char *loaded;     /* Pack actually in use. */
+static float art_scale=1.5f;
+void user_art_set_scale(float scale) {art_scale=scale;}
 static bool load_file(const char *path)
 {
     FILE *file=fopen(path,"rb");
@@ -50,7 +52,7 @@ bool user_art_available(void) {return loaded!=NULL;}
 /* Draws a frame whose offset is in twips from Mario's feet, canonical-left. */
 static void draw(const Player *p,const ArtFrame *f,float x,float y,float degrees,float pivot_x,float pivot_y)
 {
-    const float scale=1.5f,twips=scale/20,w=f->width*scale,h=f->height*scale;
+    const float scale=art_scale,twips=scale/20,w=f->width*scale,h=f->height*scale;
     float left=f->offset_x*twips,top=f->offset_y*twips,px=pivot_x*twips,py=pivot_y*twips;
     float u0=(float)f->x/art.width,u1=(float)(f->x+f->width)/art.width;
     if(!p->facing_left) { /* Mirror registration, pivot, rotation and UVs once. */

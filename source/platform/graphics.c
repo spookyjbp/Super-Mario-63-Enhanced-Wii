@@ -82,6 +82,13 @@ bool graphics_init(void)
 }
 
 float graphics_width(void) { return logical_width; }
+void graphics_set_zoom(float zoom)
+{
+    Mtx view;
+    guMtxIdentity(view);
+    guMtxScaleApply(view, view, zoom, zoom, 1);
+    GX_LoadPosMtxImm(view, GX_PNMTX0);
+}
 
 void graphics_rect(float x, float y, float width, float height, GXColor color)
 {

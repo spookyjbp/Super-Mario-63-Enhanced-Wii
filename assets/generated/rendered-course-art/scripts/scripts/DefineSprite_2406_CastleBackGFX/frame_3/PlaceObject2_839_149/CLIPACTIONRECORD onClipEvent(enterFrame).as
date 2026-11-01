@@ -1,0 +1,7 @@
+onClipEvent(enterFrame){
+   if(this.hitTest(_root.Course.Char.charClip.body) && _root.Course.Char.Water == true)
+   {
+      _root.Course.Char.xspeed = _root.groundFriction(_root.Course.Char.xspeed,0.03,1.02);
+      _root.Course.Char.xspeed -= 0.5;
+   }
+}

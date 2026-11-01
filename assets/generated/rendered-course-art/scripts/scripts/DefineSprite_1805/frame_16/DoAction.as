@@ -1,0 +1,1 @@
+_root.GetStarMusic1();

@@ -20,7 +20,7 @@ import swf_states as S
 import xfl
 
 SOURCE_SHA = '6f8dc22d74963cb75928fcac6ad67769384c3088bb419f9995e24b81d8411e1c'
-VERSION = 1
+VERSION = 2
 MASK_LAYERS = ['Platforms', 'BPlatforms', 'CamEdge', 'Ice', 'Puddle', 'Lava']
 OBJECT_LAYERS = ['BackGFX', 'FrontGFX', 'Water']
 # Decoration-only clips whose graphics belong to the layer art, not to objects.
@@ -98,6 +98,7 @@ def objects(area, layer):
                 m = inst['m']
                 out.append({'type': item, 'name': inst['name'] or '', 'layer': layer, 'x': round(m['tx'], 2),
                             'y': round(m['ty'], 2), 'sx': round(m['a'], 4), 'sy': round(m['d'], 4),
+                            'b': round(m['b'], 4), 'c': round(m['c'], 4),
                             'frames': [f['index'], f['index'] + f['duration']],
                             'params': load_params(inst['actions'])})
     return out
@@ -175,7 +176,8 @@ def build(areas):
         chunk += struct.pack('>I', len(a['objects']))
         for o in a['objects']:
             chunk += pack_string(o['type']) + pack_string(o['name']) + pack_string(o['layer'])
-            chunk += struct.pack('>4f2H', o['x'], o['y'], o['sx'], o['sy'], *o['frames'])
+            # Full placement matrix: x' = a*u + c*v + x, y' = b*u + d*v + y
+            chunk += struct.pack('>6f2H', o['x'], o['y'], o['sx'], o['b'], o['c'], o['sy'], *o['frames'])
             chunk += struct.pack('>H', len(o['params']))
             for k, v in sorted(o['params'].items()):
                 chunk += pack_string(k) + pack_string(str(v))

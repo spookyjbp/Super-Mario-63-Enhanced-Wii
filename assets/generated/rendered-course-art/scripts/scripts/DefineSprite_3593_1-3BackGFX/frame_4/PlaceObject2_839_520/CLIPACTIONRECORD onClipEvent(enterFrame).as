@@ -1,0 +1,12 @@
+onClipEvent(enterFrame){
+   if(_root.PauseGame == false && _root.playpause == false)
+   {
+      if(this.hitTest(_root.Course.Char.charClip.body))
+      {
+         _root.Course.Char.xspeed = _root.groundFriction(_root.Course.Char.xspeed,0.05,1.05);
+         _root.Course.Char.xspeed -= 1;
+         _root.Course.Char.yspeed = _root.groundFriction(_root.Course.Char.yspeed,0.07,1.01);
+         _root.Course.Char.yspeed -= 0.5;
+      }
+   }
+}

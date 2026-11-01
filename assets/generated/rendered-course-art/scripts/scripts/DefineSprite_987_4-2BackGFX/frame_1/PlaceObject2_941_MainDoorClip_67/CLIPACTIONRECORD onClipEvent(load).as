@@ -1,0 +1,50 @@
+onClipEvent(load){
+   doorplace = "4-4-3";
+   doortype = 5;
+   if(_root.Starnum == 1)
+   {
+      locked = true;
+      keytype = 1;
+      if(_root.lvl4keyB == true)
+      {
+         removelock = true;
+      }
+      openwithkey = true;
+      unlockitem = "lvl4keyB";
+      doorlockfunction = function()
+      {
+         _root.Course.Char.attack = true;
+         _root.Course.Char.attackFrame = "Sign";
+         _root.Course.Char.xspeed = 0;
+         _root.PlayMessage("This Door is also Locked! There should be another Key somewhere here.");
+         _root.Mariosound = new Sound(this);
+         _root.Mariosound.attachSound("Boo");
+         _root.Mariosound.start(0,1);
+         _root.Mariosound.setVolume(_root.MarioVolume);
+         count = 0;
+         onEnterFrame = function()
+         {
+            X = _X + _parent._x;
+            _root.Course.Char._x += (X - _root.Course.Char._x) / 5;
+            _root.playpause = true;
+            count++;
+            if(_root.KeyZ() && count > 5)
+            {
+               _root.StopMessage();
+               count = 0;
+               onEnterFrame = function()
+               {
+                  count++;
+                  if(count > 5)
+                  {
+                     _root.playpause = false;
+                     _root.Course.Char.attack = false;
+                     onEnterFrame = null;
+                     gotoAndStop(1);
+                  }
+               };
+            }
+         };
+      };
+   }
+}

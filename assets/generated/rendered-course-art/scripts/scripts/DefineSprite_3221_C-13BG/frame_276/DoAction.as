@@ -1,0 +1,10 @@
+soundclip.stop();
+_root.Fluddpow = "";
+_root.StopBGsong();
+_root.lvl8keyA = false;
+_root.lvl8keyB = false;
+_root.lvl8keyC = false;
+_root.lvl8keyD = false;
+_root.lvl8keyE = false;
+_root.Playinglevel = 8;
+_root.changecourse("righttransition2","8-1",0,0,0,0,true);

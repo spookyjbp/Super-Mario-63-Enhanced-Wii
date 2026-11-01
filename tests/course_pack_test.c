@@ -75,6 +75,8 @@ static void test_scripted_objects(void)
     assert(param_is(controls,"completefunction","_root.Course.Platforms.gotoAndStop(2);"));
     const CourseObject *warp=find(a,"Blank Movieclip","warp1");
     assert(warp && warp->x==1855.8f && warp->frame_start==2 && warp->frame_end==3);
+    float box[4];course_object_bounds(warp,COURSE_BLANK_U0,COURSE_BLANK_V0,COURSE_BLANK_U1,COURSE_BLANK_V1,box);
+    assert(box[0]>1830 && box[2]<1882 && box[1]<-245 && box[3]>-7); /* tall strip: a=d=0, b=4.71, c=-3.12 */
     const CourseObject *toad=find(a,"Toad Main Clip",NULL);
     CourseString text;
     assert(toad && course_object_param(toad,"M1Txt",&text) && text.length>20 && !memcmp(text.text,".....Did you know",17));
@@ -92,7 +94,7 @@ static void test_rejects_damage(void)
     static unsigned char bad[1 << 20];
     CoursePack p;
     assert(!course_pack_parse(blob,blob_size-40,&p));
-    memcpy(bad,blob,blob_size);bad[11]=2;assert(!course_pack_parse(bad,blob_size,&p)); /* version */
+    memcpy(bad,blob,blob_size);bad[11]=9;assert(!course_pack_parse(bad,blob_size,&p)); /* version */
     memcpy(bad,blob,blob_size);bad[0]='X';assert(!course_pack_parse(bad,blob_size,&p));
 }
 int main(void)

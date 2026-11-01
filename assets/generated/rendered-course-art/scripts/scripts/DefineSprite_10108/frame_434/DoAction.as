@@ -1,0 +1,4 @@
+Skip = function()
+{
+   gotoAndStop("end");
+};

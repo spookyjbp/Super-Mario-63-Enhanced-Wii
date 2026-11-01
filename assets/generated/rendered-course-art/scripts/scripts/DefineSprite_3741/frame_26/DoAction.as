@@ -1,0 +1,1 @@
+_root.Course.BackGFX.attachMovie("BombombCode","BombombCode" + _root.Course.BackGFX.getNextHighestDepth(),_root.Course.BackGFX.getNextHighestDepth(),{_x:_parent._parent._x,_y:_parent._parent._y - 27,xspeed:(- _parent._parent._xscale) / 8,yspeed:1,tumble:true,tumblerot:45,exploding:true,explodetimer:0,_xscale:_parent._parent._xscale});

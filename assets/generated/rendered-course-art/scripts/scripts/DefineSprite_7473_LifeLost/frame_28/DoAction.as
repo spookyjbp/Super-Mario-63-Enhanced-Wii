@@ -1,0 +1,1 @@
+lives = _root.CharLives;

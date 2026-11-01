@@ -1,0 +1,462 @@
+{
+ "layers": [
+  {
+   "area": "8-E1-1",
+   "layer": "FarBackground",
+   "sprite": 2144,
+   "linkage": "CastleColoredFarBG",
+   "origin": [
+    -225.0,
+    -150.0
+   ],
+   "size": [
+    720,
+    480
+   ],
+   "tiles": 1,
+   "bytes": 57935,
+   "raw": 691200,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-1",
+   "layer": "Background",
+   "sprite": 2150,
+   "linkage": "CastleColoredBG",
+   "origin": [
+    -565.0,
+    -5.95
+   ],
+   "size": [
+    1808,
+    464
+   ],
+   "tiles": 2,
+   "bytes": 57139,
+   "raw": 1677824,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-1",
+   "layer": "CloseBackground",
+   "sprite": 6238,
+   "linkage": "8-E1-1CloseBG",
+   "origin": [
+    -191.1,
+    -187.6
+   ],
+   "size": [
+    2280,
+    828
+   ],
+   "tiles": 3,
+   "bytes": 233339,
+   "raw": 3775680,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-1",
+   "layer": "BackGFX",
+   "sprite": 6254,
+   "linkage": "8-E1-1BackGFX",
+   "origin": [
+    -133.45,
+    -175.15
+   ],
+   "size": [
+    3092,
+    824
+   ],
+   "tiles": 4,
+   "bytes": 206433,
+   "raw": 5095616,
+   "stripped": 39
+  },
+  {
+   "area": "8-E1-1",
+   "layer": "FrontGFX",
+   "sprite": 6260,
+   "linkage": "8-E1-1FrontGFX",
+   "origin": [
+    -233.9,
+    -160.2
+   ],
+   "size": [
+    3556,
+    832
+   ],
+   "tiles": 4,
+   "bytes": 469430,
+   "raw": 5917184,
+   "stripped": 15
+  },
+  {
+   "area": "8-E1-1-2",
+   "layer": "FarBackground",
+   "sprite": 2144,
+   "linkage": "CastleColoredFarBG",
+   "origin": [
+    -225.0,
+    -150.0
+   ],
+   "size": [
+    720,
+    480
+   ],
+   "tiles": 1,
+   "bytes": 57935,
+   "raw": 691200,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-1-2",
+   "layer": "Background",
+   "sprite": 2150,
+   "linkage": "CastleColoredBG",
+   "origin": [
+    -565.0,
+    -5.95
+   ],
+   "size": [
+    1808,
+    464
+   ],
+   "tiles": 2,
+   "bytes": 57139,
+   "raw": 1677824,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-1-2",
+   "layer": "CloseBackground",
+   "sprite": 6238,
+   "linkage": "8-E1-1CloseBG",
+   "origin": [
+    -191.1,
+    -187.6
+   ],
+   "size": [
+    2280,
+    828
+   ],
+   "tiles": 3,
+   "bytes": 233339,
+   "raw": 3775680,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-1-2",
+   "layer": "BackGFX",
+   "sprite": 6278,
+   "linkage": "8-E1-1-2BackGFX",
+   "origin": [
+    103.2,
+    -142.95
+   ],
+   "size": [
+    2588,
+    700
+   ],
+   "tiles": 3,
+   "bytes": 204331,
+   "raw": 3623200,
+   "stripped": 35
+  },
+  {
+   "area": "8-E1-1-2",
+   "layer": "FrontGFX",
+   "sprite": 6281,
+   "linkage": "8-E1-1-2FrontGFX",
+   "origin": [
+    -104.3,
+    -185.75
+   ],
+   "size": [
+    3088,
+    928
+   ],
+   "tiles": 4,
+   "bytes": 461002,
+   "raw": 5731328,
+   "stripped": 8
+  },
+  {
+   "area": "8-E1-2",
+   "layer": "FarBackground",
+   "sprite": 2144,
+   "linkage": "CastleColoredFarBG",
+   "origin": [
+    -225.0,
+    -150.0
+   ],
+   "size": [
+    720,
+    480
+   ],
+   "tiles": 1,
+   "bytes": 57935,
+   "raw": 691200,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-2",
+   "layer": "Background",
+   "sprite": 2150,
+   "linkage": "CastleColoredBG",
+   "origin": [
+    -565.0,
+    -5.95
+   ],
+   "size": [
+    1808,
+    464
+   ],
+   "tiles": 2,
+   "bytes": 57139,
+   "raw": 1677824,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-2",
+   "layer": "CloseBackground",
+   "sprite": 6293,
+   "linkage": "8-E1-2CloseBG",
+   "origin": [
+    -369.0,
+    -237.8
+   ],
+   "size": [
+    3328,
+    712
+   ],
+   "tiles": 4,
+   "bytes": 368065,
+   "raw": 4739072,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-2",
+   "layer": "BackGFX",
+   "sprite": 6296,
+   "linkage": "8-E1-2BackGFX",
+   "origin": [
+    -11.8,
+    -384.6
+   ],
+   "size": [
+    2968,
+    632
+   ],
+   "tiles": 3,
+   "bytes": 73235,
+   "raw": 3751552,
+   "stripped": 43
+  },
+  {
+   "area": "8-E1-2",
+   "layer": "FrontGFX",
+   "sprite": 6302,
+   "linkage": "8-E1-2FrontGFX",
+   "origin": [
+    -51.0,
+    -482.45
+   ],
+   "size": [
+    3108,
+    1040
+   ],
+   "tiles": 8,
+   "bytes": 376954,
+   "raw": 6464640,
+   "stripped": 18
+  },
+  {
+   "area": "8-E1-2-2",
+   "layer": "FarBackground",
+   "sprite": 2144,
+   "linkage": "CastleColoredFarBG",
+   "origin": [
+    -225.0,
+    -150.0
+   ],
+   "size": [
+    720,
+    480
+   ],
+   "tiles": 1,
+   "bytes": 57935,
+   "raw": 691200,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-2-2",
+   "layer": "CloseBackground",
+   "sprite": 819,
+   "linkage": "8-E1-2-2CloseBG",
+   "origin": [
+    -1459.0,
+    -299.0
+   ],
+   "size": [
+    3376,
+    836
+   ],
+   "tiles": 4,
+   "bytes": 461731,
+   "raw": 5644672,
+   "stripped": 0
+  },
+  {
+   "area": "8-E1-2-2",
+   "layer": "BackGFX",
+   "sprite": 6313,
+   "linkage": "8-E1-2-2BackGFX",
+   "origin": [
+    374.2,
+    -1051.0
+   ],
+   "size": [
+    1524,
+    1724
+   ],
+   "tiles": 1,
+   "bytes": 24021,
+   "raw": 1433600,
+   "stripped": 74
+  },
+  {
+   "area": "8-E1-2-2",
+   "layer": "FrontGFX",
+   "sprite": 6317,
+   "linkage": "8-E1-2-2FrontGFX",
+   "origin": [
+    -928.4,
+    -865.7
+   ],
+   "size": [
+    3472,
+    1864
+   ],
+   "tiles": 7,
+   "bytes": 609954,
+   "raw": 11223296,
+   "stripped": 15
+  },
+  {
+   "area": "*",
+   "layer": "Start",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 50330,
+   "raw": 795648
+  },
+  {
+   "area": "*",
+   "layer": "bomb",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 32920,
+   "raw": 795648
+  },
+  {
+   "area": "*",
+   "layer": "controls",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 42775,
+   "raw": 795648
+  },
+  {
+   "area": "*",
+   "layer": "goomba",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 26247,
+   "raw": 795648
+  },
+  {
+   "area": "*",
+   "layer": "hover",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 44129,
+   "raw": 795648
+  },
+  {
+   "area": "*",
+   "layer": "refill",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 30638,
+   "raw": 795648
+  },
+  {
+   "area": "*",
+   "layer": "stomp",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 26121,
+   "raw": 795648
+  },
+  {
+   "area": "*",
+   "layer": "ttt",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 21201,
+   "raw": 795648
+  },
+  {
+   "area": "*",
+   "layer": "zoom",
+   "size": [
+    896,
+    444
+   ],
+   "tiles": 1,
+   "bytes": 21741,
+   "raw": 795648
+  }
+ ],
+ "tints": {
+  "('self', 6238)": 37.5,
+  "('self', 808)": 37.5,
+  "('self', 2406)": 37.5,
+  "('self', 6253)": 37.5,
+  "('place', 10298, 1)": 37.5,
+  "('place', 10290, 86)": 37.5,
+  "('place', 10290, 1)": 37.5,
+  "('self', 2422)": 37.5,
+  "('place', 2431, 1)": 37.5,
+  "('self', 2144)": 37.5,
+  "('place', 2150, 1)": 37.5,
+  "('place', 10299, 1)": 37.5
+ },
+ "frame2": [
+  6259
+ ]
+}

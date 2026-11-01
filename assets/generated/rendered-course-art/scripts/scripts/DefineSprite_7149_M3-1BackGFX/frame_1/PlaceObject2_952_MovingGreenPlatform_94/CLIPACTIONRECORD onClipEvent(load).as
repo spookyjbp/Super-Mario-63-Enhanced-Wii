@@ -1,0 +1,13 @@
+onClipEvent(load){
+   DirectionX = "Left";
+   DirectionY = "Up";
+   distanceX = 0;
+   distanceY = 90;
+   Yoffstart = 90;
+   Xoffstart = 0;
+   accelX = 0;
+   accelY = 0.4;
+   speedX = 0;
+   speedY = 2;
+   scale = 1;
+}
