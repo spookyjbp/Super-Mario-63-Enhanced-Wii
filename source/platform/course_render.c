@@ -110,6 +110,52 @@ static void draw_objects(const CourseSession *s, float ox, float oy, bool front)
         for (unsigned k = 0; k < n; ++k) draw_object_frame(&d[k], ox + l->x * COURSE_SCALE, oy + l->y * COURSE_SCALE);
     }
 }
+/* Stats Clip (SWF 800): stage px (450 x 300) at 1.6 screen px each. Elements
+   left of x 150 keep to the left edge, right of 300 to the right edge, the
+   POWER meter to the centre, so 16:9 keeps the original corners. */
+#define HUD_K 1.6f
+static float hud_x(float x, float width)
+{
+    return x < 150 ? x * HUD_K : x > 300 ? width - (450 - x) * HUD_K : width / 2 + (x - 225) * HUD_K;
+}
+static void hud_clip(int clip, unsigned frame, float x, float y, float width, float scale)
+{
+    const ObjectDraw d = {.clip = clip, .frame = frame, .alpha = 100, .scale = HUD_K / COURSE_SCALE * scale};
+    draw_object_frame(&d, hud_x(x, width), y * HUD_K);
+}
+/* A DefineEditText counter (font 187, 16 px): digits from the field's left edge. */
+static void hud_number(unsigned value, float x, float y, float width, float scale, bool centre)
+{
+    char buf[12];
+    const int n = snprintf(buf, sizeof(buf), "%u", value);
+    const float advance = 8.9f * scale; /* Arial digit advance, 0.556 em */
+    float left = centre ? x - n * advance / 2 : x;
+    for (int i = 0; i < n; ++i) hud_clip(OBJ_HUD_DIGITS, (unsigned)(buf[i] - '0'), left + i * advance, y, width, scale);
+}
+static void draw_hud(const CourseSession *s, float width)
+{
+    /* Shine and star coin icons with "=" (left), TotalStars / TotalStarCoins. */
+    hud_clip(OBJ_HUD_STATIC, 0, 0, 0, width, 1);
+    hud_number(s->total_stars, 45.3f, 12.7f, width, 1, false);
+    hud_number(0, 136.7f, 11.2f, width, 1, false);                  /* TotalStarCoins */
+    /* Coins: spinning coin (SWF 17), "=", _root.Coins. */
+    hud_clip(OBJ_COIN_SPIN, s->hud.ticks % 16, 342.6f, 10.3f, width, 1);
+    hud_clip(OBJ_HUD_DIGITS, 10, 349.5f, 2.9f, width, 1);
+    hud_number(s->progress.coins, 364.1f, 2.9f, width, 1, false);
+    /* POWER meter (114 at (225, 25)) with the CharHP pie (111). */
+    hud_clip(OBJ_HUD_PIE, hud_pie_frame(&s->hud), 225, 25 + hud_meter_offset(&s->hud), width, 1);
+    /* FLUDD tank (160 at (431.2, 266.9)): level 'cl', power gauge, percentage. */
+    const Player *p = &s->game.player;
+    if (p->has_fludd) {
+        int level = (int)lroundf(p->water * 5);
+        level = level < 2 ? 2 : level > 500 ? 500 : level;
+        const int power = (int)lroundf(p->power);
+        hud_clip(OBJ_HUD_TANK, 0, 431.2f, 266.9f, width, 1);
+        hud_clip(OBJ_HUD_TANK_LEVEL, (unsigned)(level - 1) / 10, 431.2f, 266.9f, width, 1);
+        hud_clip(OBJ_HUD_POWER_BAR, (unsigned)(power < 0 ? 0 : power > 100 ? 100 : power) / 5, 431.2f, 266.9f, width, 1);
+        hud_number((unsigned)lroundf(p->water), 431.2f, 266.9f - 20.7f + 1, width, 15.0f / 16, true);
+    }
+}
 static const CourseArtLayer *loaded_picture;
 
 bool course_render_init(void)
@@ -225,15 +271,17 @@ void course_render(const CourseSession *s, float t)
         graphics_rect(20, 420, width - 40, 40, (GXColor){0, 0, 0, 150});
         text_block(30, 428, s->hint, 1.5f, white, (unsigned)((width - 60) / 9));
     }
-    { /* HUD (placeholder layout; original Stats clip art still to be ported) */
-        char hud[48];
-        snprintf(hud, sizeof(hud), "COINS %u   HP %u", s->progress.coins, s->progress.hp);
-        graphics_rect(14, 14, 220, 22, (GXColor){0, 0, 0, 140});
-        graphics_text(22, 19, hud, 2, white);
-    }
+    draw_hud(s, width);
     if (s->state == SESSION_TALK && s->toad_text.length) {
-        graphics_rect(40, 330, width - 80, 120, (GXColor){20, 20, 40, 220});
-        text_block(56, 346, s->toad_text, 2, white, (unsigned)((width - 112) / 12));
+        /* 'tm' (186 at (246, 259)): cloud, text typed two characters a frame
+           (a blank first line when shorter than 40), Z prompt once complete. */
+        hud_clip(OBJ_HUD_TALK_BOX, 0, 246, 259, width, 1);
+        const CourseString shown = {s->toad_text.text, (uint16_t)s->toad_chars};
+        const float tx = hud_x(246, width) - 141.45f * HUD_K, ty = (259 - 26.9f + (s->toad_text.length < 40 ? 14 : 0)) * HUD_K;
+        const unsigned wrap = (unsigned)(280 * HUD_K / 9);
+        text_block(tx + 2, ty + 2, shown, 1.5f, (GXColor){0, 0, 0, 160}, wrap);
+        text_block(tx, ty, shown, 1.5f, white, wrap);
+        if (s->toad_chars >= s->toad_text.length) hud_clip(OBJ_HUD_TALK_Z, (s->hud.ticks / 2) % 50, 246, 259, width, 1);
     }
     if (s->area_title_time > 0)
         text_block(width / 2 - 100, 60, s->area_title, 3, white, 30);

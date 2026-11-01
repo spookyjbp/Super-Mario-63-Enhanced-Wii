@@ -70,6 +70,7 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     s->pack = pack; s->view_width = view_width; s->warp_target = -1;
     s->game.player.has_fludd = false; /* StartChar(..., Fluddpow "") */
     s->progress.hp = 8;                 /* _root.CharHP = 8 */
+    hud_init(&s->hud, s->progress.hp);
     /* StartChar(..., resetmusic = true): _root["8-E1-1MusicIntro"], then "8-E1-1Music". */
     if (course_string_equals(course_pack_area(pack, id)->id, "8-E1-1") || course_string_equals(course_pack_area(pack, id)->id, "8-E1-2-2"))
         sfx_music(MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT);
@@ -182,7 +183,7 @@ static bool toad_page(CourseSession *s, unsigned page)
     char key[8] = {'M', (char)('0' + page), 'T', 'x', 't', 0};
     CourseString t;
     if (page > 9 || !course_object_param(s->toad->src, key, &t) || course_string_equals(t, "undefined")) return false;
-    s->toad_text = t;
+    s->toad_text = t; s->toad_chars = 0;
     key[2] = 'M'; key[3] = 'o'; key[4] = 'o';
     if (!course_object_param(s->toad->src, key, &s->toad_mood)) s->toad_mood = (CourseString){0};
     return true;
@@ -246,6 +247,8 @@ void course_session_step(CourseSession *s, GameInput in)
     case SESSION_TALK:
         p->vx = p->vy = 0;
         game_step(&s->game, &s->world, (GameInput){0}, s->view_width);
+        if (p->source_step && s->toad_chars < s->toad_text.length) /* tm: two characters a frame */
+            s->toad_chars = s->toad_chars + 2 < s->toad_text.length ? s->toad_chars + 2 : s->toad_text.length;
         if (z_pressed && !toad_page(s, ++s->toad_page)) {
             s->state = SESSION_PLAY; s->toad = NULL; s->camera_override = false;
         }
@@ -269,6 +272,7 @@ void course_session_step(CourseSession *s, GameInput in)
     if (s->state != SESSION_WARP)
         course_objects_step(&s->objects, &s->runtime, &s->game.player, &s->progress, pickups_for(s), false,
                             s->game.camera.cx, s->game.camera.cy, in.jump_held);
+    if (s->game.player.source_step) hud_step(&s->hud, s->progress.hp);
     if (s->camera_override) {
         /* Camcenter = another clip: centre moves 1/10 of the way each frame. */
         Camera *c = &s->game.camera;

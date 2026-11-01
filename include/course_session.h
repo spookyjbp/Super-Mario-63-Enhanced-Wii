@@ -5,6 +5,7 @@
    docs/original-tutorial-reference.md and docs/course-session.md. */
 #include "course_world.h"
 #include "course_objects.h"
+#include "hud.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -32,9 +33,11 @@ typedef struct {
     float view_width;
     CourseObjects objects;
     CourseProgress progress;
+    HudState hud;                /* Stats Clip POWER meter */
     CoursePickups pickups[COURSE_MAX_AREAS];
     /* Toad dialogue: Phase (1-based page), text of the current page */
     const LiveObject *toad; unsigned toad_page; CourseString toad_text; CourseString toad_mood;
+    unsigned toad_chars;         /* 'tm' clip: characters typed so far (2 a frame) */
 } CourseSession;
 bool course_session_start(CourseSession *s, const CoursePack *pack, const char *area, float cx, float cy, float view_width);
 void course_session_step(CourseSession *s, GameInput input);

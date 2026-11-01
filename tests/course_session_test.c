@@ -100,11 +100,28 @@ static void test_area_chain_and_completion(void)
     ticks((GameInput){.crouch_held = true, .vertical = 1}, 1);
     assert(s.state == SESSION_COMPLETE);
 }
+static void test_hud_power_meter(void)
+{
+    HudState h;
+    hud_init(&h, 8);
+    assert(hud_meter_offset(&h) == 0 && hud_pie_frame(&h) == 8);
+    for (int i = 0; i < 161; ++i) hud_step(&h, 8);
+    assert(hud_meter_offset(&h) == 0);           /* 160 frames at full health... */
+    for (int i = 0; i < 15; ++i) hud_step(&h, 8);
+    assert(hud_meter_offset(&h) == -50);         /* ...then it slides away (frame 15) */
+    hud_step(&h, 7);                             /* hurt: slides back (frames 16-20) */
+    for (int i = 0; i < 6; ++i) hud_step(&h, 7);
+    assert(h.meter == 1 && hud_meter_offset(&h) == 0);
+    for (int i = 0; i < 4; ++i) hud_step(&h, 7);
+    assert(hud_pie_frame(&h) == 7);              /* pie eases 0.3 a frame to CharHP */
+    hud_step(&h, 8);                             /* healed while shown: stays */
+    assert(h.meter == 1 && h.count == 0);
+}
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
     const size_t n = fread(blob, 1, sizeof(blob), f); fclose(f);
     assert(course_pack_parse(blob, n, &pack));
-    test_opening_and_controls_sign(); test_hints(); test_area_chain_and_completion();
-    puts("3 course session (tutorial flow) test groups passed"); return 0;
+    test_opening_and_controls_sign(); test_hints(); test_area_chain_and_completion(); test_hud_power_meter();
+    puts("4 course session (tutorial flow, HUD) test groups passed"); return 0;
 }

@@ -66,6 +66,17 @@ SPEC = [
     ('HNOZZLE', 42, None, 1, (0, 0, 1, 1), ()),               # Hover nozzle pickup from the FLUDD box
     ('TIP_LOG', 3476, None, 1, (0, 0, 1, 1), ()),
     ('ROT_BLOCK', 3063, [0, 1], 1, (0, 0, 1, 1), ()),        # frame = blocktype (tutorial uses 1, 2)
+    # Stats Clip (800) frame 1 without its dynamic parts: the shine and star coin
+    # icons with their "=" (the coin counter's "=" is HUD_DIGITS frame 10, so it
+    # can sit at the right edge on 16:9).
+    ('HUD_STATIC', 800, [0], 1, (0, 0, 1, 1),
+     (1, 3, 9, 45, 65, 70, 71, 72, 74, 75, 76, 78, 82, 84, 86, 98, 104, 110, 112, 113, 118, 120, 122)),
+    ('HUD_PIE', 111, None, 1, (0, 0, 1, 1), ()),               # POWER meter, frame = CharHP + 1
+    ('HUD_TANK', 160, [0], 1, (0, 0, 1, 1), (6, 32, 35)),      # FLUDD tank without level, gauge, number
+    ('HUD_TANK_LEVEL', 149, None, 10, (1.1, 30.5, 0.5, 0.5), ()),  # 'cl', frame = Waterpercent * 5
+    ('HUD_POWER_BAR', 153, None, 5, (-17.35, -14.85, 1, 1), ()),   # frame = Power / TotalPower * 100 + 1
+    ('HUD_TALK_BOX', 186, [0], 1, (0, 0, 1, 1), (2, 4)),       # 'tm' Toad message cloud (text drawn by the port)
+    ('HUD_TALK_Z', 184, None, 1, (143.45, 1, 1.5, 1.5), ()),   # its 'bz' Z prompt
     # Shine Sprite 977/976: only on 8-E1-2-2 frames reached once Star[39] is set,
     # so a new save never shows it in the tutorial; not exported.
 ]
@@ -130,6 +141,33 @@ def strip_blanks(raw, start, strip_depths):
     return out
 
 
+def digits(jar, swf_path, work, cid):
+    """HUD counters: DefineEditText fields in font 187 (Arial, 16 px), a black
+    50% copy 2 px down-right under the white one. Frames 0-9 are the digits,
+    drawn from the text field's top-left (2 px gutter); frame 10 is "="."""
+    from PIL import ImageDraw, ImageFont
+    font_dir = work / 'font'
+    if not list(font_dir.glob('187_*.ttf')):
+        subprocess.run(['java', '-Djava.awt.headless=true', '-jar', str(jar.resolve()), '-selectid', '187', '-format',
+                        'font:ttf', '-export', 'font', str(font_dir), str(swf_path)], check=True, capture_output=True)
+    font = ImageFont.truetype(str(next(font_dir.glob('187_*.ttf'))), round(16 * ZOOM))
+    out_png = work / 'digits'
+    out_png.mkdir(exist_ok=True)
+    frames = []
+    for d in '0123456789=':
+        w = round(14 * ZOOM); h = round(24 * ZOOM)
+        im = Image.new('RGBA', (w, h))
+        dr = ImageDraw.Draw(im)
+        # FFDec draws these fields bold with a dark edge; a stroke reproduces that look.
+        dr.text((round(2 * ZOOM) + 2, round(2 * ZOOM) + 2), d, font=font, fill=(0, 0, 0, 128), stroke_width=2,
+                stroke_fill=(0, 0, 0, 128))
+        dr.text((2, 2), d, font=font, fill=(255, 255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0, 255))
+        path = out_png / f'{d}.png'
+        im.save(path)
+        frames.append({'file': str(path.resolve()), 'duration': 1, 'offset_twips': [round(2 * 20), round(2 * 20)]})
+    return {'id': cid, 'name': 'HUD_DIGITS', 'loop': False, 'frames': frames}
+
+
 def export(source, jar, out_dir):
     swf_file = source / 'Publish/Super_Mario_63_2010.swf'
     swf = swf_file.read_bytes()
@@ -176,6 +214,8 @@ def export(source, jar, out_dir):
                         'offset_twips': [round((ox * sx + tx) * 20), round((oy * sy + ty) * 20)]})
         clips.append({'id': cid, 'name': name, 'loop': frames is None, 'frames': out})
         report.append({'name': name, 'sprite': ident, 'frames': len(out), 'placement': [tx, ty]})
+    clips.append(digits(jar, swf_path, work, len(clips)))
+    report.append({'name': 'HUD_DIGITS', 'font': 187})
     # Split into packs that each fit one 1024x1024 texture.
     packs, current = [], []
     for clip in clips:

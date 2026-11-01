@@ -46,9 +46,17 @@ enum {
     OBJ_HNOZZLE = 39, /* pack 1 */
     OBJ_TIP_LOG = 40, /* pack 1 */
     OBJ_ROT_BLOCK = 41, /* pack 1 */
-    OBJ_CLIP_COUNT = 42
+    OBJ_HUD_STATIC = 42, /* pack 1 */
+    OBJ_HUD_PIE = 43, /* pack 1 */
+    OBJ_HUD_TANK = 44, /* pack 1 */
+    OBJ_HUD_TANK_LEVEL = 45, /* pack 1 */
+    OBJ_HUD_POWER_BAR = 46, /* pack 1 */
+    OBJ_HUD_TALK_BOX = 47, /* pack 1 */
+    OBJ_HUD_TALK_Z = 48, /* pack 1 */
+    OBJ_HUD_DIGITS = 49, /* pack 1 */
+    OBJ_CLIP_COUNT = 50
 };
 static const unsigned char object_art_pack_of[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 };
 #endif
