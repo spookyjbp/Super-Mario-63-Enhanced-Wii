@@ -145,6 +145,19 @@ static void test_tile_and_parallax_rendering(void)
     record(&game,&movement_world,0.5f);
     assert(draws.rects<visible && draws.triangles==0);
 }
+/* Dolphin crash at 87a7b67: pressing Down selected an animation with no HUD
+   label. Render the whole frame, HUD included, for every state. */
+static void test_every_animation_renders_hud(void)
+{
+    const World world = {.solids=NULL, .count=0, .width=2400, .height=960, .spawn_x=100, .spawn_y=100};
+    Game game = {0};
+    for (int state = 0; state < PLAYER_ANIMATION_COUNT; ++state)
+        for (unsigned left = 0; left < 2; ++left) {
+            game.player.animation = (PlayerAnimation)state;
+            game.player.facing_left = left != 0;
+            render_game(&game, &world, 1);
+        }
+}
 int main(void)
 {
     render_init();
@@ -152,6 +165,7 @@ int main(void)
     test_spin_tracks_player_and_camera();
     test_direction_reaches_uvs();
     test_tile_and_parallax_rendering();
-    puts("4 render command regression groups passed (not a visual/GX test)");
+    test_every_animation_renders_hud();
+    puts("5 render command regression groups passed (not a visual/GX test)");
     return 0;
 }

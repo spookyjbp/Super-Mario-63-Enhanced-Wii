@@ -93,7 +93,10 @@ void render_game(const Game *game, const World *world, float interpolation)
         graphics_rect(x + PLAYER_WIDTH + spread, y + PLAYER_HEIGHT - 5, 10, 5, white);
     }
     static const char *states[] = {"IDLE", "RUN", "RISE", "FALL", "SPIN", "WINDUP", "POUND", "LAND", "LOW DIVE", "DIVE", "BACKFLIP", "ROLL", "SWIM",
-        "HOVER", "CHARGING", "ROCKET", "TURBO", "BONK"};
+        "HOVER", "CHARGING", "ROCKET", "TURBO", "BONK", "LOW DIVE"};
+    /* Every PlayerAnimation needs a label; a missing one is an out-of-bounds read. */
+    _Static_assert(sizeof(states) / sizeof(states[0]) == PLAYER_ANIMATION_COUNT,
+                   "HUD state labels must match PlayerAnimation");
     char hud[100];
     static const char *nozzles[]={"H","R","T"};
     snprintf(hud, sizeof(hud), "V0.4.1 %s %s W%u P%u", states[p->animation], nozzles[p->nozzle], (unsigned)p->water, (unsigned)p->power);
