@@ -83,9 +83,9 @@ second solid layer (`BackGFX` hitTests both). Water volumes come from `Water Cod
 instances (`WaterLength` wide, `WaterDeepness` deep, default 400; spring-wave
 surface after Jim Bumgardner's "Ocean"). Ice: one area in 8-E1-1.
 
-Not yet extracted as geometry: the vector outlines themselves (needed for
-collision). Plan: render each `Platforms`/`BPlatforms` frame from the SWF at 1:1
-into a collision mask (section 11).
+Collision, camera edge and ice are extracted as 1:1 masks of these sprites
+(both `Platforms` frames for 8-E1-1) into `assets/generated/course_8e1.bin`;
+see `docs/course-format.md`.
 
 ## 4. Background art and parallax
 
@@ -426,14 +426,14 @@ sequence. Full text in the inventory parameters' source scripts.
 | 8-E1-1-2 `warp2` | feet | `8-E1-2` (0,0) |
 | 8-E1-2 `warp1` / `warp2` | feet | `8-E1-1-2` (1730, -30) / `8-E1-2-2` (0,0) |
 | 8-E1-2-2 `warp1` / `warp2` / `warp3` | feet | `8-E1-2` (1840,-170) / `8-E3-1` / fall back to `8-E1-2` |
-| 8-E1-2-2 `Invisible Door` (964, -783), `doorplace = "C-Opening"`, warp pipe | Down on pipe | **Completion** |
+| 8-E1-2-2 `Invisible Door` (964.05, -783.3), `doorplace = "C-Opening"`, warp pipe | Down on pipe | **Completion** |
 
 Completion (`DOMDocument.xml:13207`): if `Star[39]` is false, stop music,
 `gotoAndStop("Intro2")`, remove the course. Intro Movie 2 (`LIBRARY/Menu/Intro
 Movie 2.xml`) plays; its `Mario Talk` clip sets `Star[39] = true`,
 `CalculateStars()`, `SaveFile()` (`LIBRARY/Char/Mario Talk.xml:79-86`); its last
 frame starts `"Castle"` at (80, 60) facing left. Later uses go straight to
-`"Castle"` (-1300, 100). The 8-E1-2-2 Shine Sprite (`starnum = 39`, (730, -814))
+`"Castle"` (-1300, 100). The 8-E1-2-2 Shine Sprite (`starnum = 39`, (730.2, -813.5))
 is only on the frames reached when `Star[39]` is already true.
 
 **Destination not in this port:** Intro Movie 2 and the Castle. Implement as a
@@ -449,8 +449,8 @@ moving platforms, camera control boxes, zoom (+/-), pause menu, warp pipe.
 
 ## Missing or uncertain
 
-- Collision outlines not yet rasterised; FFDec render of the `Platforms` sprites
-  is the planned source.
+- 8-E1-2 `Giant Water Block` is a 132-frame animated water clip, exported as an
+  object, not a static volume; its motion still has to be read.
 - Object behaviour scripts (Goomba, Koopa, Bob-omb, Cheep Cheep, platforms,
   Toad, FLUDD box, Water Bottle, camera boxes) still to be read before porting.
 - Intro Movie 2 and the Castle are separate content outside this level.
