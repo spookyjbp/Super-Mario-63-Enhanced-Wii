@@ -7,28 +7,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "player_art_bin.h"
+
 static ArtPack art;
 static GXTexObj texture;
-static unsigned char *storage;
+static unsigned char *storage;          /* SD/USB override, if one was loaded. */
+static const unsigned char *loaded;     /* Pack actually in use. */
+static bool load_file(const char *path)
+{
+    FILE *file=fopen(path,"rb");
+    if(!file) return false;
+    if(fseek(file,0,SEEK_END)!=0) {fclose(file);return false;}
+    long size=ftell(file);
+    if(size<32 || size>4*1024*1024+8192 || fseek(file,0,SEEK_SET)!=0) {fclose(file);return false;}
+    storage=memalign(32,(size_t)size);
+    if(!storage) {fclose(file);return false;}
+    const bool read=fread(storage,1,(size_t)size,file)==(size_t)size;fclose(file);
+    if(!read || !art_pack_parse(storage,(size_t)size,&art)) {free(storage);storage=NULL;return false;}
+    loaded=storage;return true;
+}
+/* An SD/USB player.art overrides the pack embedded in boot.dol
+   (assets/generated/player_art.bin, built by tools/export_source_clips.py). */
 void user_art_init(void)
 {
-    if(storage || !fatInitDefault()) return;
-    FILE *file=fopen("sd:/apps/super-mario-63-enhanced-wii/player.art","rb");
-    if(!file) file=fopen("usb:/apps/super-mario-63-enhanced-wii/player.art","rb");
-    if(!file) return;
-    if(fseek(file,0,SEEK_END)!=0) {fclose(file);return;}
-    long size=ftell(file);
-    if(size<32 || size>4*1024*1024+8192 || fseek(file,0,SEEK_SET)!=0) {fclose(file);return;}
-    storage=memalign(32,(size_t)size);
-    if(!storage) {fclose(file);return;}
-    const bool read=fread(storage,1,(size_t)size,file)==(size_t)size;fclose(file);
-    if(!read || !art_pack_parse(storage,(size_t)size,&art)) {free(storage);storage=NULL;return;}
+    if(loaded) return;
+    if(fatInitDefault() && !load_file("sd:/apps/super-mario-63-enhanced-wii/player.art"))
+        load_file("usb:/apps/super-mario-63-enhanced-wii/player.art");
+    if(!loaded && player_art_bin_size>0 && art_pack_parse(player_art_bin,player_art_bin_size,&art))
+        loaded=player_art_bin;
+    if(!loaded) return;
     DCFlushRange((void *)art.texture,art.width*art.height*4);
     GX_InitTexObj(&texture,(void *)art.texture,art.width,art.height,GX_TF_RGBA8,GX_CLAMP,GX_CLAMP,GX_FALSE);
     GX_InitTexObjLOD(&texture,GX_NEAR,GX_NEAR,0,0,0,GX_FALSE,GX_FALSE,GX_ANISO_1);
     GX_InvalidateTexAll();
 }
-bool user_art_available(void) {return storage!=NULL;}
+void user_art_shutdown(void)
+{
+    free(storage);storage=NULL;loaded=NULL;
+}
+bool user_art_available(void) {return loaded!=NULL;}
 static unsigned body_clip(const Player *p)
 {
     if(p->animation==PLAYER_CROUCH) return ART_DOWN;

@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+const unsigned char *player_art_bin;unsigned int player_art_bin_size;
 static unsigned calls;static float px,py,tu0,tu1;
 void DCFlushRange(void *d,unsigned n) {(void)d;(void)n;}
 void GX_InitTexObj(GXTexObj *t,void *d,unsigned w,unsigned h,unsigned f,unsigned s,unsigned v,unsigned m)
@@ -51,7 +52,18 @@ int main(void)
     memcpy(bad,bytes,192);set16(bad+60,5);assert(!art_pack_parse(bad,192,&pack));
     memcpy(bad,bytes,192);set16(bad+68,0);assert(!art_pack_parse(bad,192,&pack));
     memcpy(bad,bytes,192);set32(bad+12,1025);assert(!art_pack_parse(bad,192,&pack));
+    /* Pack embedded in boot.dol is used when no SD/USB file exists. */
     directory("sd:");directory("sd:/apps");directory("sd:/apps/super-mario-63-enhanced-wii");
+    remove("sd:/apps/super-mario-63-enhanced-wii/player.art");
+    player_art_bin=bytes;player_art_bin_size=sizeof(bytes);
+    user_art_init();assert(user_art_available());
+    {Player q={.height=44,.animation=PLAYER_CROUCH,.facing_left=true};
+     assert(user_art_draw_player(&q,100,100) && fabsf(px-112.5f)<0.001f);}
+    user_art_shutdown();assert(!user_art_available());
+    player_art_bin_size=0;user_art_init();assert(!user_art_available());
+    /* An SD file overrides the embedded pack (embedded copy has offset 0 -> px 114). */
+    static unsigned char embedded[192];memcpy(embedded,bytes,192);set16(embedded+64,0);
+    player_art_bin=embedded;player_art_bin_size=sizeof(embedded);calls=0;
     FILE *f=fopen("sd:/apps/super-mario-63-enhanced-wii/player.art","wb");assert(f);
     assert(fwrite(bytes,1,sizeof(bytes),f)==sizeof(bytes));assert(fclose(f)==0);
     user_art_init();assert(user_art_available());
@@ -67,5 +79,11 @@ int main(void)
     p.nozzle=NOZZLE_ROCKET;p.rocket_boost=0;calls=0;
     assert(!user_art_fludd_available(&p));
     user_art_draw_equipment(&p,100,100);assert(calls==0); /* No wrong-nozzle effect. */
-    puts("3 private-art parser/loader/render regression groups passed");return 0;
+    /* The committed embedded pack: original crouch, 30-frame triple, 22-frame backflip. */
+    FILE *e=fopen("../../assets/generated/player_art.bin","rb");assert(e);
+    static unsigned char real[4*1024*1024+8192];const size_t n=fread(real,1,sizeof(real),e);fclose(e);
+    static ArtPack committed;assert(art_pack_parse(real,n,&committed));
+    assert(committed.clips[ART_DOWN].count==1 && committed.clips[ART_TRIPLE].count==30 &&
+           committed.clips[ART_BACKFLIP].count==22 && committed.clips[ART_RISE].count==1);
+    puts("5 private-art parser/loader/render regression groups passed");return 0;
 }
