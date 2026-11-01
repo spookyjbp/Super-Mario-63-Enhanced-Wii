@@ -56,3 +56,12 @@ const CourseArtLayer *course_art_picture(const CourseArtPack *p,const char *labe
     }
     return NULL;
 }
+
+void course_layer_tile_quad(float bx, float by, float px, unsigned x, unsigned y, unsigned w, unsigned h,
+                            float xs[4], float ys[4])
+{
+    const float x0 = bx + (float)x * px, x1 = bx + (float)(x + w) * px;
+    const float y0 = by + (float)y * px, y1 = by + (float)(y + h) * px;
+    xs[0] = x0; xs[1] = x1; xs[2] = x1; xs[3] = x0;
+    ys[0] = y0; ys[1] = y0; ys[2] = y1; ys[3] = y1;
+}

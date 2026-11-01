@@ -963,7 +963,7 @@ static void step_box(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
             p->vy = (fall * 0.75f - 3) * 44; p->grounded = false; brk = true;
         }
         if (overlap(box4, M.body) && fabsf(M.last_vx) > 9) { /* _root.HitWall() */
-            p->action = ACTION_BONK; p->action_time = 0; p->bonk_direction = M.last_vx > 0 ? -1 : 1;
+            p->action = ACTION_BONK; p->action_time = 0; p->bonk_direction = M.last_vx > 0 ? -1 : 1; p->bonk_frame = 0;
             p->vx = p->vy = 0; p->spin_time = 0; p->pounding = false;
             p->facing_left = !(M.mx < l->x);
             brk = true;

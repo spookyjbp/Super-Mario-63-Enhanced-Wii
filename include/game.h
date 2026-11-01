@@ -71,6 +71,8 @@ typedef struct {
     bool ejump;              /* attackFrame "EJump": held on a stomped enemy */
     float input_horizontal;  /* held direction this tick, for wall rules */
     int hurtfall;            /* CharCode hurtfallcount (0..7); "Mario-Fall" at 5 */
+    unsigned bonk_frame;     /* Mario Main "hurt2" clip (1422) frame, 0-based, during ACTION_BONK */
+    bool reading_sign;       /* attackFrame "Sign": the reading pose (Main "Sign", 1487) */
     bool fall_sfx;           /* fallingsfx: once per fall */
     TileType material;
     PlayerAction action;

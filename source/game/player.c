@@ -132,8 +132,8 @@ void player_step(Player *p, const World *world, GameInput input)
             p->vx = vx * 44; p->vy = vy * 44;
             if (p->pound_frame < 26) ++p->pound_frame; /* stop() at frame 26 */
         }
-    } else if (!p->submerged && p->action!=ACTION_BONK && p->spin_time==0) {
-        if (!input.jump_held && p->vy < 0 && !p->jump_cut) {
+    } else if (!p->submerged && p->spin_time==0) { /* CharCode gravity also runs during hurt2 */
+        if (!input.jump_held && p->vy < 0 && !p->jump_cut && p->action!=ACTION_BONK) {
             p->vy *= 0.45f;
             p->jump_cut = true;
         }
@@ -145,8 +145,12 @@ void player_step(Player *p, const World *world, GameInput input)
     player_spin_update(p,input);
     player_fludd_step(p,input);
     player_collision_step(p,world);
-    if(p->wall_normal && (fabsf(p->wall_speed)>11*44 || (p->dashing && fabsf(p->wall_speed)>5*44)) && !p->submerged && p->action!=ACTION_BONK) {
-        p->action=ACTION_BONK;p->action_time=0;p->bonk_direction=p->wall_normal;
+    /* CharCode wall test: HitWall() when |xspeed| > 11 with no attack, or > 5 while
+       running (attackFrame "Run"); a dive (an attack) never bonks. */
+    if(p->wall_normal && ((fabsf(p->wall_speed)>11*44 && p->action==ACTION_NONE && !p->pounding && p->spin_time==0) ||
+                          (p->dashing && fabsf(p->wall_speed)>5*44)) && !p->submerged && p->action!=ACTION_BONK) {
+        p->action=ACTION_BONK;p->action_time=0;p->bonk_direction=p->wall_normal;p->bonk_frame=0;
+        p->facing_left=p->wall_speed<0; /* HitWall: _xscale = -100 when xspeed > 0 */
         p->vx=p->vy=0;p->rocket_boost=0;p->dashing=false;
     }
     if (p->grounded) {

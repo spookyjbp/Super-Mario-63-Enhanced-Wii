@@ -19,4 +19,9 @@ bool course_art_parse(const unsigned char *data, size_t size, CourseArtPack *pac
 const CourseArtLayer *course_art_layer(const CourseArtPack *pack, const char *area, CourseArtKind kind);
 /* Picture-sign page by label ("controls", "Start"...), stored under area "*". */
 const CourseArtLayer *course_art_picture(const CourseArtPack *pack, const char *label, size_t length);
+/* Screen quad of one layer tile: (bx, by) is image (0,0) on screen, px screen px
+   per image px. Edges are computed from absolute image columns/rows, so a
+   tile's right/bottom edge equals the next tile's left/top edge bit for bit. */
+void course_layer_tile_quad(float bx, float by, float px, unsigned x, unsigned y, unsigned w, unsigned h,
+                            float xs[4], float ys[4]);
 #endif

@@ -30,6 +30,21 @@ int main(void)
             assert(lz4_block_decode(tile->data, tile->packed, out, tile->size - 1) == -1); /* no overflow */
         }
     assert(tiles > 50);
+    /* Bug #5: adjacent tiles share their edge coordinates exactly at any
+       camera offset / scale, so no hairline opens between 1024 px tiles. */
+    const float bases[] = {-1234.567f, -0.3f, 0, 17.123f, 999.99f}, scales[] = {0.7272727f, 0.8593750f, 1, 1.0078f};
+    for (unsigned l = 0; l < pack.layer_count; ++l)
+        for (unsigned a = 0; a < 5; ++a)
+            for (unsigned s = 0; s < 4; ++s)
+                for (unsigned t = 0; t < pack.layers[l].tile_count; ++t)
+                    for (unsigned u = 0; u < pack.layers[l].tile_count; ++u) {
+                        const CourseArtTile *p = &pack.layers[l].tiles[t], *q = &pack.layers[l].tiles[u];
+                        float px[4], py[4], qx[4], qy[4];
+                        course_layer_tile_quad(bases[a], bases[4 - a], scales[s], p->x, p->y, p->width, p->height, px, py);
+                        course_layer_tile_quad(bases[a], bases[4 - a], scales[s], q->x, q->y, q->width, q->height, qx, qy);
+                        if (q->x == p->x + p->width && q->y == p->y) assert(qx[0] == px[1] && qy[0] == py[0]);
+                        if (q->y == p->y + p->height && q->x == p->x) assert(qy[0] == py[2] && qx[0] == px[0]);
+                    }
     pack.layer_count = 0;
     assert(!course_art_parse(blob, 100, &pack));
     printf("course art: %u layers, %u tiles decoded\n", 0u + (unsigned)(sizeof(areas) / sizeof(*areas)), tiles);

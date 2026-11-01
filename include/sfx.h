@@ -30,6 +30,18 @@ bool sfx_music_take(int *intro, int *repeat);
 /* Original object volume/pan from the camera distance (BombombCode `distancevolume`:
    100 - min(100, distance / 100 * falloff); pan = clamp((x - camX) / 2, +/-100)). */
 void sfx_at(SfxId id, float x, float y, float cam_x, float cam_y, float falloff);
+/* Effect voice allocation (audio.c asks; pure so it is host-tested). Voices
+   FIRST..LAST are effects. A request for a sound already started on the last
+   SFX_RETRIGGER_TICKS ticks is merged into it (two coins at once play one
+   jingle); at most SFX_SAME_MAX copies of one sound play together (the oldest
+   copy is replaced); otherwise a free voice, else the oldest effect. */
+#define SFX_FIRST_VOICE 2
+#define SFX_LAST_VOICE 15
+#define SFX_RETRIGGER_TICKS 2
+#define SFX_SAME_MAX 2 /* two CoinJingles peak at 2 x 13383 < 32767: no clipping */
+typedef struct { bool busy; int id; unsigned started; } SfxVoice;
+/* Returns the voice to (re)start, or -1 to drop the request. */
+int sfx_pick_voice(const SfxVoice voices[16], SfxId id, unsigned now);
 /* _root.StepSound: "Mario-Step", or another sound for `frames` source frames. */
 void sfx_set_step(SfxId id, int frames);
 void sfx_step_tick(bool puddle);

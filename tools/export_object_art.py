@@ -17,6 +17,8 @@ import swf_states as S
 import export_course as C
 import export_course_art as A
 from build_player_art import build, _pack
+import numpy as np
+import art_repair
 
 ZOOM = 1.6
 BLANKS = {839, 896}
@@ -210,9 +212,15 @@ def export(source, jar, out_dir):
         count = sprites[ident]['frames']
         picks = list(frames) if frames is not None else list(range(count))
         picks = picks[::step]
-        out = []
+        out, repaired_px = [], 0
         for k in picks:
             png = C.sprite_dir(work / 'png', ident) / f'{k + 1}.png'
+            # FFDec cracks (e.g. the transparent column inside the sign board): art_repair.py
+            fixed, changed = art_repair.repair(np.asarray(Image.open(png).convert('RGBA')))
+            repaired_px += changed
+            png = work / 'repaired' / f'{name}_{k}.png'
+            png.parent.mkdir(exist_ok=True)
+            Image.fromarray(fixed).save(png)
             if abs(sx - 1) > 0.01 or abs(sy - 1) > 0.01:  # child placed scaled: resample once
                 im = Image.open(png).convert('RGBA')
                 scaled = work / 'scaled' / f'{name}_{k}.png'
@@ -222,7 +230,8 @@ def export(source, jar, out_dir):
             out.append({'file': str(png.resolve()), 'duration': step,
                         'offset_twips': [round((ox * sx + tx) * 20), round((oy * sy + ty) * 20)]})
         clips.append({'id': cid, 'name': name, 'loop': frames is None, 'frames': out})
-        report.append({'name': name, 'sprite': ident, 'frames': len(out), 'placement': [tx, ty]})
+        report.append({'name': name, 'sprite': ident, 'frames': len(out), 'placement': [tx, ty],
+                       'repaired_px': repaired_px})
     clips.append(digits(jar, swf_path, work, len(clips)))
     report.append({'name': 'HUD_DIGITS', 'font': 187})
     # Split into packs that each fit one 1024x1024 texture.

@@ -14,15 +14,14 @@
 
 #define MUSIC_VOICE 0
 #define FLUDD_VOICE 1
-#define FIRST_SFX_VOICE 2
-#define LAST_SFX_VOICE 15
 
 static SoundPack pack;
 static int16_t *pcm[SOUND_PACK_MAX];
 static unsigned bytes[SOUND_PACK_MAX];
 static bool ready, fludd_on, intro_playing;
 static int repeat_id = -1;
-static unsigned next_voice = FIRST_SFX_VOICE;
+static SfxVoice voices[16];
+static unsigned tick;
 
 bool audio_init(void)
 {
@@ -82,13 +81,17 @@ void audio_update(bool paused)
     }
     SfxEvent events[SFX_QUEUE];
     const unsigned n = sfx_drain(events);
+    ++tick;
+    for (int i = SFX_FIRST_VOICE; i <= SFX_LAST_VOICE; ++i)
+        if (voices[i].busy && ASND_StatusVoice(i) == SND_UNUSED) voices[i].busy = false;
     for (unsigned i = 0; i < n; ++i) {
-        int voice = ASND_GetFirstUnusedVoice();
-        if (voice < FIRST_SFX_VOICE || voice > LAST_SFX_VOICE) { /* all busy: replace the oldest */
-            voice = (int)next_voice;
-            next_voice = next_voice == LAST_SFX_VOICE ? FIRST_SFX_VOICE : next_voice + 1;
-        }
+        /* Bug 11: ASND_GetFirstUnusedVoice() returned the idle music/FLUDD voices,
+           so every effect went round-robin over busy voices, and identical coin
+           jingles stacked at full volume until the mix clipped. */
+        const int voice = sfx_pick_voice(voices, events[i].id, tick);
+        if (voice < 0) continue;
         start(voice, events[i].id, events[i].volume, events[i].pan, false);
+        voices[voice] = (SfxVoice){true, (int)events[i].id, tick};
     }
 }
 void audio_shutdown(void)

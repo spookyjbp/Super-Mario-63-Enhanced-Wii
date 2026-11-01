@@ -29,6 +29,19 @@ static void stand_at(float x, float y)
     ticks((GameInput){0}, 40);
     assert(s.game.player.grounded);
 }
+/* Coded Sign frames 4-9 before the message, 11-16 after Z. */
+static void sign_shown(void)
+{
+    for (int i = 0; i < 30 && s.sign_phase != 1; ++i) course_session_step(&s, (GameInput){0});
+    assert(s.state == SESSION_SIGN && s.sign_phase == 1 && s.game.player.reading_sign);
+}
+static void sign_close(void)
+{
+    ticks((GameInput){.pound_pressed = true}, 1);
+    assert(s.state == SESSION_SIGN && s.sign_phase == 2 && s.game.player.reading_sign);
+    for (int i = 0; i < 30 && s.state == SESSION_SIGN; ++i) course_session_step(&s, (GameInput){0});
+    assert(s.state == SESSION_PLAY && !s.game.player.reading_sign);
+}
 static bool hint_is(const char *prefix)
 { return s.hint.text && s.hint.length >= strlen(prefix) && !memcmp(s.hint.text, prefix, strlen(prefix)); }
 
@@ -42,16 +55,22 @@ static void test_opening_and_controls_sign(void)
     assert(s.state == SESSION_SIGN && s.sign_picture && course_string_equals(s.sign_text, "Start"));
     assert(s.camera_override && s.camera_target_x == 146); /* looks at the controls sign */
     ticks((GameInput){.pound_pressed = true}, 1);
-    assert(s.state == SESSION_PLAY && s.runtime.platform_frame == 0);
+    assert(s.state == SESSION_SIGN && s.sign_phase == 0); /* Z before frame 10 does nothing */
+    sign_shown();
+    sign_close();
+    assert(s.runtime.platform_frame == 0);
     /* Reading the controls sign removes the barrier (completefunction). */
     const CourseObject *controls = named("Coded Sign", "signmessage", "controls");
     stand_at(controls->x, controls->y);
     ticks((GameInput){.pound_pressed = true}, 1);
     assert(s.state == SESSION_SIGN && course_string_equals(s.sign_text, "controls"));
+    /* Bug 10: the reading pose; the camera looks at the sign (Camcenter = this). */
+    assert(s.game.player.reading_sign && s.camera_override && s.camera_target_x == controls->x);
+    sign_shown();
     ticks((GameInput){0}, 10);
-    assert(s.state == SESSION_SIGN); /* stays open until Z again */
-    ticks((GameInput){.pound_pressed = true}, 1);
-    assert(s.state == SESSION_PLAY && s.runtime.platform_frame == 1);
+    assert(s.state == SESSION_SIGN && s.sign_phase == 1); /* stays open until Z again */
+    sign_close();
+    assert(s.runtime.platform_frame == 1);
 }
 static void test_hints(void)
 {
@@ -116,8 +135,8 @@ static void test_sign_camera_steady(void)
         lx = s.game.camera.x; ly = s.game.camera.y;
     }
     /* Closing eases back to Mario (1/10 a frame, as the original) without reversing. */
-    course_session_step(&s, (GameInput){.pound_pressed = true});
-    assert(s.state == SESSION_PLAY && !s.camera_override);
+    sign_close();
+    assert(!s.camera_override);
     ldx = 0;
     for (int i = 0; i < 90; ++i) {
         course_session_step(&s, (GameInput){0});

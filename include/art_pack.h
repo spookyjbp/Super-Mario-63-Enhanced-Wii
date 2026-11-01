@@ -13,7 +13,7 @@
    behind/in front of that body clip, as layered in Mario Main. */
 typedef enum { ART_WALK, ART_RISE, ART_FALL, ART_DIVE, ART_DIVEFLIP, ART_BACKFLIP,
                ART_FRONTFLIP, ART_SPIN, ART_SWIM_FLOAT, ART_SWIM_STROKE, ART_LAND,
-               ART_RUN, ART_GROUND, ART_STATE_COUNT } ArtState;
+               ART_RUN, ART_GROUND, ART_HURT2, ART_SIGN, ART_STATE_COUNT } ArtState;
 #define ART_VARIANTS 4
 #define ART_BACK_EFFECT 64
 #define ART_FRONT_EFFECT 128

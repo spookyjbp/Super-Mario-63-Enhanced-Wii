@@ -31,12 +31,24 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
         return true;
     }
     if(p->action==ACTION_BONK) {
-        p->vx=0;p->vy=0;
-        if(p->action_time>=10.0f/32) {
-            p->vx=p->bonk_direction*5*ORIGINAL_VELOCITY;p->vy=-4*ORIGINAL_VELOCITY;
-            p->action=ACTION_NONE;p->jump_cut=true;
-            p->grounded=false;
+        /* _root.HitWall(): attackFrame "hurt2", xspeed = yspeed = 0 (Mario Main
+           "hurt2", clip 1422). Frames 1-10: against the wall (gravity still runs);
+           frame 11: yspeed = -4, xspeed = +/-5 away from it; frame 15 waits for
+           the ground; frame 23 waits for any key (CharHP > 0); frame 32 ends it. */
+        if(p->bonk_frame<10) p->vx=0;
+        if(p->source_step) {
+            const bool any_key=in.horizontal!=0 || in.vertical!=0 || in.jump_held || in.crouch_held || in.nozzle_held;
+            const bool hold=(p->bonk_frame==14 && !(grounded || p->submerged)) || (p->bonk_frame==22 && !any_key);
+            if(!hold) ++p->bonk_frame;
+            if(p->bonk_frame==10) {
+                p->vy=-4*ORIGINAL_VELOCITY;
+                p->vx=(p->facing_left ? 5 : -5)*ORIGINAL_VELOCITY;
+                p->grounded=false;p->jump_cut=true;
+            }
+            if(p->bonk_frame>10 && p->bonk_frame<14 && grounded && p->vy>=0) p->vx=0;
+            if(p->bonk_frame>=31) {p->action=ACTION_NONE;p->bonk_frame=0;return false;} /* frame 32: attack = false */
         }
+        if(p->bonk_frame>=14 && grounded) p->vx=0;
         return true;
     }
     if(p->action==ACTION_BACKFLIP || p->action==ACTION_ROLL) {

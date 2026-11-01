@@ -60,7 +60,13 @@ static void test_dash_and_wall_rebound(void)
     player_step(&p,&w,(GameInput){.horizontal=1});
     assert(p.action==ACTION_BONK && p.vx==0 && p.bonk_direction==-1);
     ticks(&p,&w,(GameInput){0},19);
-    assert(p.action==ACTION_NONE && p.vx<0 && p.vy<0);
+    /* hurt2 frame 11: knocked back from the wall, still in the hurt2 clip. */
+    assert(p.action==ACTION_BONK && p.bonk_frame>=10 && p.vx<0 && p.vy<0 && !p.facing_left);
+    ticks(&p,&w,(GameInput){0},300);
+    assert(p.action==ACTION_BONK && p.bonk_frame==22 && p.grounded); /* lying: waits for a key */
+    ticks(&p,&w,(GameInput){.jump_held=true},2);
+    ticks(&p,&w,(GameInput){0},30);
+    assert(p.action==ACTION_NONE);                                /* frame 32: control back */
     player_init(&p,170,356);p.grounded=true;p.vx=400;p.dashing=true;
     player_step(&p,&w,(GameInput){.horizontal=1});
     assert(p.action==ACTION_BONK && !p.dashing);

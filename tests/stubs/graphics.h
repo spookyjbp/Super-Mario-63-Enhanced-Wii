@@ -24,4 +24,6 @@ void graphics_rect(float x, float y, float w, float h, GXColor color);
 void graphics_text(float x, float y, const char *text, float scale, GXColor color);
 void graphics_sprite(GXTexObj *t, float x, float y, float w, float h,
                      float u0, float v0, float u1, float v1);
+void graphics_quad_alpha(GXTexObj *t, const float xs[4], const float ys[4],
+                         float u0, float v0, float u1, float v1, unsigned char alpha);
 #endif

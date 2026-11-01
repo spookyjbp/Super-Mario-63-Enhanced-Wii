@@ -49,3 +49,18 @@ void sfx_step_tick(bool puddle)
 SfxId sfx_step_sound(void) { return step_override >= 0 ? (SfxId)step_override : SFX_STEP; }
 static unsigned flip = 0x6d2b79f5u;
 bool sfx_coin_flip(void) { flip ^= flip << 13; flip ^= flip >> 17; flip ^= flip << 5; return flip & 1; } /* random(2) */
+
+int sfx_pick_voice(const SfxVoice v[16], SfxId id, unsigned now)
+{
+    int same = 0, oldest_same = -1, free_voice = -1, oldest = -1;
+    for (int i = SFX_FIRST_VOICE; i <= SFX_LAST_VOICE; ++i) {
+        if (!v[i].busy) { if (free_voice < 0) free_voice = i; continue; }
+        if (oldest < 0 || v[i].started < v[oldest].started) oldest = i;
+        if (v[i].id != (int)id) continue;
+        if (now - v[i].started < SFX_RETRIGGER_TICKS) return -1;         /* merge a simultaneous retrigger */
+        ++same;
+        if (oldest_same < 0 || v[i].started < v[oldest_same].started) oldest_same = i;
+    }
+    if (same >= SFX_SAME_MAX) return oldest_same;                     /* cap stacked copies */
+    return free_voice >= 0 ? free_voice : oldest;
+}

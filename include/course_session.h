@@ -22,6 +22,9 @@ typedef struct {
     const CourseObject *sign;
     bool sign_picture;
     CourseString sign_text;
+    /* Coded Sign timeline: 0 = frames 4-9 (walk to the sign), 1 = frame 10
+       (message shown), 2 = frames 11-15 (closing); sign_frames counts each. */
+    unsigned sign_phase, sign_frames;
     float camera_target_x, camera_target_y; bool camera_override;
     /* hints and titles */
     CourseString hint;

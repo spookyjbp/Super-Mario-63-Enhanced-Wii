@@ -205,8 +205,13 @@ static void draw_layer(CourseArtKind k, float anchor_x, float anchor_y, float sc
     const float px = COURSE_SCALE / L->zoom * scale; /* world px per image px */
     for (unsigned t = 0; t < L->tile_count; ++t) {
         const CourseArtTile *tile = &L->tiles[t];
-        graphics_sprite(&layer_tex[k][t], anchor_x + (L->ox * L->zoom + tile->x) * px,
-                        anchor_y + (L->oy * L->zoom + tile->y) * px, tile->width * px, tile->height * px, 0, 0, 1, 1);
+        /* Neighbouring tiles share edge coordinates exactly (same expression for
+           one tile's right edge and the next one's left edge), so no hairline
+           opens between them at any camera position. */
+        float xs[4], ys[4];
+        course_layer_tile_quad(anchor_x + L->ox * L->zoom * px, anchor_y + L->oy * L->zoom * px, px,
+                               tile->x, tile->y, tile->width, tile->height, xs, ys);
+        graphics_quad_alpha(&layer_tex[k][t], xs, ys, 0, 0, 1, 1, 255);
     }
 }
 static void text_block(float x, float y, CourseString s, float scale, GXColor color, unsigned wrap)
@@ -285,7 +290,7 @@ void course_render(const CourseSession *s, float t)
     }
     if (s->area_title_time > 0)
         text_block(width / 2 - 100, 60, s->area_title, 3, white, 30);
-    if (s->state == SESSION_SIGN) {
+    if (s->state == SESSION_SIGN && s->sign_phase == 1) {
         if (s->sign_picture) {
             const CourseArtLayer *pic = course_art_picture(&art, s->sign_text.text, s->sign_text.length);
             if (pic && pic != loaded_picture && pic->tile_count == 1 &&

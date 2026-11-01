@@ -102,7 +102,11 @@ def build(data, root, compressed=False, px_twips=20):
     for i, im in enumerate(images):
         atlas.paste(im, spots[i])
     if compressed:
-        raw = rgb5a3_tiles(atlas)
+        # Bilinear-filtered (objects): transparent texels take their neighbours'
+        # colour so edges and the 1 px gutters do not darken (art_repair.bleed).
+        import numpy as np
+        from art_repair import bleed
+        raw = rgb5a3_tiles(Image.fromarray(bleed(np.asarray(atlas))))
         packed = lz4block.compress(raw, store_size=False)
         texture = struct.pack('>I', len(raw)) + packed
         version = 3

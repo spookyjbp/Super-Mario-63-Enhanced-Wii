@@ -25,6 +25,7 @@ import lz4.block
 import swf_states as S
 import xfl
 import export_course as C
+import art_repair
 
 ZOOM = 1.6
 TILE = 1024
@@ -186,8 +187,19 @@ def origin(work, ident):
     return -t[4], -t[5]
 
 
-def encode_layer(image):
+def clean(image, repair=True):
+    """FFDec seam/crack repair (course layers only: the picture-sign pages are
+    line drawings), then colour for transparent texels (GX filters
+    bilinearly); see art_repair.py."""
+    a = np.asarray(image.convert('RGBA'))
+    if repair:
+        a, _ = art_repair.repair(a)
+    return Image.fromarray(art_repair.bleed(a))
+
+
+def encode_layer(image, repair=True):
     """Pad to multiples of 4, cut into <=1024 tiles, drop empty tiles."""
+    image = clean(image, repair)
     w, h = image.size
     W, H = -(-w // 4) * 4, -(-h // 4) * 4
     canvas = Image.new('RGBA', (W, H)); canvas.paste(image, (0, 0))
@@ -195,7 +207,7 @@ def encode_layer(image):
     for ty in range(0, H, TILE):
         for tx in range(0, W, TILE):
             part = canvas.crop((tx, ty, min(W, tx + TILE), min(H, ty + TILE)))
-            if part.getbbox() is None:
+            if part.getchannel('A').getbbox() is None:
                 continue
             data = rgb5a3(part)
             tiles.append((tx, ty, part.width, part.height, lz4.block.compress(data, store_size=False), len(data)))
@@ -276,7 +288,7 @@ def export(source, jar, output, areas):
     count = struct.unpack_from('>I', out, 12)[0]
     for label in labels:
         im = Image.open(C.sprite_dir(pages, pic[0]) / f'{sprites[pic[0]]["labels"][label] + 1}.png').convert('RGBA')
-        W, H, tiles = encode_layer(im)
+        W, H, tiles = encode_layer(im, repair=False)
         out += C.pack_string('*') + C.pack_string(label) + struct.pack('>ffffII', 0, 0, 0, ZOOM, W, H)
         out += struct.pack('>I', len(tiles))
         for tx, ty, tw, th, blob, size in tiles:

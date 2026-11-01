@@ -26,6 +26,9 @@ void graphics_sprite(GXTexObj *t,float x,float y,float w,float h,float u0,float 
 {(void)t;(void)v0;(void)v1;record(x,y,w,h,u0,u1,0);}
 void graphics_sprite_rotated(GXTexObj *t,float x,float y,float w,float h,float u0,float v0,float u1,float v1,float deg)
 {(void)t;(void)v0;(void)v1;record(x,y,w,h,u0,u1,deg);}
+static float quad_x[4],quad_y[4];static unsigned quads;
+void graphics_quad_alpha(GXTexObj *t,const float xs[4],const float ys[4],float u0,float v0,float u1,float v1,unsigned char a)
+{(void)t;(void)u0;(void)v0;(void)u1;(void)v1;(void)a;memcpy(quad_x,xs,sizeof quad_x);memcpy(quad_y,ys,sizeof quad_y);++quads;}
 
 static void set16(unsigned char *p,unsigned n) {p[0]=(unsigned char)(n>>8);p[1]=(unsigned char)n;}
 static void set32(unsigned char *p,unsigned n) {set16(p,n>>16);set16(p+2,n);}
@@ -91,6 +94,11 @@ static void test_selection_rules(void)
     p=(Player){.has_fludd=true,.submerged=true,.swim_stroke=true,.vy=-44};a=player_art_select(&p);
     assert(a.state==ART_SWIM_STROKE && a.index==0);
     p=(Player){.has_fludd=true,.grounded=true,.normal_land_time=1.0f/32};assert(player_art_select(&p).state==ART_LAND);
+    /* Bug 6: the HitWall bonk shows Main "hurt2" by its frame, over running/falling. */
+    p=(Player){.has_fludd=true,.action=ACTION_BONK,.bonk_frame=12,.vy=200,.dashing=true};
+    a=player_art_select(&p);assert(a.state==ART_HURT2 && a.index==12 && a.variant==1);
+    /* Bug 10: reading a sign shows Main "Sign" while standing still. */
+    p=(Player){.grounded=true,.reading_sign=true};a=player_art_select(&p);assert(a.state==ART_SIGN && a.variant==0);
 }
 static void test_loader_and_drawing(void)
 {
@@ -144,13 +152,36 @@ static void test_committed_pack(void)
     assert(art_pack_clip_length(&pack,art_clip(ART_GROUND,2))==43);
     assert(art_pack_clip_length(&pack,art_clip(ART_DIVE,1))==8);   /* Slide (Hover) */
     assert(art_pack_clip_length(&pack,art_clip(ART_LAND,3))==8);
+    assert(art_pack_clip_length(&pack,art_clip(ART_HURT2,1))==32);  /* hurt2 frames 1-32 */
+    assert(art_pack_clip_length(&pack,art_clip(ART_SIGN,0))==1);
+    assert(art_pack_clip_length(&pack,60)==5);                      /* FLUDD spray levels 0-4 */
     for(unsigned v=1;v<ART_VARIANTS;++v) {
         const unsigned walk=art_clip(ART_WALK,v),blast=v==2 ? 24 : 10; /* Rocket / spray */
         assert(art_pack_clip_length(&pack,ART_BACK_EFFECT+walk)+art_pack_clip_length(&pack,ART_FRONT_EFFECT+walk)>=blast);
     }
 }
+/* Bug 9: the Hover spray nested in the dive and frontflip bodies is drawn while
+   spraying, placed by the body frame (HDive: one behind, one in front). */
+static void test_spray_during_specials(void)
+{
+    FILE *e=fopen("../../assets/generated/player_art.bin","rb");assert(e);
+    static unsigned char real[4*1024*1024+128*1024];const size_t n=fread(real,1,sizeof(real),e);fclose(e);
+    player_art_bin=real;player_art_bin_size=(unsigned)n;
+    remove("sd:/apps/super-mario-63-enhanced-wii/player.art");
+    user_art_init();assert(user_art_available());
+    Player p={.has_fludd=true,.nozzle=NOZZLE_HOVER,.height=26,.action=ACTION_DIVE,.dive_frame=2,.facing_left=true};
+    quads=0;assert(user_art_draw_player(&p,100,100));assert(quads==0);   /* not spraying: none */
+    p.blast_level=3;quads=0;user_art_draw_player(&p,100,100);assert(quads==2);
+    const float left_x=quad_x[0];
+    p.facing_left=false;quads=0;user_art_draw_player(&p,100,100);assert(quads==2);
+    assert(fabsf((quad_x[0]-(100+14))+(left_x-(100+14)))<20);           /* mirrored about the feet */
+    p=(Player){.has_fludd=true,.nozzle=NOZZLE_HOVER,.height=44,.jump_stage=3,.jump_time=0.1f,.blast_level=4,.facing_left=true};
+    quads=0;user_art_draw_player(&p,100,100);assert(quads==1);         /* Hfrontflip: water._rotation = frame._rotation */
+    p.nozzle=NOZZLE_HOVER;p.has_fludd=false;quads=0;user_art_draw_player(&p,100,100);assert(quads==0);
+    user_art_shutdown();
+}
 int main(void)
 {
-    test_parser();test_selection_rules();test_loader_and_drawing();test_committed_pack();
-    puts("4 player-art parser/selection/loader/drawing regression groups passed");return 0;
+    test_parser();test_selection_rules();test_loader_and_drawing();test_committed_pack();test_spray_during_specials();
+    puts("5 player-art parser/selection/loader/drawing/spray regression groups passed");return 0;
 }

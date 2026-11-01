@@ -9,6 +9,7 @@
 
 #include "player_art_bin.h"
 #include "player_art_select.h"
+#include "player_spray.h"
 
 static ArtPack art;
 static GXTexObj texture;
@@ -66,6 +67,42 @@ static void draw(const Player *p,const ArtFrame *f,float x,float y,float degrees
     const float cx=left+w/2-px,cy=top+h/2-py;
     graphics_sprite_rotated(&texture,feet_x+px+cx*c-cy*s-w/2,feet_y+py+cx*s+cy*c-h/2,w,h,u0,v0,u1,v1,degrees);
 }
+/* FLUDD spray nested inside the Dive / Frontflip bodies (Wait WaterBlast 1157
+   in HDive 1200, Hfrontflip 1216 > 1214, ...). The body art is rendered with
+   it empty, so it is drawn here with its placement for the body frame
+   (player_spray.h), the clip's `_yscale *= -1` parity, the dive rotation and
+   the facing mirror. Frame = spray level (1157 frames 2-5). */
+static void draw_spray(const Player *p,const ArtPick *a,float x,float y,bool behind)
+{
+    if(!p->has_fludd || p->blast_level==0 || (a->state!=ART_DIVE && a->state!=ART_FRONTFLIP)) return;
+    const ArtFrame *f=art_pack_frame_index(&art,PLAYER_SPRAY_CLIP,p->blast_level);
+    if(!f) return;
+    for(unsigned t=0;t<PLAYER_SPRAY_TABLES;++t) {
+        const SprayTable *T=&player_spray_tables[t];
+        if(T->state!=a->state || T->variant!=a->variant) continue;
+        unsigned n=a->timed ? (unsigned)(fmaxf(0,a->seconds)*32) : a->index;
+        if(n>=T->frames) n=T->frames-1u;
+        const float scale=art_scale,k=scale/20,deg=a->rotation*0.01745329252f,c=cosf(deg),sn=sinf(deg);
+        const float lx[4]={(float)f->offset_x,(float)f->offset_x+f->width*20.0f,(float)f->offset_x+f->width*20.0f,(float)f->offset_x};
+        const float ly[4]={(float)f->offset_y,(float)f->offset_y,(float)f->offset_y+f->height*20.0f,(float)f->offset_y+f->height*20.0f};
+        const float feet_x=x+PLAYER_WIDTH/2,feet_y=y+player_height(p);
+        for(unsigned i=0;i<T->per_frame;++i) {
+            const SprayPlacement *m=&T->data[n*T->per_frame+i];
+            if(m->behind!=(behind ? 1 : 0)) continue;
+            float xs[4],ys[4];
+            for(unsigned v=0;v<4;++v) {
+                const float qy=p->blast_parity ? -ly[v] : ly[v];
+                float X=m->a*lx[v]+m->c*qy+m->tx,Y=m->b*lx[v]+m->d*qy+m->ty;
+                const float dx=X-a->pivot_x,dy=Y-a->pivot_y;   /* Dive.xml _rotation */
+                X=a->pivot_x+dx*c-dy*sn;Y=a->pivot_y+dx*sn+dy*c;
+                if(!p->facing_left) X=-X;
+                xs[v]=feet_x+X*k;ys[v]=feet_y+Y*k;
+            }
+            graphics_quad_alpha(&texture,xs,ys,(float)f->x/art.width,(float)f->y/art.height,
+                                (float)(f->x+f->width)/art.width,(float)(f->y+f->height)/art.height,255);
+        }
+    }
+}
 static const ArtFrame *body_frame(const ArtPick *a,unsigned clip)
 {
     return a->timed ? art_pack_frame(&art,clip,a->seconds) : art_pack_frame_index(&art,clip,a->index);
@@ -81,7 +118,9 @@ bool user_art_draw_player(const Player *p,float x,float y)
     const ArtFrame *back=art_pack_frame_index(&art,ART_BACK_EFFECT+clip,a.effect_index);
     const ArtFrame *front=art_pack_frame_index(&art,ART_FRONT_EFFECT+clip,a.effect_index);
     if(back) draw(p,back,x,y,0,0,0);
+    draw_spray(p,&a,x,y,true);
     draw(p,f,x,y,a.rotation,(float)a.pivot_x,(float)a.pivot_y);
+    draw_spray(p,&a,x,y,false);
     if(front) draw(p,front,x,y,0,0,0);
     return true;
 }

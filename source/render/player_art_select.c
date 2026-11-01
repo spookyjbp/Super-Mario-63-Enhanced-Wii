@@ -29,6 +29,10 @@ ArtPick player_art_select(const Player *p)
         /* Spin Attack.xml: frame 1..40 fast, +40 while speed <= 10. */
         a.state=ART_SPIN;
         a.index=(unsigned)p->spin_frame+(p->spin_speed>10 ? 0u : 40u);
+    } else if(p->action==ACTION_BONK) {
+        a.state=ART_HURT2;a.index=p->bonk_frame;    /* hurt2 (HitWall) timeline */
+    } else if(p->reading_sign) {
+        a.state=ART_SIGN;a.index=0;                 /* Main "Sign": Mario faces the sign */
     } else if(p->pounding || p->landing_time>0) {
         a.state=ART_GROUND;a.index=p->pound_frame;  /* Ground Pound.xml timeline */
     } else if(p->action==ACTION_DIVE) {

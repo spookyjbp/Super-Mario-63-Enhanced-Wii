@@ -70,10 +70,53 @@ static void test_requests(void)
     assert(course_session_start(&s, &pack, "8-E1-1-2", 0, 0, 640) == true);
     assert(!sfx_music_take(&intro, &repeat));
 }
+/* Bug 11: coin jingles collected together do not stack past two voices, a
+   simultaneous pair merges, other sounds keep their voices, and every coin
+   still counts. */
+static void test_coin_voices(void)
+{
+    SfxVoice v[16] = {{0}};
+    v[0] = (SfxVoice){true, MUS_CASTLE_REPEAT, 0}; /* music and FLUDD voices are not effects */
+    unsigned now = 10;
+    int a = sfx_pick_voice(v, SFX_COIN, now); assert(a == SFX_FIRST_VOICE); v[a] = (SfxVoice){true, SFX_COIN, now};
+    assert(sfx_pick_voice(v, SFX_COIN, now) == -1);           /* same tick: merged */
+    now += 2;
+    int b = sfx_pick_voice(v, SFX_COIN, now); assert(b > a); v[b] = (SfxVoice){true, SFX_COIN, now};
+    now += 2;
+    int c = sfx_pick_voice(v, SFX_COIN, now); assert(c == a);  /* third copy replaces the oldest */
+    v[c] = (SfxVoice){true, SFX_COIN, now};
+    int d = sfx_pick_voice(v, SFX_JUMP1, now); assert(d != a && d != b && d >= SFX_FIRST_VOICE);
+    /* Ten coins in a row through the session: counter exact, at most two jingles. */
+    assert(course_session_start(&s, &pack, "8-E1-1", 0, 0, 640));
+    s.state = SESSION_PLAY; s.runtime.platform_frame = 1;
+    SfxVoice live[16] = {{0}};
+    unsigned coins = 0, t = 0, max_same = 0;
+    for (unsigned i = 0; i < s.objects.count && coins < 10; ++i) {
+        LiveObject *l = &s.objects.live[i];
+        if (l->kind != LIVE_COIN || !l->alive || l->collected) continue;
+        course_place_player(&s.runtime, &s.game.player, l->x, l->y + 9);
+        for (int k = 0; k < 2; ++k) {
+            course_session_step(&s, (GameInput){0});
+            SfxEvent e[SFX_QUEUE];
+            const unsigned n = sfx_drain(e);
+            ++t;
+            for (unsigned j = 0; j < n; ++j) {
+                const int voice = sfx_pick_voice(live, e[j].id, t);
+                if (voice >= 0) live[voice] = (SfxVoice){true, (int)e[j].id, t};
+            }
+            unsigned same = 0;
+            for (int j = 0; j < 16; ++j) same += live[j].busy && live[j].id == SFX_COIN;
+            if (same > max_same) max_same = same;
+        }
+        ++coins;
+    }
+    assert(s.progress.coins == 10 && max_same <= 2);
+}
 int main(void)
 {
     test_pack();
     test_requests();
-    puts("2 sound pack/request test groups passed");
+    test_coin_voices();
+    puts("3 sound pack/request/voice test groups passed");
     return 0;
 }

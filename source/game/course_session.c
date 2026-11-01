@@ -79,7 +79,8 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
 }
 static void open_sign(CourseSession *s, const CourseObject *o)
 {
-    s->sign = o; s->state = SESSION_SIGN;
+    s->sign = o; s->state = SESSION_SIGN; s->sign_phase = 0; s->sign_frames = 0;
+    s->game.player.reading_sign = true; /* attack = true; attackFrame = "Sign" */
     s->sign_picture = param(o, "picture", "true");
     course_object_param(o, "signmessage", &s->sign_text);
     Player *p = &s->game.player;
@@ -87,17 +88,20 @@ static void open_sign(CourseSession *s, const CourseObject *o)
     /* othercamcenter: the Start sign looks at the controls sign (sign2), the
        goomba/bomb/stomp signs at their targetN clip. */
     CourseString target;
-    s->camera_override = false;
+    /* Coded Sign frame 3: _root.Camcenter = this (the sign), unless othercamcenter
+       (frame 10) or the Start sign's sign2. */
+    s->camera_override = true; s->camera_target_x = o->x; s->camera_target_y = o->y;
     if (course_object_param(o, "othercamcenter", &target) || param(o, "signmessage", "Start")) {
         const CourseArea *a = s->runtime.area;
         const char *want = param(o, "signmessage", "Start") ? "sign2" : NULL;
-        for (unsigned i = 0; i < a->object_count && !s->camera_override; ++i) {
+        bool found = false;
+        for (unsigned i = 0; i < a->object_count && !found; ++i) {
             const CourseObject *t = &a->objects[i];
             const bool match = want ? course_string_equals(t->name, want)
                                     : (t->name.length && target.length > t->name.length &&
                                        !memcmp(target.text + target.length - t->name.length, t->name.text, t->name.length));
             if (match) {
-                s->camera_override = true;
+                found = true;
                 s->camera_target_x = t->x; s->camera_target_y = t->y - (want ? 60 : 0);
             }
         }
@@ -110,6 +114,7 @@ static void close_sign(CourseSession *s)
         course_string_equals(done, "_root.Course.Platforms.gotoAndStop(2);"))
         s->runtime.platform_frame = 1;
     s->sign = NULL; s->state = SESSION_PLAY; s->camera_override = false;
+    s->game.player.reading_sign = false; /* frame 16: attack = false */
 }
 static void update_hint(CourseSession *s)
 {
@@ -223,11 +228,22 @@ void course_session_step(CourseSession *s, GameInput in)
             s->warp_target = -1;
         }
         return;
-    case SESSION_SIGN:
-        p->vx = p->vy = 0;
+    case SESSION_SIGN: {
+        /* Coded Sign: Mario stands in the "Sign" pose and slides to the sign
+           (`Char._x += (X - Char._x) / 5`); the message shows on frame 10 and Z
+           (pressed again) plays frames 11-16, which end the reading. */
+        p->vx = 0; if (p->vy < 0) p->vy = 0;
         game_step(&s->game, &s->world, (GameInput){0}, s->view_width);
-        if (z_pressed) close_sign(s);
+        if (p->source_step) {
+            const float fx = course_cx(&s->runtime, p->x + PLAYER_WIDTH / 2);
+            p->x += (s->sign->x - fx) / 5 * COURSE_SCALE;
+            ++s->sign_frames;
+            if (s->sign_phase == 0 && s->sign_frames >= 6) { s->sign_phase = 1; s->sign_frames = 0; }
+            else if (s->sign_phase == 2 && s->sign_frames >= 6) { close_sign(s); break; }
+        }
+        if (s->sign_phase == 1 && z_pressed) { s->sign_phase = 2; s->sign_frames = 0; }
         break;
+    }
     case SESSION_OPENING: {
         /* Start sign enterFrame: after landing wait 60 frames, walk right for
            12 more (`xspeed += 3; xspeed *= 0.6`, facing right), then read. */
