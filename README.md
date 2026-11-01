@@ -1,16 +1,32 @@
 # Super Mario 63: Enhanced Wii Edition
 
-**v0.4 — Player Movement and Environment Foundation** is a native Wii homebrew
-movement lab built with C/C++, devkitPPC, libogc and GX. It starts from v0.3.2
-(`e061143`) and retains the corrected original Mario sprite directions and spin
-animation without yellow square particles.
+**v0.4.1 — Controls, Physics and Animation Corrections** starts from v0.4
+(`978eda7`). This is a staged, tested correction set, **not all six reported
+issues fully completed**. See the [per-issue source references and status](docs/v0.4.1-corrections.md).
 
-This is an **experimental movement port and tested engine foundation**, not a
-complete faithful Story Mode port. New actions are grounded in the original
-source rather than borrowed from other Mario games. See the
-[source research, values and implementation-status report](docs/v0.4-movement.md).
+- Corrected: repeated spin rules, source spin decay/lift/drag, swimming strokes,
+  resistance and entry/surface rules, backflip control/facing duration, and
+  ordinary jump ascent/descent/landing pose mapping.
+- Correct original grounded Down, four swim poses, and complete bare backflip /
+  triple-jump frames are available through the optional
+  [private artwork pipeline](docs/private-player-art.md). Without that pack,
+  safe upright poses remain rather than the wrong squashed/rotated replacements.
+- Incomplete: authentic composite FLUDD equipment/water visuals, including
+  nozzle-specific body variants. Correct conditional exports and further
+  state/timing work are still required. The generic loader interface does not
+  complete FLUDD rendering.
 
-## What v0.4 adds
+The ordinary single/double jumps share the source ascent pose; a new double flip
+has not been invented. The collision, terrain, camera, level data, 60 Hz update
+loop and original spin orientation fixes are preserved. No distracting particle
+squares, Level Designer or unrelated Story Mode systems are added.
+
+The original 32 Hz swim/spin recurrences run inside 60 Hz gameplay; collision and
+position integration remain adaptations. Source equations and automated tests
+are **not proof of accuracy against the original game**. No v0.4.1 Dolphin or
+Wii playtest or side-by-side Flash comparison has been performed here.
+
+## v0.4 foundation retained
 
 - Low dive/slide, a source-confirmed backflip trigger, dive recovery roll,
   double-tap run, material friction and slope momentum.
@@ -21,9 +37,10 @@ source rather than borrowed from other Mario games. See the
   and a separate side somersault were not confirmed and have not been invented.
 - An immutable tile level with solid/one-way platforms, 45-degree slopes, water,
   ice, shallow-puddle material, lab hazards and parallax backgrounds.
-- Explicit animation states. New action poses are temporary transformations of
-  existing sprites; complete original animation clips and FLUDD artwork remain
-  unfinished. Terrain/backgrounds use placeholders because redistribution
+- Explicit animation states. The v0.4.1 patch removes misleading generic
+  backflip/swim rotations; source-pose packs and full rendered exports are
+  described above. Equipped variants and FLUDD artwork remain unfinished.
+  Terrain/backgrounds use placeholders because redistribution
   permission for new original environment art has not been established.
 
 Existing acceleration, variable-height jumping, double/triple jumps, spin, pound,
@@ -42,13 +59,19 @@ vertical analog movement uses a dead zone.
 | --- | --- | --- | --- |
 | Move / swim vertically | Nunchuk stick or upright Remote D-pad | Left stick / D-pad | Stick / D-pad |
 | Jump / rise in water | A (hold for higher jump) | A | A |
-| Spin | B or Nunchuk C | X | B |
+| Spin / hold to repeat when eligible | B or Nunchuk C | X | B |
 | Ground pound in air | Nunchuk Z | ZR | Z |
 | Low dive / slide / descend in water | Stick down or D-pad Down | Stick down or D-pad Down | Stick down or D-pad Down |
 | Activate selected FLUDD | Hold Remote 1 | Hold Y | Hold R |
 | Cycle Hover → Rocket → Turbo | Remote 2 | ZL | L |
 | Pause / resume | PLUS or HOME | PLUS or HOME | START |
 | Menu select / confirm / cancel | D-pad / A / B | D-pad / A / B | D-pad / A / B |
+
+Swimming: A or Up starts an original-style stroke, holding sustains it, and
+release after the minimum five source frames permits another stroke. Down
+descends. Spin cannot start during a fast ascent (source vertical speed <= -3),
+and pressing repeatedly does not reset an active spin. Holding it can start
+another when the attack ends and the source restrictions allow it.
 
 Backflip: enter a slow low dive, then Jump while pressing opposite the stored
 facing direction. Jump from a forward dive to recover with a roll. For running,
@@ -83,6 +106,11 @@ docker run --rm -v "$PWD:/project" -w /project \
 Outputs are `boot.dol`, debug `boot.elf` / `boot.elf.map`, and
 `dist/apps/super-mario-63-enhanced-wii/`. Copy the `apps` folder to an SD card or
 supported USB device and launch through the installed Homebrew Channel.
+To use private poses, run `tools/import_source_poses.py` on your local Runouw
+checkout; for the original bare flip tweens, use `tools/export_source_clips.py`
+with FFDec instead. Copy the resulting `player.art` next to `boot.dol`.
+See the [export instructions](docs/private-player-art.md). Public CI packages
+intentionally omit new private artwork. The HUD reports missing art.
 `make clean` removes generated build/package outputs. C11/C++17 modules are
 supported; source basenames must be unique across listed source directories.
 
@@ -93,7 +121,10 @@ Use the pause menu to restart. Original Story Mode levels are not included.
 ## Architecture and data
 
 - `source/game/player.c`: existing movement, action integration, animation choice.
-- `source/game/player_special.c`: source-derived dive/swim/FLUDD adapters.
+- `source/game/player_special.c`: dive/backflip/FLUDD adapters.
+- `source/game/source_movement.c`: original-frame swim/spin recurrence logic.
+- `source/assets/art_pack.c` / `source/platform/user_art.c`: validated private
+  texture/clip loader and user-asset rendering.
 - `source/game/collision.c` / `world_query.c`: solid, one-way, slope and water queries.
 - `source/game/game.c` / `camera.c`: pause/restart/respawn, input latching, camera.
 - `source/platform/input.c`: device mappings; `graphics.c`: GX primitives;
@@ -120,15 +151,16 @@ python tests/test_level.py
 # For optional atlas verification, install Pillow==11.3.0:
 python tools/build_mario_atlas.py --check
 python tests/test_atlas.py
+python tests/test_player_art.py
 ```
 
 Tests compile with warnings as errors. They run the actual game/presentation C
 sources on the host and record renderer commands without emulating GX. CI runs
 physics, orientation, movement/environment, renderer and asset/level checks before
 the Wii build, then uploads the Homebrew Channel application artifact.
-The pinned toolchain compiled v0.4 and produced `boot.dol`; host checks passed.
+The pinned toolchain compiled v0.4.1 and produced `boot.dol`; host checks passed.
 
-No v0.4 Dolphin or Wii test has been performed. Earlier user-confirmed Mario
+No v0.4.1 Dolphin or Wii test has been performed. Earlier user-confirmed Mario
 sprite/jump/spin direction results do not establish that the new mechanics or
 rendering work visually. The [v0.4 report](docs/v0.4-movement.md) includes the
 required playtest checklist and precise fidelity/animation limitations. Prior

@@ -28,14 +28,38 @@ This source-only conversion includes:
 - Four original swimming poses, selected by the original Floating and Swimming Up
   clip velocity thresholds, with their authored bitmap registration.
 
-It does **not** turn Flash motion tweens/scripts into guessed PNG frames. The
-triple jump and backflip movie clips need a faithful rendered export. Composite
-FLUDD equipment and animated water clips also still require exports. Without a
+This fast source-only conversion does not render Flash motion tweens. Use the
+optional SWF exporter below to add the original bare triple jump and backflip.
+Composite FLUDD equipment and animated water clips still require exports. Without a
 private pose pack, the app uses a safe standing/air pose instead of the wrong
 squashed landing sprite or arbitrary backflip/swim rotation. This fallback is
 not a claim that the original animation has been restored.
 
-## Rendered exports for remaining clips
+## Optional original backflip/triple export
+
+Install Java and obtain [JPEXS FFDec 26.4.0](https://github.com/jindrapetrik/jpexs-decompiler/releases/tag/version26.4.0).
+The tested official `ffdec_26.4.0.zip` has SHA-256
+`56ce960aeafc7caf034e2052ba49f878a883f7c7ca690da6eeffca9587b5e4b9`.
+This is a local optional tool, not a Wii or CI dependency.
+
+```sh
+python tools/export_source_clips.py /path/to/Super-Mario-63 /path/to/ffdec.jar private-art/player.art
+```
+
+This includes the source poses above and renders all 22 bare backflip and 30
+bare triple-jump frames from the pinned original SWF. It preserves registration
+from the SVG export and source 32 Hz timing. The exporter rejects other SWF
+revisions instead of guessing character IDs. Intermediate PNG/SVG files and a
+manifest stay in ignored `private-art/rendered-source/`. The original checkout
+is untouched. Copy the resulting `player.art` beside `boot.dol` as above.
+
+FFDec's static export does not run ActionScript. The original WingCap=false
+blank state is selected explicitly for the bare Mario exports. No conditional
+FLUDD composite is presented as correctly rendered by this process. The 60-frame
+pack has been generated and validated locally; Dolphin appearance still needs
+testing. Public GitHub packages omit this private artwork.
+
+## Rendered exports for remaining FLUDD clips
 
 Export PNG frames from the original Flash/Animate project with transparent
 backgrounds, **canonical facing LEFT** (original `_xscale=100`), 32 Hz timing,
@@ -80,7 +104,7 @@ user exports, not evidence that correct original exports are already included.
 The current loader/draw interface handles registration, animation durations,
 canonical mirroring, player/camera attachment and suppression of Rocket water
 before the boost. **Full source-accurate nozzle attachments across all actions,
-nozzle-specific effect timing and backflip/triple composite animation remain
+nozzle-specific effect timing and equipped backflip/triple composite animation remain
 incomplete until correct rendered clips and their state mappings are supplied
 and compared to the original.** Generic export support does not fix issue 5 by
 itself. No equipment artwork or distracting replacement squares are synthesized.

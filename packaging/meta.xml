@@ -2,7 +2,7 @@
 <app version="1">
   <name>Super Mario 63: Enhanced Wii Edition</name>
   <coder>Super Mario 63: Enhanced Wii Edition contributors</coder>
-  <version>0.4.0</version>
-  <short_description>Movement and environment foundation</short_description>
-  <long_description>v0.4 experimental movement and environment lab. Adds source-derived low dive, backflip/recovery roll, swimming, Hover/Rocket/Turbo adapters, materials, slopes and tile water. New action poses and environment graphics are temporary; Story Mode fidelity is incomplete. A jumps, B/Classic X spins, Z/Classic ZR pounds. Stick or D-pad Down dives. Hold Remote 1/Classic Y/GC R for FLUDD; Remote 2/Classic ZL/GC L cycles nozzles. PLUS/HOME/START pauses. No yellow spin squares or Level Designer.</long_description>
+  <version>0.4.1</version>
+  <short_description>Source-backed controls and physics corrections</short_description>
+  <long_description>v0.4.1 staged correction release. Adds source-timed swim strokes and repeated spins, preserves backward backflip impulse/facing, and corrects ordinary jump pose selection. Optional private player.art supplies original Down/swim poses and bare backflip/triple animation exports. Authentic FLUDD/water composites and equipped variants remain incomplete. Same controller buttons; hold Spin to repeat when source rules permit. No yellow spin squares, terrain changes or Level Designer.</long_description>
 </app>

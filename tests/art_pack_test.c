@@ -39,6 +39,13 @@ int main(void)
     assert(art_pack_frame(&pack,0,0)==&pack.frames[0]);
     assert(art_pack_frame(&pack,0,1000)==&pack.frames[0]);
     assert(art_pack_frame(&pack,1,0)==NULL && art_pack_frame(&pack,64,0)==NULL);
+    memcpy(bad,bytes,192);set16(bad+36,3); /* Three one-tick frames at source 32 Hz. */
+    assert(art_pack_parse(bad,192,&pack));
+    for(unsigned tick=0;tick<3;++tick)
+        assert(art_pack_frame(&pack,0,tick/32.0f)==&pack.frames[tick]);
+    assert(art_pack_frame(&pack,0,3/32.0f)==&pack.frames[2]); /* Non-looping clip clamps. */
+    set16(bad+38,1);assert(art_pack_parse(bad,192,&pack));
+    assert(art_pack_frame(&pack,0,3/32.0f)==&pack.frames[0]);
     assert(!art_pack_parse(bytes,191,&pack));
     memcpy(bad,bytes,192);set16(bad+40,0);assert(!art_pack_parse(bad,192,&pack));
     memcpy(bad,bytes,192);set16(bad+60,5);assert(!art_pack_parse(bad,192,&pack));
