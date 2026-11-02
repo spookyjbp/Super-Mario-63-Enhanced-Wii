@@ -48,3 +48,16 @@ To do when it is added to the game:
 
 - Replace `ui_art.prompt_versions` with this method.
 - The fade and pulse stay as they are (`prompt_alpha`).
+
+## Prompt on picture signs: chosen fix (option 1, saved for later, 2026-11-02)
+
+**Problem.** On picture signs, the "Press … to Continue" prompt covers the page art.
+
+- The original places the prompt (sprite 250) separately on each page: controls (272.2, 225.15), goomba and bomb (222.2, 163.15), ttt (222.2, 215.15), Start (225, 259.95). See `original_prompt_places.png`.
+- On Goomba, Bob-omb and controls, the original prompt already overlaps the art.
+- Our controls page makes it worse, because its Stomp/Read + FLUDD row sits on that spot.
+
+**Chosen fix.** On every picture sign, centre the prompt just below the page's bottom edge, at the same height each time (over the game, not the page).
+
+- Text signs keep the prompt inside the message box.
+- Preview it on every picture sign for every controller before adding it to the game.
