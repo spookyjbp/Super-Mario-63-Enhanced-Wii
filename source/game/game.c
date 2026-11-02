@@ -53,6 +53,7 @@ void game_input_latch(GameInput *p, GameInput current)
     p->spin_held = current.spin_held;
     p->spin_pressed |= current.spin_pressed;
     p->pound_pressed |= current.pound_pressed;
+    p->pound_held = current.pound_held;
     p->pause_pressed |= current.pause_pressed;
     p->confirm_pressed |= current.confirm_pressed;
     p->cancel_pressed |= current.cancel_pressed;
@@ -64,9 +65,9 @@ void game_input_consume(GameInput *p)
 {
     const float horizontal = p->horizontal, vertical = p->vertical;
     const bool crouch=p->crouch_held, nozzle=p->nozzle_held;
-    const bool held = p->jump_held, spin=p->spin_held;
+    const bool held = p->jump_held, spin=p->spin_held, pound=p->pound_held;
     const float zoom = p->zoom_axis;
     const unsigned char controller = p->controller;
-    *p = (GameInput){.horizontal=horizontal, .vertical=vertical, .jump_held=held, .spin_held=spin, .crouch_held=crouch,
+    *p = (GameInput){.horizontal=horizontal, .vertical=vertical, .jump_held=held, .spin_held=spin, .pound_held=pound, .crouch_held=crouch,
                      .nozzle_held=nozzle, .zoom_axis=zoom, .controller=controller};
 }

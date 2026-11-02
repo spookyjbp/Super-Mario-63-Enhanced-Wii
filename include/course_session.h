@@ -41,6 +41,12 @@ typedef struct {
     /* Toad dialogue: Phase (1-based page), text of the current page */
     const LiveObject *toad; unsigned toad_page; CourseString toad_text; CourseString toad_mood;
     unsigned toad_chars;         /* 'tm' clip: characters typed so far (2 a frame) */
+    /* Stats.tm (186): the cloud's _alpha (eases a quarter of the way to 100 while
+       _root.ToadMessage is set, to 0 when it is ""), its prompt bz._alpha (half
+       way to 100 once the page is typed), and whether ToadMessage is set. The
+       last page's text stays in toad_text while the cloud fades out. */
+    float tm_alpha, tm_bz;
+    bool tm_message;
     /* View zoom on top of the course scale: the player's zoom (eased toward
        zoom_target) times _root.CameraZoom / 100 (Toad talk: up to 150, 3 a frame). */
     float zoom, zoom_target, talk_zoom;

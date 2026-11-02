@@ -4,7 +4,8 @@ Approved mockups (shown over the tutorial scene; the original pages are
 see-through white panels): `controls_mock.png`, `sign_Start.png`,
 `sign_bomb.png`, `sign_hover.png`, `sign_stomp.png`, `sign_zoom.png`;
 button sets: `sets.png`. Mockup code: `tools/sign_mockup/` (prototype, paths
-point at a scratch work area; to be turned into the real generator).
+point at a scratch work area). Built into the game by `tools/controller_signs.py`
+(run by `export_course_art.py`); the pages match these mockups.
 
 Decisions
 - Option 1: keep the original page art, replace only the keyboard keys.

@@ -43,6 +43,7 @@ typedef struct {
     bool x_tap, y_tap;    /* a single press of X / Y, once it is known not to be a combo */
     bool x_hold, y_hold;  /* X / Y held as a single button (immediate buttons from the press) */
     bool both;            /* the combo, once */
+    bool both_held;       /* the combo, while both stay held */
 } ChordOut;
 ChordOut input_chord_step(InputChord *c, bool held_x, bool held_y, bool immediate_x, bool immediate_y);
 typedef struct { InputChord ab, plus_minus; } WiimoteState;

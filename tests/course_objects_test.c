@@ -12,6 +12,13 @@ static CoursePack pack;
 static CourseSession s;
 
 static void ticks(GameInput in, int n) { for (int i = 0; i < n; ++i) course_session_step(&s, in); }
+/* Wait (nothing pressed) until tm has typed the page and its Z prompt is up, then press Z. */
+static void next_page(void)
+{
+    for (int i = 0; i < 2000 && !(s.toad_chars >= s.toad_text.length && s.tm_bz >= 98); ++i) ticks((GameInput){0}, 1);
+    ticks((GameInput){.pound_pressed = true, .pound_held = true}, 1);
+    ticks((GameInput){0}, 1);
+}
 static LiveObject *first(LiveKind k)
 {
     for (unsigned i = 0; i < s.objects.count; ++i) if (s.objects.live[i].kind == k && s.objects.live[i].alive) return &s.objects.live[i];
@@ -63,9 +70,22 @@ static void test_toad_dialogue_pages(void)
     ticks((GameInput){.pound_pressed = true}, 1);
     assert(s.state == SESSION_TALK && s.toad_page == 1);
     assert(!memcmp(s.toad_text.text, ".....Did you know", 17) && course_string_equals(s.toad_mood, "Talk"));
-    /* M2Txt = undefined: the original ends the talk after the first page. */
+    /* Stats.tm: the cloud fades in (a quarter of the way a frame) and the page
+       only types once it is above 98. */
+    ticks((GameInput){0}, 2 * 8);
+    assert(s.tm_alpha > 80 && s.tm_alpha < 98 && s.toad_chars == 0);
+    ticks((GameInput){0}, 2 * 8);
+    assert(s.tm_alpha > 98 && s.toad_chars > 0 && s.toad_chars < s.toad_text.length);
+    /* Z while typing does not leave the page: KeyZ() shows the rest at once. */
+    ticks((GameInput){.pound_pressed = true, .pound_held = true}, 2);
+    assert(s.state == SESSION_TALK && s.toad_page == 1 && s.toad_chars == s.toad_text.length && s.tm_bz < 98);
     ticks((GameInput){.pound_pressed = true}, 1);
-    assert(s.state == SESSION_PLAY);
+    assert(s.state == SESSION_TALK);                    /* the prompt (bz) is not up yet */
+    /* M2Txt = undefined: the original ends the talk after the first page. */
+    next_page();
+    assert(s.state == SESSION_PLAY && s.tm_alpha > 50);  /* the cloud fades out with the text */
+    ticks((GameInput){0}, 2 * 30);
+    assert(s.tm_alpha < 2);
     play_area("8-E1-2-2");
     t = first(LIVE_TOAD);
     course_place_player(&s.runtime, &s.game.player, t->x + 12, t->y);
@@ -73,7 +93,15 @@ static void test_toad_dialogue_pages(void)
     ticks((GameInput){.pound_pressed = true}, 1);
     assert(s.state == SESSION_TALK && !memcmp(s.toad_text.text, "...Hello Mario, How are you?", 28));
     unsigned pages = 1;
-    while (s.state == SESSION_TALK) { ticks((GameInput){.pound_pressed = true}, 1); ticks((GameInput){0}, 2); ++pages; }
+    while (s.state == SESSION_TALK) {
+        const unsigned page = s.toad_page;
+        next_page(); ++pages;
+        if (s.state == SESSION_TALK) {
+            assert(s.toad_page == page + 1 && s.tm_alpha < 98);    /* ToadMessage "" for a frame: the cloud dips */
+            ticks((GameInput){0}, 1);
+            assert(s.toad_chars == 0 && s.toad_text.length && s.tm_message);
+        }
+    }
     assert(pages == 5); /* M1..M4, M5Txt undefined */
 }
 static void test_falling_log(void)
@@ -478,10 +506,10 @@ static void test_toad_reactions(void)
     ticks((GameInput){.pound_pressed = true}, 1);
     assert(s.state == SESSION_TALK && t->state == TOAD_TALK && t->facing_left && !s.game.player.facing_left); /* _xscale -100: Mario is to the left */
     assert(t->eye >= course_toad_mood_label(TOAD_TALK) && t->eye < course_toad_mood_label(TOAD_SAD)); /* Talk segment */
-    ticks((GameInput){0}, 4);
-    ticks((GameInput){.pound_pressed = true}, 1);
+    next_page();
+    ticks((GameInput){0}, 2);
     assert(s.state == SESSION_TALK && t->state == TOAD_CRAZY);   /* M2Moo */
-    while (s.state == SESSION_TALK) { ticks((GameInput){.pound_pressed = true}, 1); ticks((GameInput){0}, 2); }
+    while (s.state == SESSION_TALK) next_page();
     assert(t->state == TOAD_MAD);                                  /* Mood = StartMood */
     /* Idle body frames advance (and are drawn from the idle clip). */
     play_area("8-E1-1");

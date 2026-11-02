@@ -26,7 +26,7 @@ typedef struct {
 typedef struct {
     float horizontal, vertical;
     bool crouch_held, nozzle_held, nozzle_next_pressed;
-    bool jump_pressed, jump_held, spin_pressed, spin_held, pound_pressed;
+    bool jump_pressed, jump_held, spin_pressed, spin_held, pound_pressed, pound_held;
     bool pause_pressed, confirm_pressed, cancel_pressed;
     int menu_delta;
     /* Camera zoom (not in the original's controls): -1 (zoom in) .. 1 (zoom

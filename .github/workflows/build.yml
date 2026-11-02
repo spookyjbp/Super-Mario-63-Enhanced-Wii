@@ -26,6 +26,7 @@ jobs:
           python tests/test_object_art.py
           python tests/test_art_repair.py
           python tests/test_water_texture.py
+          python tests/test_picture_signs.py
           python tools/build_level.py --check
           python tests/test_level.py
       - name: Test platform-independent physics

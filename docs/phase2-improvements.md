@@ -52,3 +52,27 @@ Tests:
 - `text_layout_test`: HTML stripping, wrapping and the original fonts.
 - `course_session_test` `test_message_box_frames`.
 - `course_art_test`: the box and the three prompts.
+
+## Toad dialogue (original talk cloud behaviour)
+
+This follows Stats.tm's script (186) and Toad Main Clip's page logic (2517).
+
+- **Fade-in.** The cloud fades in, easing a quarter of the way to full each frame. A page only starts typing once the cloud is above 98% opacity, then types two characters a frame.
+- **Holding the read button.** Holding it shows the rest of the page at once (`KeyZ()` held, `GameInput.pound_held`). It never skips a page.
+- **Turning the page.** The next page needs a read press (`BP()`), but only once the page is fully shown and its prompt has faded in to 98% (`MnEnd` with `tm.txt == ToadMessage && tm.bz._alpha >= 98`).
+- **Between pages.** `ToadMessage` is empty for one frame, so the cloud dips briefly.
+- **After the last page.** The cloud fades out with its text.
+- **Prompt.** The prompt (bz, 184) was the keyboard "Z" key wobbling between two tilted poses. It is now the controller's read button in the same two poses (`TalkZ@<n>`), right-aligned with the key, and it fades in at half the remaining distance each frame.
+
+Tests: `course_objects_test` `test_toad_dialogue_pages`, `controls_test` (held read button), `course_art_test`, `tests/test_picture_signs.py`.
+
+## Controller picture signs (approved design)
+
+`tools/controller_signs.py` builds the design approved in `docs/sign-design` from the original page renders.
+
+- **Original art.** Keys that are separate shapes are removed from the render itself. These are the arrow and Z/X/C keys in 371, the stomp page's Z key 416, and the boxes' keys 417 in 424.
+- **Reused pieces.** The diving Mario (bitmap 362) and the explosion (bitmap 412) are taken from the SWF.
+- **Stomp demo.** The boxes show a mid-pound frame of Mario's ground-pound demo (424). Each frame is placed by snapping it to the box outline the page already shows.
+- **Buttons.** All buttons come from `tools/sign_buttons.py`.
+
+The pages are still single frames: animating every picture sign is a later item. Tests: `tests/test_picture_signs.py`.

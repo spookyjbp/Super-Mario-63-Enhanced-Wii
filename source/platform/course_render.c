@@ -288,6 +288,16 @@ static bool load_picture(const CourseArtLayer *pic)
     }
     return true;
 }
+/* The prompt slot: the "Press .. to Continue" prompt or Toad's talk button, one at a time. */
+static bool load_prompt_layer(const CourseArtLayer *l)
+{
+    if (!l || l->tile_count != 1) return false;
+    if (l != loaded_prompt) {
+        if (!upload(&l->tiles[0], prompt_mem, PROMPT_BYTES, &prompt_tex)) return false;
+        GX_InvalidateTexAll(); loaded_prompt = l;
+    }
+    return true;
+}
 /* The "Press .. to Continue" prompt (250) for the controller in use, placed at
    its page's position, faded as the original's frames. */
 static void draw_prompt(const CourseSession *s, const char *page, size_t page_len, float width)
@@ -304,11 +314,7 @@ static void draw_prompt(const CourseSession *s, const char *page, size_t page_le
     char key[12];
     snprintf(key, sizeof key, "Prompt@%u", (unsigned)s->controller);
     const CourseArtLayer *l = course_art_picture(&art, key, strlen(key));
-    if (!l || l->tile_count != 1) return;
-    if (l != loaded_prompt) {
-        if (!upload(&l->tiles[0], prompt_mem, PROMPT_BYTES, &prompt_tex)) return;
-        GX_InvalidateTexAll(); loaded_prompt = l;
-    }
+    if (!load_prompt_layer(l)) return;
     const float x = stage_x(place->x + l->ox, width), y = (place->y + l->oy) * HUD_K;
     graphics_sprite_alpha(&prompt_tex, x, y, (float)l->width, (float)l->height, 0, 0, 1, 1, a);
 }
@@ -369,18 +375,30 @@ void course_render(const CourseSession *s, float t)
         draw_text(FONT_TALK, s->hint.text, s->hint.length, 30, width - 30, 424, white, ALIGN_LEFT, ~0u);
     }
     draw_hud(s, width);
-    if (s->state == SESSION_TALK && s->toad_text.length) {
-        /* 'tm' (186 at (246, 259)): cloud, text typed two characters a frame
-           (a blank first line when shorter than 40), Z prompt once complete. */
-        hud_clip(OBJ_HUD_TALK_BOX, 0, 246, 259, width, 1);
-        /* tm's text field (185): font 155 size 15, light yellow, left aligned, at
-           (-143.45, -28.9) in tm; a blank first line when the message is short. */
+    if (s->tm_alpha > 2 && s->toad_text.length) {
+        /* Stats.tm (186 at (246, 259)): the cloud at its _alpha; the text (field
+           185: font 155 size 15, light yellow, left aligned, at (-143.45, -28.9),
+           a blank first line when the page is short) typed two characters a frame;
+           bz, the "Z" key wobbling between two poses, is the controller's button
+           at bz._alpha inside the cloud's. */
+        const float ca = s->tm_alpha / 100;
+        const ObjectDraw cloud = {.clip = OBJ_HUD_TALK_BOX, .alpha = s->tm_alpha, .scale = HUD_K / COURSE_SCALE};
+        draw_object_frame(&cloud, hud_x(246, width), 259 * HUD_K);
         const float x0 = hud_x(246, width) + (-143.45f + 2) * HUD_K, x1 = hud_x(246, width) + (-143.45f + 288.9f - 2) * HUD_K;
         const float lh = text_line_height(&font_info[FONT_TALK], 2 * HUD_K);
         const float ty = (259 - 28.9f + 2) * HUD_K + (s->toad_text.length < 40 ? lh : 0);
-        draw_text(FONT_TALK, s->toad_text.text, s->toad_text.length, x0, x1, ty, (GXColor){255, 255, 179, 255}, ALIGN_LEFT,
-                  s->toad_chars);
-        if (s->toad_chars >= s->toad_text.length) hud_clip(OBJ_HUD_TALK_Z, (s->hud.ticks / 2) % 50, 246, 259, width, 1);
+        draw_text(FONT_TALK, s->toad_text.text, s->toad_text.length, x0, x1, ty,
+                  (GXColor){255, 255, 179, (unsigned char)(255 * ca)}, ALIGN_LEFT, s->toad_chars);
+        const unsigned char za = (unsigned char)(255 * ca * s->tm_bz / 100);
+        char key[12];
+        snprintf(key, sizeof key, "TalkZ@%u", (unsigned)s->controller);
+        const CourseArtLayer *z = course_art_picture(&art, key, strlen(key));
+        if (za && load_prompt_layer(z)) {
+            const unsigned pose = (s->hud.ticks / 2) % 50 < 24 ? 0 : 1;   /* 184: 182 on frames 1-24, 183 on 25-50 */
+            const float cw = z->width / 2.0f;
+            graphics_sprite_alpha(&prompt_tex, hud_x(246, width) + z->ox * HUD_K, (259 + z->oy) * HUD_K, cw,
+                                  (float)z->height, pose * 0.5f, 0, pose * 0.5f + 0.5f, 1, za);
+        }
     }
     if (s->area_title_time > 0)
         draw_text(FONT_SIGN, s->area_title.text, s->area_title.length, 40, width - 40, 50, white, ALIGN_CENTRE, ~0u);

@@ -202,6 +202,25 @@ static bool toad_page(CourseSession *s, unsigned page)
     }
     return true;
 }
+/* Stats.tm's onEnterFrame, once a source frame (z_held: KeyZ()). The cloud
+   fades in; only once it is above 98 does the page type, two characters a
+   frame, all at once while Z is held; then its Z prompt fades in. */
+static void tm_step(CourseSession *s, bool z_held)
+{
+    const float aa = s->tm_message ? 100 : 0;
+    const float bz_aa = s->tm_message && s->toad_chars >= s->toad_text.length ? 100 : 0;
+    s->tm_alpha += (aa - s->tm_alpha) / 4;
+    s->tm_bz += (bz_aa - s->tm_bz) / 2;
+    if (s->tm_alpha > 98 && s->tm_message) {
+        s->toad_chars = s->toad_chars + 2 < s->toad_text.length ? s->toad_chars + 2 : s->toad_text.length;
+        if (z_held) s->toad_chars = s->toad_text.length;
+    }
+}
+/* Toad's MnEnd (BP(): Z pressed) only counts once tm shows the whole page and its prompt is at 98. */
+static bool toad_page_done(const CourseSession *s)
+{
+    return s->tm_message && s->toad_chars >= s->toad_text.length && s->tm_bz >= 98;
+}
 /* The conversation ended: Mood = StartMood, frame = Startframe. */
 static void toad_rest(CourseSession *s)
 {
@@ -219,6 +238,7 @@ static void try_talk(CourseSession *s, bool z_pressed)
     if (!t) return;
     s->toad = t; s->toad_page = 1;
     if (!toad_page(s, 1)) return;
+    s->tm_message = true;
     s->state = SESSION_TALK;
     s->camera_override = true; s->camera_target_x = t->x; s->camera_target_y = t->y; /* Camcenter = this */
     Player *pm = &s->game.player;
@@ -298,21 +318,32 @@ void course_session_step(CourseSession *s, GameInput in)
     case SESSION_TALK:
         p->vx = p->vy = 0;
         game_step(&s->game, &s->world, (GameInput){0}, s->view_width);
-        if (p->source_step && s->toad_chars < s->toad_text.length) /* tm: two characters a frame */
-            s->toad_chars = s->toad_chars + 2 < s->toad_text.length ? s->toad_chars + 2 : s->toad_text.length;
+        if (p->source_step) {
+            tm_step(s, in.pound_held);
+            /* Between pages ToadMessage is "" for one frame (Toad's next MnSta), so the cloud dips. */
+            if (!s->tm_message && s->toad_page && toad_page(s, s->toad_page)) s->tm_message = true;
+        }
         if (p->source_step) {
             /* talking: Mario is pushed 2 px a frame out of Toad's body. */
             const float mx = course_cx(&s->runtime, p->x + PLAYER_WIDTH / 2);
             if (fabsf(mx - s->toad->x) < 12) p->x += (mx > s->toad->x ? 2 : -2) * COURSE_SCALE;
         }
-        if (z_pressed && !toad_page(s, ++s->toad_page)) {
-            toad_rest(s);
-            s->state = SESSION_PLAY; s->toad = NULL; s->camera_override = false;
+        if (z_pressed && toad_page_done(s)) {
+            s->tm_message = false;   /* ToadMessage = ""; Phase += 1 */
+            CourseString keep = s->toad_text;
+            const unsigned keep_chars = s->toad_chars;
+            if (!toad_page(s, ++s->toad_page)) {
+                toad_rest(s);
+                s->state = SESSION_PLAY; s->toad = NULL; s->camera_override = false;
+            }
+            /* the shown page stays in tm until the next one starts typing */
+            s->toad_text = keep; s->toad_chars = keep_chars;
         }
         break;
     case SESSION_PLAY:
         if (p->stun > 0 || p->ejump) in = (GameInput){.jump_held = in.jump_held}; /* StunTime / EJump: no control */
         game_step(&s->game, &s->world, in, s->view_width);
+        if (p->source_step && s->tm_alpha > 0.01f) tm_step(s, false); /* the cloud fades out after the talk */
         if (s->progress.hp <= 0) {
             /* Faint: the original plays the faint clip and restarts the course
                (lives); the port restarts this area's entry with full health. */

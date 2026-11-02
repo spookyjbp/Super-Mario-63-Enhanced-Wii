@@ -24,9 +24,13 @@ static void test_gamecube_down_reaches_gameplay(void)
     assert(in.spin_pressed && in.spin_held && !in.crouch_held);   /* Spin mapping unchanged. */
     in=input_map_gamecube(GC_Z|GC_R,GC_Z|GC_L|GC_START);
     assert(in.pound_pressed && in.nozzle_held && in.nozzle_next_pressed && in.pause_pressed);
+    in=input_map_gamecube(GC_Z,0);assert(in.pound_held && !in.pound_pressed);   /* KeyZ() held (Toad's text) */
+    in=input_map_classic(CC_R,0,0);assert(in.pound_held && !in.pound_pressed);
     /* The latch must carry held Down across catch-up ticks. */
     GameInput pending={0};game_input_latch(&pending,input_map_gamecube(GC_DOWN,GC_DOWN));
     game_input_consume(&pending);assert(pending.crouch_held);
+    game_input_latch(&pending,input_map_gamecube(GC_Z,GC_Z));game_input_consume(&pending);
+    assert(pending.pound_held && !pending.pound_pressed);
 }
 /* New control scheme: D-pad movement only; Classic and sideways Wii Remote buttons. */
 static void test_classic_mapping(void)
@@ -59,8 +63,9 @@ static void test_wiimote_mapping(void)
     in=wm(&w,&last,WM_B);assert(in.nozzle_held && !in.pound_pressed);
     /* A joins within the window: stomp once, FLUDD stops, no nozzle switch. */
     in=wm(&w,&last,WM_B|WM_A);assert(in.pound_pressed && !in.nozzle_held && !in.nozzle_next_pressed);
-    for(int i=0;i<20;++i){in=wm(&w,&last,WM_B|WM_A);assert(!in.pound_pressed && !in.nozzle_held && !in.nozzle_next_pressed);}
-    wm(&w,&last,0);
+    assert(in.pound_held);
+    for(int i=0;i<20;++i){in=wm(&w,&last,WM_B|WM_A);assert(!in.pound_pressed && in.pound_held && !in.nozzle_held && !in.nozzle_next_pressed);}
+    in=wm(&w,&last,0);assert(!in.pound_held);
     /* A then B within the window: stomp too. */
     in=wm(&w,&last,WM_A);assert(!in.nozzle_next_pressed);
     in=wm(&w,&last,WM_A|WM_B);assert(in.pound_pressed && !in.nozzle_held);

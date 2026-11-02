@@ -74,6 +74,15 @@ int main(void)
         assert(p && p->tile_count == 1 && p->width > 100 && p->height > 10 && (size_t)p->width * p->height * 4 <= 128u * 1024);
         assert(p->ox < 0 && p->ox > -(float)p->width / 1.6f && p->oy < 0 && p->oy > -(float)p->height / 1.6f);
     }
+    /* Toad's talk prompt (bz): the controller's button in the key's two poses,
+       side by side, placed around the key (tm (143.45, 1)) in tm px. */
+    for (unsigned k = 0; k < CONTROLLER_KINDS; ++k) {
+        char key[16]; snprintf(key, sizeof key, "TalkZ@%u", k);
+        const CourseArtLayer *z = course_art_picture(&pack, key, strlen(key));
+        assert(z && z->tile_count == 1 && z->width % 2 == 0 && (size_t)z->width * z->height * 4 <= 128u * 1024);
+        const float cx = z->ox + z->width / 4.0f / 1.6f, cy = z->oy + z->height / 2.0f / 1.6f;
+        assert(cx > 60 && cx < 150 && fabsf(cy - 1) < 3);
+    }
     /* Phase 2 item 5: water quads tile one texel per course px, abut, and keep
        the surface frame's V range half a texel inside its frame. */
     for (float t = 0; t < 30; t += 0.37f) {

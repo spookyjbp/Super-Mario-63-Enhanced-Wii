@@ -307,6 +307,22 @@ def export(source, jar, output, areas):
     # the canvas origin comes from the frame's SVG (the same for every frame).
     psvg = ui_art.ffdec(jar, work, pictures_swf, pic[0], [1], work / 'pictures-svg', svg=True)
     pox, poy = ui_art.svg_origin(psvg / '1.svg')
+    # The keys removed from the render itself (controller_signs.HIDE), the
+    # bitmaps the new pages reuse, and the boxes' ground-pound demo (424).
+    keyless = work / 'pictures-keyless.swf'
+    keyless.write_bytes(ui_art.hide(pictures_swf.read_bytes(), controller_signs.HIDE))
+    kl = ui_art.ffdec(jar, work, keyless, pic[0], [sprites[pic[0]]['labels'][l] + 1 for l in ('controls', 'stomp')],
+                      work / 'pictures-keyless')
+    demo_png = ui_art.ffdec(jar, work, keyless, controller_signs.DEMO_SPRITE, controller_signs.DEMO_FRAMES, work / 'demo')
+    demo_svg = ui_art.ffdec(jar, work, keyless, controller_signs.DEMO_SPRITE, controller_signs.DEMO_FRAMES[:1],
+                            work / 'demo-svg', svg=True)
+    dox, doy = ui_art.svg_origin(demo_svg / f'{controller_signs.DEMO_FRAMES[0]}.svg')
+    with (work / 'export.log').open('a') as log:
+        subprocess.run(cmd[:cmd.index('-selectid')] + ['-selectid', f'{controller_signs.DIVE_BITMAP},{controller_signs.EXPLOSION_BITMAP}',
+                                                         '-format', 'image:png', '-export', 'image', str(work / 'picture-bitmaps'),
+                                                         str(pictures_swf)], check=True, stdout=log, stderr=log)
+    sign_art = {'dive': Image.open(work / 'picture-bitmaps' / f'{controller_signs.DIVE_BITMAP}.png').convert('RGBA'),
+                'explosion': Image.open(work / 'picture-bitmaps' / f'{controller_signs.EXPLOSION_BITMAP}.png').convert('RGBA')}
     variants = []
     for label in labels:
         im = Image.open(C.sprite_dir(pages, pic[0]) / f'{sprites[pic[0]]["labels"][label] + 1}.png').convert('RGBA')
@@ -314,10 +330,25 @@ def export(source, jar, output, areas):
         im = im.crop(bb)  # the page itself; (x, y) its stage position
         x, y = 225 + pox + bb[0] / ZOOM, 150 + poy + bb[1] / ZOOM
         variants.append((label, im, x, y))
+        if label in ('controls', 'stomp'):
+            sign_art[label] = Image.open(kl / f'{sprites[pic[0]]["labels"][label] + 1}.png').convert('RGBA').crop(bb)
+        if label == 'stomp':
+            # the demo in each box: 424's placements in the page (page px from the frame's canvas)
+            sign_art['demo'] = []
+            boxes = [e for d, e in sorted(sprites[pic[0]]['stage'][sprites[pic[0]]['labels'][label]].items())
+                     if e.get('id') == controller_signs.DEMO_SPRITE]
+            for e, f in zip(boxes, controller_signs.DEMO_FRAMES):
+                m = e['matrix']
+                if abs(m['sx'] - 1) > 1e-3 or abs(m['sy'] - 1) > 1e-3 or m['r0'] or m['r1']:
+                    raise ValueError('Stomp demo placement is scaled; not supported')
+                fr = Image.open(demo_png / f'{f}.png').convert('RGBA')
+                px = (m['tx'] / 20 + dox - pox) * ZOOM - bb[0]
+                py = (m['ty'] / 20 + doy - poy) * ZOOM - bb[1]
+                sign_art['demo'].append((fr,) + controller_signs.snap(sign_art['stomp'], fr, round(px), round(py)))
         if label in controller_signs.PAGES:
             bg = Image.open(work / 'picture-shapes' / f'{controller_signs.BACKGROUND[label]}.png').convert('RGBA')
             for k, kind in enumerate(controller_signs.CONTROLLERS):
-                page = controller_signs.make(label, im, bg, kind)
+                page = controller_signs.make(label, im, bg, kind, sign_art)
                 page.save(work / 'picture-shapes' / f'{label}@{k}.png')
                 variants.append((f'{label}@{k}', page, x, y))
     # The message box and its controller prompts (ui_art.py); origins in stage px.

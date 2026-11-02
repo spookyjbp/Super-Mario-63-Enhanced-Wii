@@ -40,6 +40,7 @@ GameInput input_map_gamecube(unsigned held, unsigned down)
     state.spin_pressed = (down & GC_B) != 0;
     state.spin_held = (held & GC_B) != 0;
     state.pound_pressed = (down & GC_Z) != 0;
+    state.pound_held = (held & GC_Z) != 0;
     state.pause_pressed = (down & GC_START) != 0;
     state.confirm_pressed = state.jump_pressed;
     state.cancel_pressed = state.spin_pressed;
@@ -54,6 +55,7 @@ GameInput input_map_classic(unsigned held, unsigned down, float right_stick_y)
     state.spin_pressed = (down & CC_Y) != 0;
     state.spin_held = (held & CC_Y) != 0;
     state.pound_pressed = (down & (CC_L | CC_R)) != 0;
+    state.pound_held = (held & (CC_L | CC_R)) != 0;
     state.nozzle_held = (held & CC_ZR) != 0;
     state.nozzle_next_pressed = (down & CC_ZL) != 0;
     state.pause_pressed = (down & (CC_PLUS | CC_HOME)) != 0;
@@ -83,6 +85,7 @@ ChordOut input_chord_step(InputChord *c, bool hx, bool hy, bool imm_x, bool imm_
     if (!hx) c->single_x = false;
     if (!hy) c->single_y = false;
     if (!hx && !hy) c->chord = false;
+    o.both_held = c->chord && hx && hy;
     o.x_hold = hx && c->single_x && !c->chord;
     o.y_hold = hy && c->single_y && !c->chord;
     c->was_x = hx; c->was_y = hy;
@@ -102,6 +105,7 @@ GameInput input_map_wiimote(WiimoteState *w, unsigned held, unsigned down)
     state.nozzle_next_pressed = ab.x_tap;
     state.nozzle_held = ab.y_hold;
     state.pound_pressed = ab.both;
+    state.pound_held = ab.both_held;
     /* + (zoom in) and - (zoom out), both waiting: together pause. */
     const ChordOut pm = input_chord_step(&w->plus_minus, held & WM_PLUS, held & WM_MINUS, false, false);
     state.zoom_axis = pm.x_hold ? -1.0f : pm.y_hold ? 1.0f : 0.0f;

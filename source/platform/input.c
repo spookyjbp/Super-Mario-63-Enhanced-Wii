@@ -42,7 +42,7 @@ static void merge(GameInput *s, GameInput o)
     if (fabsf(o.zoom_axis) > fabsf(s->zoom_axis)) s->zoom_axis = o.zoom_axis;
     s->crouch_held |= o.crouch_held; s->nozzle_held |= o.nozzle_held; s->nozzle_next_pressed |= o.nozzle_next_pressed;
     s->jump_pressed |= o.jump_pressed; s->jump_held |= o.jump_held; s->spin_pressed |= o.spin_pressed;
-    s->spin_held |= o.spin_held; s->pound_pressed |= o.pound_pressed; s->pause_pressed |= o.pause_pressed;
+    s->spin_held |= o.spin_held; s->pound_pressed |= o.pound_pressed; s->pound_held |= o.pound_held; s->pause_pressed |= o.pause_pressed;
     s->confirm_pressed |= o.confirm_pressed; s->cancel_pressed |= o.cancel_pressed;
 }
 GameInput input_poll(void)

@@ -156,7 +156,7 @@ def combo(a, b):
 
 def either(a, b):
     """Either button: L or R."""
-    return row([a, word('or', max(10, int(a.height * 0.4))), b])
+    return row([a, word('or', 18), b])   # as approved (the word stays 18 px)
 
 
 def arrow(direction, size):

@@ -23,6 +23,9 @@ import swf_bitmap_fix as F
 import sign_buttons
 
 MESSAGE, MESSAGE_TEXT, PROMPT, PAGES = 253, 251, 250, 619
+TALK_Z, TALK_Z_AT, TALK_Z_SCALE = 184, (143.45, 1.0), 1.5   # Stats.tm's 'bz' (in 186): a "Z" key that wobbles
+TALK_Z_TILT = (9.0, -7.0)    # 184: 182 on frames 1-24, 183 on 25-50: the key tilted these degrees (CCW), measured
+TALK_Z_HEIGHT = 38           # screen px of the controller button replacing the key
 ZOOM = 1.6
 
 
@@ -141,6 +144,24 @@ def build(work, jar, swf, sprites):
     for k, kind in enumerate(sign_buttons.CONTROLLERS):
         im, shift, top = prompt_versions(full_prompt)[kind]
         layers.append((f'Prompt@{k}', im, pox - shift / ZOOM, poy - top / ZOOM))
+    # Toad's talk cloud prompt (bz, 184): the key is replaced by the controller's
+    # button in the key's two poses, right-aligned with the key, at its centre.
+    zpng = ffdec(jar, work, hidden, TALK_Z, [1], work / 'talkz')
+    zsvg = ffdec(jar, work, hidden, TALK_Z, [1], work / 'talkz-svg', svg=True)
+    zox, zoy = svg_origin(zsvg / '1.svg')
+    zb = Image.open(zpng / '1.png').convert('RGBA').getchannel('A').getbbox()
+    to_tm = lambda px, o, at: at + TALK_Z_SCALE * (o + px / ZOOM)
+    z_right = to_tm(zb[2], zox, TALK_Z_AT[0])
+    z_cy = (to_tm(zb[1], zoy, TALK_Z_AT[1]) + to_tm(zb[3], zoy, TALK_Z_AT[1])) / 2
+    for k, kind in enumerate(sign_buttons.CONTROLLERS):
+        btn = sign_buttons.STYLE[kind]['stomp'](TALK_Z_HEIGHT)
+        poses = [btn.rotate(a, Image.BICUBIC, expand=True) for a in TALK_Z_TILT]
+        cw, ch = max(p.width for p in poses), max(p.height for p in poses)
+        im = Image.new('RGBA', (2 * cw, ch))
+        for i, pose in enumerate(poses):
+            im.alpha_composite(pose, (i * cw + (cw - pose.width) // 2, (ch - pose.height) // 2))
+        cx = z_right - btn.width / 2 / ZOOM
+        layers.append((f'TalkZ@{k}', im, cx - cw / 2 / ZOOM, z_cy - ch / 2 / ZOOM))   # tm px of the left cell
     # where the prompt is placed: in the message box, and on each picture page (619 at stage (225, 150))
     places = {}
     for d, e in sprites[MESSAGE]['stage'][5].items():
