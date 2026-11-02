@@ -137,12 +137,19 @@ static void edge_push(const CourseRuntime *c, Camera *cam, float hw)
     while (n < 50 && course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx - hw + n, cam->cy)) ++n;
     cam->cx += n;
 }
-static void publish(Camera *cam, const CourseRuntime *c, float view_width)
+static void publish(Camera *cam, const CourseRuntime *c, float view_width, bool moved, float frac)
 {
     const float zoom = course_view_zoom();
-    cam->x = course_wx(c, cam->cx) - view_width / zoom / 2;
-    cam->y = course_wy(c, cam->cy) - 480.0f / zoom / 2;
+    const float x = course_wx(c, cam->cx) - view_width / zoom / 2, y = course_wy(c, cam->cy) - 480.0f / zoom / 2;
+    if (moved) { cam->from_x = cam->to_x; cam->from_y = cam->to_y; cam->to_x = x; cam->to_y = y; }
+    /* A jump (area change, warp) is not eased. */
+    if (fabsf(cam->to_x - cam->from_x) > 200 || fabsf(cam->to_y - cam->from_y) > 200) { cam->from_x = x; cam->from_y = y; }
+    cam->x = cam->from_x + (cam->to_x - cam->from_x) * frac;
+    cam->y = cam->from_y + (cam->to_y - cam->from_y) * frac;
 }
+/* Progress through the current source frame: p->source_phase (0..59) counts 32
+   per tick and a source frame ran when it wrapped. */
+static float source_frac(const Player *p) { return fminf(1, p->source_phase / 60.0f); }
 void course_camera_init(Camera *cam, const Player *p, const World *w, float view_width)
 {
     const CourseRuntime *c = w->course;
@@ -150,7 +157,9 @@ void course_camera_init(Camera *cam, const Player *p, const World *w, float view
     cam->cy = course_cy(c, p->y + player_height(p)) - 50;
     cam->ychange = 50;
     for (int i = 0; i < 4; ++i) edge_push(c, cam, half_width(view_width));
-    publish(cam, c, view_width);
+    publish(cam, c, view_width, true, 1);
+    cam->from_x = cam->to_x; cam->from_y = cam->to_y;
+    cam->x = cam->to_x; cam->y = cam->to_y;
     cam->previous_x = cam->x; cam->previous_y = cam->y;
 }
 /* One 32 Hz camera move toward `dx`, `dy` (course px), limited by CamEdge as in
@@ -185,13 +194,13 @@ void course_camera_step(Camera *cam, const Player *p, const World *w, float view
         camera_move(cam, c, (mx - cam->cx - xchange) / 10 + p->vx / V / 4,
                     (my - cam->cy - cam->ychange) / 10 + p->vy / V / 4, view_width);
     }
-    publish(cam, c, view_width);
+    publish(cam, c, view_width, p->source_step, source_frac(p));
 }
-void course_camera_step_to(Camera *cam, const CourseRuntime *c, float tx, float ty, bool source_step, float view_width)
+void course_camera_step_to(Camera *cam, const CourseRuntime *c, float tx, float ty, const Player *p, float view_width)
 {
     /* _root.Camcenter is another clip: camXspeed = -(Camcenter)/Camspeed, no
        speed terms, the same CamEdge limits. */
     cam->previous_x = cam->x; cam->previous_y = cam->y;
-    if (source_step) camera_move(cam, c, (tx - cam->cx) / 10, (ty - cam->cy) / 10, view_width);
-    publish(cam, c, view_width);
+    if (p->source_step) camera_move(cam, c, (tx - cam->cx) / 10, (ty - cam->cy) / 10, view_width);
+    publish(cam, c, view_width, p->source_step, source_frac(p));
 }

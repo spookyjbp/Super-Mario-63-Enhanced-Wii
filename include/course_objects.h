@@ -9,6 +9,19 @@ extern "C" {
 #endif
 #define COURSE_MAX_LIVE 192
 enum { CHEEP_SWIM, CHEEP_CHASE, CHEEP_TURN, CHEEP_JUMP, CHEEP_SPIN, CHEEP_GONE };
+/* Toad 'head' (2498) moods: the label frames (0-based) of each segment. A mood
+   loops from its label to the frame before the next label (ChangeFrame). */
+enum { TOAD_SMILE, TOAD_TALK, TOAD_SAD, TOAD_MAD, TOAD_SHOCKED, TOAD_HAPPY, TOAD_CONFUSED, TOAD_CRAZY, TOAD_MOODS };
+/* Mood named by a Toad's Mood / M<n>Moo parameter (Smile when unknown). */
+int course_toad_mood(CourseString name);
+/* One source frame of the head clip: next frame, the clip's Skip(n) jumps,
+   back to the mood's label at the segment end. `rand` returns 0..n-1. */
+unsigned course_toad_head_step(unsigned frame, int mood, unsigned (*rand)(void *ctx, unsigned n), void *ctx);
+static inline unsigned course_toad_mood_label(int mood)
+{
+    static const unsigned label[TOAD_MOODS] = {0, 68, 98, 159, 184, 269, 298, 359};
+    return label[mood >= 0 && mood < TOAD_MOODS ? mood : 0];
+}
 enum { GOOMBA_IDLE, GOOMBA_JUMP, GOOMBA_WALKR, GOOMBA_WALKL, GOOMBA_SQUISH, GOOMBA_TUMBLE };
 /* Bob-omb `frame` variable. Its clip (3310) has no "Idle" label, so Idle keeps
    the frame shown last (LiveObject.state holds the shown label). */

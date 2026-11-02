@@ -34,7 +34,7 @@ bool course_stand_clear(const Player *p, const World *w);
 void course_camera_init(Camera *camera, const Player *p, const World *w, float view_width);
 void course_camera_step(Camera *camera, const Player *p, const World *w, float view_width);
 /* Camera centred on another clip (sign targets, Toad): replaces the step above. */
-void course_camera_step_to(Camera *camera, const CourseRuntime *c, float tx, float ty, bool source_step,
+void course_camera_step_to(Camera *camera, const CourseRuntime *c, float tx, float ty, const Player *p,
                            float view_width);
 /* Screen pixels per world pixel so 300 course pixels fill the 480-line screen. */
 static inline float course_view_zoom(void) { return 480.0f / (COURSE_VIEW_HEIGHT * COURSE_SCALE); }

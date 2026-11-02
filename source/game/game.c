@@ -57,11 +57,17 @@ void game_input_latch(GameInput *p, GameInput current)
     p->confirm_pressed |= current.confirm_pressed;
     p->cancel_pressed |= current.cancel_pressed;
     if (current.menu_delta) p->menu_delta = current.menu_delta;
+    p->zoom_axis = current.zoom_axis;
+    p->zoom_step_pressed |= current.zoom_step_pressed;
+    p->controller = current.controller;
 }
 void game_input_consume(GameInput *p)
 {
     const float horizontal = p->horizontal, vertical = p->vertical;
     const bool crouch=p->crouch_held, nozzle=p->nozzle_held;
     const bool held = p->jump_held, spin=p->spin_held;
-    *p = (GameInput){.horizontal=horizontal, .vertical=vertical, .jump_held=held, .spin_held=spin, .crouch_held=crouch, .nozzle_held=nozzle};
+    const float zoom = p->zoom_axis;
+    const unsigned char controller = p->controller;
+    *p = (GameInput){.horizontal=horizontal, .vertical=vertical, .jump_held=held, .spin_held=spin, .crouch_held=crouch,
+                     .nozzle_held=nozzle, .zoom_axis=zoom, .controller=controller};
 }

@@ -76,7 +76,7 @@ void player_animation_step(Player *p,GameInput in)
     }
     /* Mario Wait WaterBlast.xml: nextFrame() while KeySPACE && Power>0 &&
        WaterAmount>0, else prevFrame(); `_yscale *= -1` every frame. */
-    const bool spraying=in.nozzle_held && p->power>0 && p->water>0;
+    const bool spraying=p->has_fludd && in.nozzle_held && p->power>0 && p->water>0;
     if(spraying && p->blast_level<4) ++p->blast_level;
     else if(!spraying && p->blast_level>0) --p->blast_level;
     p->blast_parity=!p->blast_parity;

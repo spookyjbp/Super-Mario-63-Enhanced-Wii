@@ -74,6 +74,15 @@ void course_objects_init(CourseObjects *o, const CourseArea *a, const CoursePick
             l->dir = rnd(o, 2) + 1 == 1 ? 1 : -1; /* movedir */
             break;
         }
+        case LIVE_TOAD: { /* Toad Main Clip frame 1: frame ("idle"/"walk"), Mood, _xscale */
+            CourseString v;
+            l->state = course_object_param(src, "Mood", &v) ? course_toad_mood(v) : TOAD_SMILE; /* StartMood */
+            l->eye = course_toad_mood_label(l->state);
+            l->p0 = course_object_param(src, "frame", &v) && course_string_equals(v, "walk") ? 1 : 0; /* Startframe */
+            if (course_object_param(src, "_xscale", &v)) l->facing_left = v.length && v.text[0] == '-';
+            l->timer = (int)rnd(o, 40); /* body 2501 frame 1: gotoAndPlay(random(40) + _currentframe) */
+            break;
+        }
         case LIVE_GOONIE: { /* GoonieCode frame 1 */
             float v;
             l->vy = param_f(src, "speedY", &v) ? v : -0.7f - frand(o) * 0.25f;
@@ -226,10 +235,27 @@ void course_mario_hit(Player *p, CourseProgress *g, int hp, int blink, float vy,
     if (p->blink > 0 || g->hp < 1) return; /* _root.MarioHit guard */
     p->blink = blink; g->hp -= hp; g->hpcoins = 0;
     p->action = ACTION_NONE; p->spin_time = 0; p->pounding = false; p->ejump = false; /* attack = false */
-    if (hp > 0 && !add) { p->vx = vx * 44; p->vy = vy * 44; } /* hurt1: setYspeed/setXspeed */
-    else {
-        if (hp > 0) { p->vx *= 0.5f; p->vy *= 0.5f; }
-        p->vx += vx * 44; p->vy += vy * 44;               /* hurt2/hurt3, or a shove */
+    if (hp > 0) {
+        /* a > 0: speed halves and the attack becomes a hurt clip (attack = true). */
+        p->vx *= 0.5f; p->vy *= 0.5f;
+        p->jump_cut = true; p->dashing = false; p->rocket_boost = 0;
+        if (add) {
+            /* g: (d, c) added now; hurt3 when the new xspeed points the way Mario
+               faces (xspeed * _xscale < 0; _xscale > 0 is facing left), else hurt2. */
+            p->vx += vx * 44; p->vy += vy * 44;
+            if (p->vx * (p->facing_left ? 1 : -1) < 0) {
+                p->action = ACTION_HURT; p->hurt_kind = 3; p->hurt_frame = 0;
+            } else {
+                p->action = ACTION_BONK; p->bonk_frame = 11; /* hitwall false: gotoAndStop("afterwall") */
+            }
+        } else {
+            /* hurt1: setYspeed = c, setXspeed = d, added by the clip on its frame 4. */
+            p->action = ACTION_HURT; p->hurt_kind = 1; p->hurt_frame = 0;
+            p->set_vx = vx * 44; p->set_vy = vy * 44;
+        }
+        p->action_time = 0;
+    } else {
+        p->vx += vx * 44; p->vy += vy * 44;               /* a shove */
     }
     if (vy < 0) p->grounded = false;
     if (stun > 0) p->stun = stun;
@@ -432,6 +458,28 @@ static void heal(CourseProgress *g) /* DOMDocument.xml:5151 */
     while (g->coincount >= 100) g->coincount -= 100; /* CharLives++ (lives not shown yet) */
 }
 
+static unsigned toad_rand(void *ctx, unsigned n) { return rnd((CourseObjects *)ctx, n); }
+int course_toad_mood(CourseString name)
+{
+    static const char *names[TOAD_MOODS] = {"Smile", "Talk", "Sad", "Mad", "Shocked", "Happy", "Confused", "Crazy"};
+    for (int i = 0; i < TOAD_MOODS; ++i)
+        if (course_string_equals(name, names[i])) return i;
+    return TOAD_SMILE;
+}
+unsigned course_toad_head_step(unsigned frame, int mood, unsigned (*rand)(void *ctx, unsigned n), void *ctx)
+{
+    /* Head 2498 scripts: Skip(n) = gotoAndPlay(random(n) + _currentframe) on
+       frames 2 (35), 100 (20), 186 (15), 254 (15), 300 (20) and 361 (8); each
+       label frame calls ChangeFrame() = gotoAndPlay(Mood). */
+    static const struct { unsigned frame, n; } skips[] = {{1, 35}, {99, 20}, {185, 15}, {253, 15}, {299, 20}, {360, 8}};
+    const unsigned start = course_toad_mood_label(mood);
+    const unsigned end = mood + 1 < TOAD_MOODS ? course_toad_mood_label(mood + 1) : 397;
+    if (frame < start || frame >= end) return start;
+    ++frame;
+    for (unsigned i = 0; i < sizeof(skips) / sizeof(skips[0]); ++i)
+        if (frame == skips[i].frame) frame += rand(ctx, skips[i].n);
+    return frame >= end ? start : frame;
+}
 static float cam_cx, cam_cy;
 static bool jump_key;
 static LiveObject *spawn(CourseObjects *o, LiveKind kind, const CourseObject *src, float x, float y)
@@ -1022,6 +1070,9 @@ static void step_nozzle(LiveObject *l, const CourseRuntime *c, Player *p, float 
     const float b[4] = {l->x - 16.0f, l->y - 21.95f, l->x + 16.0f, l->y + 21.05f};
     if (inside(fx, fy, b)) { /* Fluddpow = "H"; WaterAmount = TotalWater */
         p->has_fludd = true; p->nozzle = NOZZLE_HOVER; p->water = 100; l->alive = false;
+        /* The original tutorial only has Hover; the port has always let every
+           nozzle be switched to once FLUDD is worn, and keeps that rule. */
+        p->nozzles = (1u << NOZZLE_COUNT) - 1;
         sfx_play(SFX_FLUDD_NOZZLE, 100, 0);
         return;
     }
@@ -1296,6 +1347,15 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
     case LIVE_TOAD: {
         const bool ready = course_objects_near(o, LIVE_TOAD, fx, fy) == l && p->grounded && p->action == ACTION_NONE;
         l->alpha += ((ready ? 100.0f : 0.0f) - l->alpha) / 3; /* bz prompt */
+        /* body: idle 2501 (120 frames; frames 1 and 60 gotoAndPlay(random(40) +
+           _currentframe)) or walk 2516 (20 frames); 'timer' is its frame. */
+        if (l->p0 > 0) l->timer = (l->timer + 1) % 20;
+        else {
+            if (++l->timer >= 120) l->timer = 0;
+            if (l->timer == 0 || l->timer == 59) l->timer += (int)rnd(o, 40);
+            if (l->timer >= 120) l->timer -= 120;
+        }
+        l->eye = course_toad_head_step(l->eye, l->state, toad_rand, o);
         break;
     }
     case LIVE_BUTTERFLY: { /* ButterflyCode onEnterFrame */

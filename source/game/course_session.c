@@ -38,8 +38,10 @@ static void enter_area(CourseSession *s, const CourseArea *a, float cx, float cy
     s->world.spawn_y = course_wy(&s->runtime, cy) - PLAYER_HEIGHT;
     s->back_frame = 2;
     const bool keep_fludd = s->game.player.has_fludd;
+    const unsigned keep_nozzles = s->game.player.nozzles;
+    const Nozzle keep_nozzle = s->game.player.nozzle;
     game_init(&s->game, &s->world, s->view_width);
-    s->game.player.has_fludd = keep_fludd;
+    s->game.player.has_fludd = keep_fludd; s->game.player.nozzles = keep_nozzles; s->game.player.nozzle = keep_nozzle;
     course_place_player(&s->runtime, &s->game.player, cx, cy);
     camera_init(&s->game.camera, &s->game.player, &s->world, s->view_width);
     s->state = SESSION_PLAY;
@@ -68,7 +70,8 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     if (!a) return false;
     memset(s, 0, sizeof(*s));
     s->pack = pack; s->view_width = view_width; s->warp_target = -1;
-    s->game.player.has_fludd = false; /* StartChar(..., Fluddpow "") */
+    s->zoom = s->zoom_target = s->talk_zoom = 1;
+    s->game.player.has_fludd = false; s->game.player.nozzles = 0; /* StartChar(..., Fluddpow "") */
     s->progress.hp = 8;                 /* _root.CharHP = 8 */
     hud_init(&s->hud, s->progress.hp);
     /* StartChar(..., resetmusic = true): _root["8-E1-1MusicIntro"], then "8-E1-1Music". */
@@ -191,7 +194,21 @@ static bool toad_page(CourseSession *s, unsigned page)
     s->toad_text = t; s->toad_chars = 0;
     key[2] = 'M'; key[3] = 'o'; key[4] = 'o';
     if (!course_object_param(s->toad->src, key, &s->toad_mood)) s->toad_mood = (CourseString){0};
+    /* Mood = M<n>Moo: the head plays that mood from its label (ChangeFrame). */
+    LiveObject *toad = (LiveObject *)s->toad; /* points into s->objects */
+    if (s->toad_mood.length && !course_string_equals(s->toad_mood, "undefined")) {
+        const int mood = course_toad_mood(s->toad_mood);
+        if (mood != toad->state) { toad->state = mood; toad->eye = course_toad_mood_label(mood); }
+    }
     return true;
+}
+/* The conversation ended: Mood = StartMood, frame = Startframe. */
+static void toad_rest(CourseSession *s)
+{
+    LiveObject *toad = (LiveObject *)s->toad;
+    CourseString v;
+    const int mood = course_object_param(toad->src, "Mood", &v) ? course_toad_mood(v) : TOAD_SMILE;
+    if (mood != toad->state) { toad->state = mood; toad->eye = course_toad_mood_label(mood); }
 }
 static void try_talk(CourseSession *s, bool z_pressed)
 {
@@ -206,10 +223,34 @@ static void try_talk(CourseSession *s, bool z_pressed)
     s->camera_override = true; s->camera_target_x = t->x; s->camera_target_y = t->y; /* Camcenter = this */
     Player *pm = &s->game.player;
     pm->vx = pm->vy = 0;
-    pm->facing_left = course_cx(&s->runtime, pm->x + PLAYER_WIDTH / 2) > t->x; /* face Toad */
+    /* Phase 1: Toad and Mario face each other (_xscale = +/-100 for both). */
+    const bool mario_right = course_cx(&s->runtime, pm->x + PLAYER_WIDTH / 2) > t->x;
+    pm->facing_left = mario_right;
+    ((LiveObject *)t)->facing_left = !mario_right;
+}
+void course_session_zoom_step(CourseSession *s, float axis, bool step, bool talking, bool source_step)
+{
+    if (s->zoom <= 0) s->zoom = s->zoom_target = s->talk_zoom = 1;
+    /* Stick: about 1.2x per second at full tilt, up = in. */
+    if (axis != 0) s->zoom_target *= expf(-axis * 1.2f * GAME_DT);
+    if (step) { /* Wii Remote -: 1 -> 1.25 -> 1.5 -> 0.85 -> 1 */
+        static const float levels[] = {1.0f, 1.25f, 1.5f, COURSE_ZOOM_MIN};
+        unsigned next = 0;
+        for (unsigned i = 0; i < 4; ++i)
+            if (fabsf(s->zoom_target - levels[i]) < 0.06f) next = (i + 1) % 4;
+        s->zoom_target = levels[next];
+    }
+    s->zoom_target = fminf(COURSE_ZOOM_MAX, fmaxf(COURSE_ZOOM_MIN, s->zoom_target));
+    s->zoom += (s->zoom_target - s->zoom) * (1 - expf(-8 * GAME_DT));   /* frame-rate independent easing */
+    if (fabsf(s->zoom - s->zoom_target) < 0.0005f) s->zoom = s->zoom_target;
+    /* Toad Main Clip: CameraZoom += 3 while talking (to 150), -= 3 after. */
+    if (source_step) s->talk_zoom = talking ? fminf(1.5f, s->talk_zoom + 0.03f) : fmaxf(1, s->talk_zoom - 0.03f);
 }
 void course_session_step(CourseSession *s, GameInput in)
 {
+    s->controller = in.controller;
+    course_session_zoom_step(s, in.zoom_axis, in.zoom_step_pressed, s->state == SESSION_TALK,
+                             s->game.player.source_step);
     /* KeyZ(): Z (read/talk/stomp). The port maps it to the pound button. */
     const bool z_pressed = in.pound_pressed; /* already a button-down event */
     if (s->area_title_time > 0) s->area_title_time = fmaxf(0, s->area_title_time - GAME_DT);
@@ -266,7 +307,13 @@ void course_session_step(CourseSession *s, GameInput in)
         game_step(&s->game, &s->world, (GameInput){0}, s->view_width);
         if (p->source_step && s->toad_chars < s->toad_text.length) /* tm: two characters a frame */
             s->toad_chars = s->toad_chars + 2 < s->toad_text.length ? s->toad_chars + 2 : s->toad_text.length;
+        if (p->source_step) {
+            /* talking: Mario is pushed 2 px a frame out of Toad's body. */
+            const float mx = course_cx(&s->runtime, p->x + PLAYER_WIDTH / 2);
+            if (fabsf(mx - s->toad->x) < 12) p->x += (mx > s->toad->x ? 2 : -2) * COURSE_SCALE;
+        }
         if (z_pressed && !toad_page(s, ++s->toad_page)) {
+            toad_rest(s);
             s->state = SESSION_PLAY; s->toad = NULL; s->camera_override = false;
         }
         break;
@@ -294,8 +341,45 @@ void course_session_step(CourseSession *s, GameInput in)
         /* Camcenter = another clip: the only camera move this frame (following
            Mario as well made the two moves and the CamEdge push fight: shake). */
         s->game.camera = camera_before;
-        course_camera_step_to(&s->game.camera, &s->runtime, s->camera_target_x, s->camera_target_y, p->source_step,
+        course_camera_step_to(&s->game.camera, &s->runtime, s->camera_target_x, s->camera_target_y, p,
                               s->view_width);
     }
+    {   /* FLUDD state shown by the switch banner */
+        const Player *pl = &s->game.player;
+        const unsigned char now = pl->has_fludd ? (unsigned char)(1 + pl->nozzle) : 0;
+        if (now != s->last_fludd && (pl->nozzles || pl->has_fludd)) { s->nozzle_banner = 90; s->banner_fludd = now; }
+        s->last_fludd = now;
+        if (s->nozzle_banner) --s->nozzle_banner;
+    }
     update_hint(s);
+}
+
+/* Text signs that name keyboard keys: the same message with the button of the
+   controller in use (mapping: source/platform/input.c). Up is the original's
+   jump key; P its pause key. */
+CourseString course_sign_message(CourseString text, unsigned controller)
+{
+    static const char *const backflip[CONTROLLER_KINDS] = {
+        "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n"
+        "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing A and back.",
+        "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n"
+        "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing A and back.",
+        "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n"
+        "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing a and back.",
+        "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n"
+        "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing A and back."};
+    static const char *const pause[CONTROLLER_KINDS] = {
+        "Oh!  Mario!  You can pause the game by pressing <b>START</b>.  There, you can change settings, view stuff "
+        "you've collected, and switch FLUDD power-ups.",
+        "Oh!  Mario!  You can pause the game by pressing <b>+</b>.  There, you can change settings, view stuff "
+        "you've collected, and switch FLUDD power-ups.",
+        "Oh!  Mario!  You can pause the game by pressing <b>+</b>.  There, you can change settings, view stuff "
+        "you've collected, and switch FLUDD power-ups.",
+        "Oh!  Mario!  You can pause the game by pressing <b>+</b>.  There, you can change settings, view stuff "
+        "you've collected, and switch FLUDD power-ups."};
+    if (controller >= CONTROLLER_KINDS) return text;
+    const char *pick = NULL;
+    if (text.length >= 29 && !memcmp(text.text, "You can run by double tapping", 29)) pick = backflip[controller];
+    else if (text.length >= 28 && !memcmp(text.text, "Oh!  Mario!  You can pause t", 28)) pick = pause[controller];
+    return pick ? (CourseString){pick, (uint16_t)strlen(pick)} : text;
 }

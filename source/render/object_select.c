@@ -23,11 +23,21 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         if (l->alpha < 1) return 1;
         o[1] = base(l, OBJ_SIGN_Z, f % 49); o[1].alpha = l->alpha;
         return 2;
-    case LIVE_TOAD:
-        o[0] = base(l, OBJ_TOAD_IDLE, (f / 4) % 30);
-        if (l->alpha < 1) return 1;
-        o[1] = base(l, OBJ_TOAD_BZ, (f / 3) % 17); o[1].alpha = l->alpha;
-        return 2;
+    case LIVE_TOAD: {
+        /* body (idle 2501 sampled 1/4, or walk 2516), its 'head' (2498) at the
+           body frame's head placement, then the 'bz' prompt. _xscale > 0 faces right. */
+        const bool walk = l->p0 > 0;
+        const unsigned body = walk ? (unsigned)l->timer % 20 : ((unsigned)l->timer % 120) / 4;
+        o[0] = base(l, walk ? OBJ_TOAD_WALK : OBJ_TOAD_IDLE, body);
+        o[0].flip_x = l->facing_left;
+        const float *h = walk ? toad_head_walk[body] : toad_head_idle[body];
+        o[1] = base(l, OBJ_TOAD_HEAD, l->eye);
+        o[1].flip_x = l->facing_left;
+        o[1].dx = l->facing_left ? -h[0] : h[0]; o[1].dy = h[1];
+        if (l->alpha < 1) return 2;
+        o[2] = base(l, OBJ_TOAD_BZ, (f / 3) % 17); o[2].alpha = l->alpha;
+        return 3;
+    }
     case LIVE_BUTTERFLY: /* clip._y = sin(wave)*5; _xscale = +/-scale */
         o[0] = base(l, OBJ_BUTTERFLY, f % 18);
         o[0].dy = sinf(l->wave) * 5 * l->scale; o[0].scale = l->scale; o[0].flip_x = l->vx < 0;

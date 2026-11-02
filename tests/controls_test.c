@@ -130,9 +130,25 @@ static void test_spin_and_jump_unchanged(void)
     }
     assert(starts>2); /* Repeated airborne spinning preserved. */
 }
+/* Phase 2 items 2 and 9: the active controller (for the picture signs) and the
+   C-stick zoom axis. */
+static void test_controller_detection_and_zoom_stick(void)
+{
+    assert(input_active_controller(CONTROLLER_GAMECUBE,false,false,CONTROLLER_CLASSIC)==CONTROLLER_GAMECUBE);
+    assert(input_active_controller(CONTROLLER_GAMECUBE,false,true,CONTROLLER_CLASSIC)==CONTROLLER_CLASSIC);
+    assert(input_active_controller(CONTROLLER_CLASSIC,true,false,CONTROLLER_NUNCHUK)==CONTROLLER_GAMECUBE);
+    assert(input_active_controller(CONTROLLER_NUNCHUK,false,false,CONTROLLER_WIIMOTE)==CONTROLLER_NUNCHUK); /* idle: keep */
+    assert(input_map_zoom_stick(0)==0 && input_map_zoom_stick(20)==0 && input_map_zoom_stick(-24)==0); /* dead zone */
+    assert(input_map_zoom_stick(90)==-1 && input_map_zoom_stick(-90)==1);   /* up: in (-1), down: out */
+    assert(input_map_zoom_stick(50)<0 && input_map_zoom_stick(50)>-1);
+    /* The zoom never reaches the game's movement/action inputs. */
+    const GameInput a=input_map_gamecube(0,0,0,0);
+    assert(a.horizontal==0 && a.vertical==0 && !a.jump_pressed && a.zoom_axis==0);
+}
 int main(void)
 {
     test_gamecube_down_reaches_gameplay();test_crouch_holds_with_slide_pose();
     test_nozzle_dive_recovery();test_backflip_activation_paths();test_not_a_backflip();test_spin_and_jump_unchanged();
-    puts("6 Down/crouch/backflip control regression groups passed");return 0;
+    test_controller_detection_and_zoom_stick();
+    puts("7 Down/crouch/backflip/controller control regression groups passed");return 0;
 }

@@ -18,14 +18,25 @@ static void resize(Player *p,float height)
     p->y+=delta;p->previous_y+=delta;p->height=height;
 }
 
+/* _root.ChangeFludd: "" -> H -> R -> T -> "" through the collected nozzles
+   ("None" is always part of the cycle); "FluddSwitch" when it changed. */
+bool player_change_fludd(Player *p)
+{
+    if(!p->nozzles) return false;
+    int next=p->has_fludd ? (int)p->nozzle+1 : 0;
+    while(next<NOZZLE_COUNT && !(p->nozzles&(1u<<next))) ++next;
+    if(next>=NOZZLE_COUNT) p->has_fludd=false;
+    else {p->has_fludd=true;p->nozzle=(Nozzle)next;}
+    p->rocket_charge=p->rocket_boost=0;p->jet_active=false;p->blast_level=0;
+    sfx_set_fludd_loop(false);
+    sfx_play(SFX_FLUDD_SWITCH,100,0);
+    return true;
+}
 bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
 {
     p->action_time+=GAME_DT;
     p->jet_active=false;
-    if(p->has_fludd && in.nozzle_next_pressed && p->action==ACTION_NONE && !p->pounding && p->spin_time==0) {
-        p->nozzle=(Nozzle)((p->nozzle+1)%NOZZLE_COUNT);
-        p->rocket_charge=p->rocket_boost=0;
-    }
+    if(in.nozzle_next_pressed && p->action==ACTION_NONE && !p->pounding && p->spin_time==0) player_change_fludd(p);
     if(player_swim_step(p,w,in)) {
         if(player_height(p)<PLAYER_HEIGHT && player_stand_clear(p,w)) resize(p,PLAYER_HEIGHT);
         return true;
@@ -49,6 +60,28 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
             if(p->bonk_frame>=31) {p->action=ACTION_NONE;p->bonk_frame=0;return false;} /* frame 32: attack = false */
         }
         if(p->bonk_frame>=14 && grounded) p->vx=0;
+        return true;
+    }
+    if(p->action==ACTION_HURT) {
+        /* Mario Main "hurt1" (1411): frame 4 adds setYspeed/setXspeed, frame 9
+           clears the attack. "hurt3" (1430): frame 4 waits for the ground (or
+           water), frame 16 for any key, frame 23 clears the attack. */
+        if(p->source_step) {
+            const bool any_key=in.horizontal!=0 || in.vertical!=0 || in.jump_held || in.crouch_held || in.nozzle_held;
+            bool hold=false;
+            if(p->hurt_kind==3) hold=(p->hurt_frame==3 && !(grounded || p->submerged)) || (p->hurt_frame==15 && !any_key);
+            if(!hold) ++p->hurt_frame;
+            if(p->hurt_kind==1 && p->hurt_frame==3) {
+                p->vx+=p->set_vx;p->vy+=p->set_vy;
+                if(p->set_vy<0) p->grounded=false;
+            }
+            const unsigned end=p->hurt_kind==1 ? 8u : 22u;
+            if(p->hurt_frame>=end) {p->action=ACTION_NONE;p->hurt_frame=0;return false;}
+        }
+        if(grounded && p->vy>=0) { /* CharCode ground friction while the attack runs */
+            const float v=fabsf(p->vx)-2000*GAME_DT;
+            p->vx=v>0 ? copysignf(v,p->vx) : 0;
+        }
         return true;
     }
     if(p->action==ACTION_BACKFLIP || p->action==ACTION_ROLL) {
@@ -144,7 +177,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
 void player_fludd_step(Player *p,GameInput in)
 {
     if(!p->has_fludd) {p->jet_active=false;p->rocket_charge=p->rocket_boost=0;return;}
-    if(!in.nozzle_held || p->water<=0 || p->action==ACTION_BONK || p->pounding || p->spin_time>0) {
+    if(!in.nozzle_held || p->water<=0 || p->action==ACTION_BONK || p->action==ACTION_HURT || p->pounding || p->spin_time>0) {
         p->rocket_charge=fmaxf(0,p->rocket_charge-GAME_DT);
         if(!in.nozzle_held && p->rocket_boost<=0) p->power=fminf(100,p->power+32*GAME_DT);
     } else if(p->nozzle==NOZZLE_HOVER && p->power>0) {
@@ -155,8 +188,10 @@ void player_fludd_step(Player *p,GameInput in)
         p->water=fmaxf(0,p->water-2.24f*GAME_DT);
         p->power=fmaxf(0,p->power-48*GAME_DT);p->jet_active=true;
     } else if(p->nozzle==NOZZLE_ROCKET && p->power>=100 && p->water>=5 && p->rocket_boost<=0) {
+        if(p->rocket_charge==0) sfx_play(SFX_ROCKET_CHARGE,70,0); /* port-made: the original Rocket is silent */
         p->rocket_charge+=GAME_DT;p->jet_active=true;
         if(p->rocket_charge>=15.0f/32 && p->water>=5) {
+            sfx_play(SFX_ROCKET_BLAST,85,0);
             p->water-=5;p->power=0;p->rocket_charge=0;p->rocket_boost=8.0f/32;
             p->vy=fminf(-25*44+fmaxf(p->vy/3,0),p->vy);
             p->grounded=false;p->jump_cut=true;

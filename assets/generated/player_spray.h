@@ -3,7 +3,9 @@
    Char origin in twips (x' = a x + c y + tx), canonical-left. */
 #ifndef SM63_PLAYER_SPRAY_H
 #define SM63_PLAYER_SPRAY_H
-#define PLAYER_SPRAY_CLIP 60
+#define PLAYER_SPRAY_CLIP 72
+#define PLAYER_ROCKET_SPRAY_CLIP 73
+/* variant 2 (Rocket) tables place the Rocket water (PLAYER_ROCKET_SPRAY_CLIP); the others 1157. */
 typedef struct { float a, b, c, d, tx, ty; unsigned char behind; } SprayPlacement;
 typedef struct { unsigned char state, variant, frames, per_frame; const SprayPlacement *data; } SprayTable;
 static const SprayPlacement spray_dive_h[] = {
@@ -53,6 +55,47 @@ static const SprayPlacement spray_frontflip_h[] = {
     {0.00000f, 1.00000f, 1.00000f, 0.00000f, 180.0f, -500.0f, 0},
     {0.00000f, 1.00000f, 1.00000f, 0.00000f, 180.0f, -500.0f, 0}
 };
+static const SprayPlacement spray_dive_r[] = {
+    {0.00000f, 1.00000f, 1.00000f, 0.00000f, -20.0f, -620.0f, 0},
+    {0.00000f, 1.00000f, 1.00000f, 0.00000f, -40.0f, -480.0f, 0},
+    {0.00000f, 1.00000f, 1.00000f, 0.00000f, -80.0f, -420.0f, 0},
+    {0.00000f, 1.00000f, 1.00000f, 0.00000f, -80.0f, -420.0f, 0},
+    {0.00000f, 1.00000f, 1.00000f, 0.00000f, -40.0f, -480.0f, 0},
+    {-0.25880f, 0.96593f, 0.96593f, 0.25882f, 2.0f, -566.0f, 0},
+    {0.00000f, 1.00000f, 1.00000f, 0.00000f, -20.0f, -620.0f, 0},
+    {-0.25882f, 0.96593f, 0.96593f, 0.25882f, 26.0f, -619.0f, 0},
+    {-0.25882f, 0.96593f, 0.96593f, 0.25882f, 26.0f, -619.0f, 0},
+    {-0.25882f, 0.96593f, 0.96593f, 0.25882f, 26.0f, -619.0f, 0}
+};
+static const SprayPlacement spray_frontflip_r[] = {
+    {1.00000f, 0.00000f, 0.00000f, 1.00000f, 170.0f, -508.0f, 0},
+    {0.86514f, -0.50154f, 0.50154f, 0.86514f, 45.5f, -555.2f, 0},
+    {0.50920f, -0.86065f, 0.86065f, 0.50920f, -82.6f, -535.0f, 0},
+    {0.04855f, -0.99882f, 0.99882f, 0.04855f, -180.5f, -459.9f, 0},
+    {-0.40347f, -0.91499f, 0.91499f, -0.40347f, -230.8f, -353.3f, 0},
+    {-0.75902f, -0.65106f, 0.65106f, -0.75902f, -229.3f, -239.8f, 0},
+    {-0.95989f, -0.28039f, 0.28039f, -0.95989f, -182.3f, -142.4f, 0},
+    {-0.99301f, 0.11801f, -0.11801f, -0.99301f, -104.4f, -75.8f, 0},
+    {-0.87614f, 0.48205f, -0.48205f, -0.87614f, -11.2f, -45.5f, 0},
+    {-0.64739f, 0.76216f, -0.76216f, -0.64739f, 81.4f, -51.0f, 0},
+    {-0.35127f, 0.93627f, -0.93627f, -0.35127f, 162.1f, -86.5f, 0},
+    {-0.03569f, 0.99936f, -0.99936f, -0.03569f, 222.5f, -142.7f, 0},
+    {0.25954f, 0.96573f, -0.96573f, 0.25954f, 259.8f, -209.1f, 0},
+    {0.51954f, 0.85444f, -0.85444f, 0.51954f, 275.7f, -279.9f, 0},
+    {0.72116f, 0.69277f, -0.69277f, 0.72116f, 272.3f, -346.1f, 0},
+    {0.86603f, 0.50000f, -0.50000f, 0.86603f, 253.9f, -405.1f, 0},
+    {0.92761f, 0.37355f, -0.37355f, 0.92761f, 236.8f, -436.9f, 0},
+    {0.94362f, 0.33104f, -0.33104f, 0.94362f, 230.4f, -446.6f, 0},
+    {0.95614f, 0.29290f, -0.29290f, 0.95614f, 224.3f, -454.9f, 0},
+    {0.96796f, 0.25111f, -0.25111f, 0.96796f, 217.4f, -463.7f, 0},
+    {0.97795f, 0.20883f, -0.20883f, 0.97795f, 210.1f, -472.1f, 0},
+    {0.98609f, 0.16622f, -0.16622f, 0.98609f, 202.5f, -480.2f, 0},
+    {0.99196f, 0.12652f, -0.12652f, 0.99196f, 195.1f, -487.4f, 0},
+    {0.99652f, 0.08336f, -0.08336f, 0.99652f, 186.8f, -494.8f, 0},
+    {0.99920f, 0.04006f, -0.04006f, 0.99920f, 178.2f, -501.8f, 0},
+    {1.00000f, 0.00000f, 0.00000f, 1.00000f, 170.0f, -508.0f, 0},
+    {1.00000f, 0.00000f, 0.00000f, 1.00000f, 170.0f, -508.0f, 0}
+};
 static const SprayPlacement spray_dive_t[] = {
     {0.00000f, -1.00000f, -1.00000f, 0.00000f, -74.0f, -911.0f, 0},
     {0.00000f, -1.00000f, -1.00000f, 0.00000f, -234.0f, -691.0f, 0},
@@ -97,8 +140,10 @@ static const SprayPlacement spray_frontflip_t[] = {
 static const SprayTable player_spray_tables[] = {
     {ART_DIVE, 1, 8, 2, spray_dive_h},
     {ART_FRONTFLIP, 1, 27, 1, spray_frontflip_h},
+    {ART_DIVE, 2, 10, 1, spray_dive_r},
+    {ART_FRONTFLIP, 2, 27, 1, spray_frontflip_r},
     {ART_DIVE, 3, 10, 1, spray_dive_t},
     {ART_FRONTFLIP, 3, 27, 1, spray_frontflip_t}
 };
-#define PLAYER_SPRAY_TABLES 4
+#define PLAYER_SPRAY_TABLES 6
 #endif

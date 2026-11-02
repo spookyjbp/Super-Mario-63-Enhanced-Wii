@@ -63,7 +63,8 @@ vertical analog movement uses a dead zone.
 | Ground pound in air | Nunchuk Z | ZR | Z |
 | Low dive / slide / descend in water | Stick down or D-pad Down | Stick down or D-pad Down | Stick down or D-pad Down |
 | Activate selected FLUDD | Hold Remote 1 | Hold Y | Hold R |
-| Cycle Hover → Rocket → Turbo | Remote 2 | ZL | L |
+| Cycle Hover → Rocket → Turbo → None | Remote 2 | ZL | L |
+| Zoom in / out | Remote − (steps 1×, 1.25×, 1.5×, 0.85×) | Right stick up / down (or −) | C-stick up / down |
 | Pause / resume | PLUS or HOME | PLUS or HOME | START |
 | Menu select / confirm / cancel | D-pad / A / B | D-pad / A / B | D-pad / A / B |
 
@@ -82,8 +83,9 @@ recover with a roll. Without the private art pack the crouch shows the standing
 fallback pose; see `docs/v0.4.1-down-controls.md`. For running,
 double-tap left or right within 9/32 s. Chain jumps within 0.28 s of landing;
 the third requires horizontal speed above 132 px/s. Hold FLUDD to Hover or Turbo;
-hold Rocket through its charge to launch, release early to cancel. The HUD shows
-H/R/T nozzle, water W and power P. Water refills in the pool and on puddle tiles;
+hold Rocket through its charge to launch, release early to cancel. Switching
+nozzles (None included: no FLUDD, the tank is hidden) shows the nozzle's name
+above the tank for 1.5 s. Water refills in the pool and on puddle tiles;
 power recovers when grounded, in water, or while releasing the nozzle. Nozzle
 switching is allowed while neutral. RESET exits safely; power callbacks retain
 shutdown behavior. Remote-only fallback is also available through the D-pad,

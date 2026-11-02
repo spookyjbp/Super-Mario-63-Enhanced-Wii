@@ -74,8 +74,9 @@ static void draw(const Player *p,const ArtFrame *f,float x,float y,float degrees
    the facing mirror. Frame = spray level (1157 frames 2-5). */
 static void draw_spray(const Player *p,const ArtPick *a,float x,float y,bool behind)
 {
-    if(!p->has_fludd || p->blast_level==0 || (a->state!=ART_DIVE && a->state!=ART_FRONTFLIP)) return;
-    const ArtFrame *f=art_pack_frame_index(&art,PLAYER_SPRAY_CLIP,p->blast_level);
+    SprayPick s;
+    if(!player_spray_pick(p,a,PLAYER_SPRAY_CLIP,PLAYER_ROCKET_SPRAY_CLIP,&s)) return;
+    const ArtFrame *f=art_pack_frame_index(&art,s.clip,s.frame);
     if(!f) return;
     for(unsigned t=0;t<PLAYER_SPRAY_TABLES;++t) {
         const SprayTable *T=&player_spray_tables[t];
@@ -91,7 +92,7 @@ static void draw_spray(const Player *p,const ArtPick *a,float x,float y,bool beh
             if(m->behind!=(behind ? 1 : 0)) continue;
             float xs[4],ys[4];
             for(unsigned v=0;v<4;++v) {
-                const float qy=p->blast_parity ? -ly[v] : ly[v];
+                const float qy=s.flip ? -ly[v] : ly[v];
                 float X=m->a*lx[v]+m->c*qy+m->tx,Y=m->b*lx[v]+m->d*qy+m->ty;
                 const float dx=X-a->pivot_x,dy=Y-a->pivot_y;   /* Dive.xml _rotation */
                 X=a->pivot_x+dx*c-dy*sn;Y=a->pivot_y+dx*sn+dy*c;

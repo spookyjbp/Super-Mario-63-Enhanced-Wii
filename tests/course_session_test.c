@@ -227,6 +227,115 @@ static void test_hud_power_meter(void)
     hud_step(&h, 8);                             /* healed while shown: stays */
     assert(h.meter == 1 && h.count == 0);
 }
+/* Phase 2 item 9: zoom by stick (smooth, limited) or by step (Wii Remote -). */
+static void test_zoom_controls(void)
+{
+    Player *p = tutorial_mario(300);
+    const float x = p->x, y = p->y;
+    assert(course_session_zoom(&s) == 1);
+    float last = 1;
+    for (int i = 0; i < 600; ++i) {   /* full stick up: zoom in, eased, to the limit */
+        course_session_zoom_step(&s, -1, false, false, false);
+        const float z = course_session_zoom(&s);
+        assert(z >= last && z - last < 0.05f);
+        last = z;
+    }
+    assert(fabsf(course_session_zoom(&s) - COURSE_ZOOM_MAX) < 0.01f);
+    for (int i = 0; i < 900; ++i) course_session_zoom_step(&s, 1, false, false, false);
+    assert(fabsf(course_session_zoom(&s) - COURSE_ZOOM_MIN) < 0.01f);
+    course_session_zoom_step(&s, 0, false, false, false);
+    const float rest = s.zoom_target;
+    for (int i = 0; i < 60; ++i) course_session_zoom_step(&s, 0, false, false, false);
+    assert(s.zoom_target == rest);     /* neutral keeps the zoom */
+    /* Step: 1 -> 1.25 -> 1.5 -> 0.85 -> 1. */
+    s.zoom = s.zoom_target = 1;
+    const float levels[] = {1.25f, 1.5f, COURSE_ZOOM_MIN, 1};
+    for (int k = 0; k < 4; ++k) { course_session_zoom_step(&s, 0, true, false, false); assert(fabsf(s.zoom_target - levels[k]) < 1e-4f); }
+    /* Visual only: Mario and the camera's world framing are untouched. */
+    assert(p->x == x && p->y == y);
+}
+/* Phase 2 item 8: None is in the nozzle cycle, shown by the HUD (tank hidden,
+   switch banner), and the spray button then does nothing. */
+static void test_none_nozzle(void)
+{
+    Player *p = tutorial_mario(300);
+    assert(!p->has_fludd && !p->nozzles);
+    ticks((GameInput){.nozzle_next_pressed = true}, 1);
+    assert(!p->has_fludd && s.nozzle_banner == 0);          /* nothing to switch before FLUDD */
+    p->has_fludd = true; p->nozzle = NOZZLE_HOVER; p->nozzles = (1u << NOZZLE_COUNT) - 1;
+    ticks((GameInput){0}, 100);
+    const unsigned char order[] = {1 + NOZZLE_ROCKET, 1 + NOZZLE_TURBO, 0, 1 + NOZZLE_HOVER};
+    for (unsigned i = 0; i < 4; ++i) {
+        ticks((GameInput){.nozzle_next_pressed = true}, 1);
+        assert(s.nozzle_banner > 80 && s.banner_fludd == order[i]);
+        ticks((GameInput){0}, 3);
+    }
+    ticks((GameInput){.nozzle_next_pressed = true}, 1);
+    ticks((GameInput){.nozzle_next_pressed = true}, 1);
+    ticks((GameInput){.nozzle_next_pressed = true}, 1);
+    assert(!p->has_fludd);
+    const float water = p->water, vy = p->vy;
+    ticks((GameInput){.nozzle_held = true}, 60);
+    assert(p->water == water && !p->jet_active && p->blast_level == 0 && p->vy >= vy - 1);
+    ticks((GameInput){0}, 100);
+    assert(s.nozzle_banner == 0);
+}
+/* Phase 2 item 2: keyboard keys in text signs become the controller's buttons. */
+static void test_sign_messages_per_controller(void)
+{
+    assert(course_session_start(&s, &pack, "8-E1-1", 0, 0, 854));
+    const CourseArea *a = s.runtime.area;
+    CourseString run = {0};
+    for (unsigned i = 0; i < a->object_count; ++i) {
+        CourseString v;
+        if (course_object_param(&a->objects[i], "signmessage", &v) && v.length > 29 &&
+            !memcmp(v.text, "You can run by double tapping", 29)) run = v;
+    }
+    assert(run.length);
+    for (unsigned k = 0; k < CONTROLLER_KINDS; ++k) {
+        const CourseString m = course_sign_message(run, k);
+        /* only "pressing Up and back" changes (Up is the keyboard jump) */
+        const char *jump = k == CONTROLLER_CLASSIC ? "pressing a and back." : "pressing A and back.";
+        assert(m.length == run.length - 1 && !memcmp(m.text + m.length - strlen(jump), jump, strlen(jump)));
+        assert(!memcmp(m.text, run.text, run.length - strlen("pressing Up and back.")));
+    }
+    assert(!memcmp(run.text + run.length - 21, "pressing Up and back.", 21));
+    assert(course_session_start(&s, &pack, "8-E1-2-2", 0, 0, 854));
+    a = s.runtime.area;
+    CourseString pause = {0};
+    for (unsigned i = 0; i < a->object_count; ++i) {
+        CourseString v;
+        if (course_object_param(&a->objects[i], "signmessage", &v) && v.length > 28 &&
+            !memcmp(v.text, "Oh!  Mario!  You can pause t", 28)) pause = v;
+    }
+    assert(pause.length);
+    CourseString m = course_sign_message(pause, CONTROLLER_GAMECUBE);
+    assert(strstr(m.text, "<b>START</b>") && !strstr(m.text, "<b>P</b>"));
+    m = course_sign_message(pause, CONTROLLER_NUNCHUK);
+    assert(strstr(m.text, "<b>+</b>"));
+    /* the rest of the message is the original's */
+    const char *tail = ".  There, you can change settings";
+    assert(strstr(m.text, tail) && strstr(pause.text, tail));
+    /* other signs are untouched */
+    const CourseString other = {"You can take this Warp-Pipe", 27};
+    assert(course_sign_message(other, CONTROLLER_CLASSIC).text == other.text);
+}
+/* Phase 2 item 3: running right, the view and Mario both advance on every 60 Hz
+   tick (the camera's 32 Hz moves are spread over the ticks), so Mario's place on
+   screen changes smoothly instead of jumping back and forth. */
+static void test_camera_moves_every_tick(void)
+{
+    Player *p = tutorial_mario(250);
+    ticks((GameInput){.horizontal = 1}, 120);  /* up to speed, camera caught up */
+    float lc = s.game.camera.x, lp = p->x, lrel = p->x - s.game.camera.x;
+    for (int i = 0; i < 40; ++i) {  /* (a wall stops him a little later) */
+        course_session_step(&s, (GameInput){.horizontal = 1});
+        const float dc = s.game.camera.x - lc, dp = p->x - lp, rel = p->x - s.game.camera.x;
+        assert(dp > 0 && dc > 0);                     /* both move every tick */
+        assert(fabsf(rel - lrel) < 0.75f * dp);       /* no back-and-forth on screen */
+        lc = s.game.camera.x; lp = p->x; lrel = rel;
+    }
+}
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
@@ -234,5 +343,6 @@ int main(void)
     assert(course_pack_parse(blob, n, &pack));
     test_opening_and_controls_sign(); test_hints(); test_area_chain_and_completion(); test_hud_power_meter();
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
-    puts("8 course session (tutorial flow, HUD, sign camera, movement) test groups passed"); return 0;
+    test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
+    puts("12 course session (tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }

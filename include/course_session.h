@@ -41,11 +41,27 @@ typedef struct {
     /* Toad dialogue: Phase (1-based page), text of the current page */
     const LiveObject *toad; unsigned toad_page; CourseString toad_text; CourseString toad_mood;
     unsigned toad_chars;         /* 'tm' clip: characters typed so far (2 a frame) */
+    /* View zoom on top of the course scale: the player's zoom (eased toward
+       zoom_target) times _root.CameraZoom / 100 (Toad talk: up to 150, 3 a frame). */
+    float zoom, zoom_target, talk_zoom;
+    unsigned char controller;    /* GameInput.controller, for the controller picture signs */
+    /* Nozzle switch banner (port HUD): ticks left, and the FLUDD state it shows
+       (0 = none, 1 + Nozzle). The original only hides the tank without FLUDD. */
+    unsigned nozzle_banner; unsigned char banner_fludd, last_fludd;
 } CourseSession;
 bool course_session_start(CourseSession *s, const CoursePack *pack, const char *area, float cx, float cy, float view_width);
 void course_session_step(CourseSession *s, GameInput input);
 /* Object is on the current BackGFX/FrontGFX frame (and not a removed one). */
 bool course_session_object_active(const CourseSession *s, const CourseObject *o);
+#define COURSE_ZOOM_MIN 0.85f
+#define COURSE_ZOOM_MAX 1.6f
+/* Total extra view zoom (1 = the original framing). Visual only: the camera,
+   CamEdge and collisions keep the original view size. */
+static inline float course_session_zoom(const CourseSession *s) { return s->zoom * s->talk_zoom; }
+/* One tick of the zoom controls (input axis / step) and easing. */
+void course_session_zoom_step(CourseSession *s, float axis, bool step, bool talking, bool source_step);
+/* A text sign's message with keyboard keys replaced by the controller's buttons. */
+CourseString course_sign_message(CourseString text, unsigned controller);
 #define COURSE_WARP_SECONDS 0.5f
 #ifdef __cplusplus
 }

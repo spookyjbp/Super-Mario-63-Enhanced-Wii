@@ -10,6 +10,7 @@
 #include "art_pack.h"
 #include "object_art_ids.h"
 #include "object_select.h"
+#include "water_tex.h"
 #include "objects_8e1_0_bin.h"
 #if OBJECT_ART_PACKS > 1
 #include "objects_8e1_1_bin.h"
@@ -34,6 +35,7 @@ static GXTexObj picture_tex;
 static ArtPack object_packs[OBJECT_ART_PACKS];
 static GXTexObj object_tex[OBJECT_ART_PACKS];
 static bool objects_ready;
+static GXTexObj water_body, water_surface;
 
 /* Decode the three compressed object packs (art pack v3) into MEM2 once. */
 static bool load_objects(unsigned char *dst, size_t cap)
@@ -155,6 +157,15 @@ static void draw_hud(const CourseSession *s, float width)
         hud_clip(OBJ_HUD_POWER_BAR, (unsigned)(power < 0 ? 0 : power > 100 ? 100 : power) / 5, 431.2f, 266.9f, width, 1);
         hud_number((unsigned)lroundf(p->water), 431.2f, 266.9f - 20.7f + 1, width, 15.0f / 16, true);
     }
+    if (s->nozzle_banner) { /* port HUD: which nozzle was just selected (1.5 s) */
+        static const char *const names[] = {"NO NOZZLE", "HOVER NOZZLE", "ROCKET NOZZLE", "TURBO NOZZLE"};
+        const char *name = names[s->banner_fludd < 4 ? s->banner_fludd : 0];
+        const unsigned char a = (unsigned char)(s->nozzle_banner > 20 ? 255 : s->nozzle_banner * 12);
+        const float tw = (float)strlen(name) * 6 * 2.5f, x = width - 24 - tw, y = 480 - 190;
+        graphics_rect(x - 10, y - 8, tw + 18, 34, (GXColor){0, 0, 0, (unsigned char)(a / 2)});
+        graphics_text(x + 2, y + 2, name, 2.5f, (GXColor){0, 0, 0, a});
+        graphics_text(x, y, name, 2.5f, (GXColor){120, 200, 255, a});
+    }
 }
 static const CourseArtLayer *loaded_picture;
 
@@ -168,6 +179,13 @@ bool course_render_init(void)
     mem2 = lo; picture_mem = lo + MEM2_RESERVE;
     SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES);
     objects_ready = load_objects(lo + MEM2_RESERVE + PICTURE_BYTES, OBJECT_BYTES);
+    /* Water textures repeat across a volume (GX_REPEAT); data lives in the DOL. */
+    GX_InitTexObj(&water_body, (void *)water_body_tex, WATER_BODY_W, WATER_BODY_H, GX_TF_RGB5A3, GX_REPEAT, GX_REPEAT,
+                  GX_FALSE);
+    GX_InitTexObjLOD(&water_body, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
+    GX_InitTexObj(&water_surface, (void *)water_surface_tex, WATER_SURFACE_W, WATER_SURFACE_H * WATER_SURFACE_FRAMES,
+                  GX_TF_RGB5A3, GX_REPEAT, GX_CLAMP, GX_FALSE);
+    GX_InitTexObjLOD(&water_surface, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
     user_art_set_scale(COURSE_SCALE);
     return true;
 }
@@ -241,10 +259,17 @@ void course_render(const CourseSession *s, float t)
     const CourseRuntime *c = &s->runtime;
     if (c->area != loaded_area) load_area(c->area);
     const Game *g = &s->game;
-    const float width = graphics_width(), zoom = course_view_zoom();
+    /* The camera works in the original framing (base); the player's zoom and
+       Toad's CameraZoom scale the picture about the camera centre. */
+    const float width = graphics_width(), base = course_view_zoom(), zoom = base * course_session_zoom(s);
     const float vw = width / zoom, vh = 480.0f / zoom;
-    const float camx = g->camera.previous_x + (g->camera.x - g->camera.previous_x) * t;
-    const float camy = g->camera.previous_y + (g->camera.y - g->camera.previous_y) * t;
+    const float centre_x = g->camera.previous_x + (g->camera.x - g->camera.previous_x) * t + width / base / 2;
+    const float centre_y = g->camera.previous_y + (g->camera.y - g->camera.previous_y) * t + 480.0f / base / 2;
+    /* The view and Mario are placed on whole screen pixels: Mario's art is
+       sampled nearest-texel, so a sub-pixel origin changes which texel lands on
+       which pixel from frame to frame (shimmering outlines while moving). */
+    const float camx = roundf((centre_x - vw / 2) * zoom) / zoom;
+    const float camy = roundf((centre_y - vh / 2) * zoom) / zoom;
     const float ccx = course_cx(c, camx + vw / 2), ccy = course_cy(c, camy + vh / 2); /* camera centre */
     graphics_rect(0, 0, width, 480, (GXColor){0, 0, 0, 255});
     graphics_set_zoom(zoom);
@@ -259,14 +284,23 @@ void course_render(const CourseSession *s, float t)
     draw_layer(ART_LAYER_BACK, ox, oy, 1);
     draw_objects(s, ox, oy, false);
     const Player *p = &g->player;
-    const float px = p->previous_x + (p->x - p->previous_x) * t - camx;
-    const float py = p->previous_y + (p->y - p->previous_y) * t - camy;
+    const float px = roundf((p->previous_x + (p->x - p->previous_x) * t - camx) * zoom) / zoom;
+    const float py = roundf((p->previous_y + (p->y - p->previous_y) * t - camy) * zoom) / zoom;
     if (!(p->blink > 0 && (p->blink / 2) % 2)) user_art_draw_player(p, px, py); /* MarioHit blink */
-    /* Water Code volumes (surface waves still to be ported): flat translucent fill. */
+    /* Water Code volumes: port-made water (tools/make_water_texture.py), drawn
+       over Mario like the original's translucent water: a slowly drifting body
+       and an animated wave crest along the surface. */
+    const float water_seconds = (float)s->hud.ticks / 60.0f;
     for (unsigned i = 0; i < c->area->water_count; ++i) {
         const CourseWater *w = &c->area->water[i];
-        graphics_rect(ox + w->x * COURSE_SCALE, oy + w->y * COURSE_SCALE, w->w * COURSE_SCALE, w->h * COURSE_SCALE,
-                      (GXColor){40, 110, 220, 110});
+        CourseWaterQuad q[2];
+        const unsigned n = course_water_quads(ox + w->x * COURSE_SCALE, oy + w->y * COURSE_SCALE, w->w * COURSE_SCALE,
+                                              w->h * COURSE_SCALE, COURSE_SCALE, water_seconds, q);
+        for (unsigned k = 0; k < n; ++k) {
+            const float xs[4] = {q[k].x0, q[k].x1, q[k].x1, q[k].x0}, ys[4] = {q[k].y0, q[k].y0, q[k].y1, q[k].y1};
+            graphics_quad_alpha(k + 1 == n ? &water_surface : &water_body, xs, ys, q[k].u0, q[k].v0, q[k].u1, q[k].v1,
+                                255);
+        }
     }
     draw_layer(ART_LAYER_FRONT, ox, oy, 1);
     draw_objects(s, ox, oy, true);
@@ -292,18 +326,20 @@ void course_render(const CourseSession *s, float t)
         text_block(width / 2 - 100, 60, s->area_title, 3, white, 30);
     if (s->state == SESSION_SIGN && s->sign_phase == 1) {
         if (s->sign_picture) {
-            const CourseArtLayer *pic = course_art_picture(&art, s->sign_text.text, s->sign_text.length);
+            const CourseArtLayer *pic = course_art_controller_picture(&art, s->sign_text, s->controller);
             if (pic && pic != loaded_picture && pic->tile_count == 1 &&
                 upload(&pic->tiles[0], picture_mem, PICTURE_BYTES, &picture_tex)) {
                 GX_InvalidateTexAll(); loaded_picture = pic;
             }
             if (pic && pic == loaded_picture) {
-                const float w = fminf(width - 40, 600), h = w * pic->height / pic->width;
+                /* One texel per screen pixel (pages are rendered at 1.6 px per stage px,
+                   the stage's own scale on the 480-line screen), centred. */
+                const float w = fminf(width - 16, (float)pic->width), h = w * pic->height / pic->width;
                 graphics_sprite(&picture_tex, (width - w) / 2, (480 - h) / 2, w, h, 0, 0, 1, 1);
             }
         } else {
             graphics_rect(40, 120, width - 80, 200, (GXColor){20, 20, 40, 220});
-            text_block(56, 136, s->sign_text, 2, white, (unsigned)((width - 112) / 12));
+            text_block(56, 136, course_sign_message(s->sign_text, s->controller), 2, white, (unsigned)((width - 112) / 12));
         }
     }
     if (s->state == SESSION_WARP) { /* righttransition: wipe to black and back */

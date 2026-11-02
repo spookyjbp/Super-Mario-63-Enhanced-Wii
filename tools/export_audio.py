@@ -24,8 +24,44 @@ SOUNDS = [
     'Mario-Step', 'step - Water', 'step-wetwood', 'sound - Splash', 'sound - Water', 'Mario-Fall',
     'Mario - Doh', 'Mario - Uh', 'Mario-Squish', 'Mario - Ohhhhh', 'Goomba-Attention', 'Goomba-Stomped',
     'Explosion', 'fuse-lite', 'fuse-loop', 'flippers', 'boxbreak', 'Nozzle Box Break', 'Fludd Nozzle',
-    'fluddrepeat', 'FluddSwitch', 'PrincessPeachesCastle-Intro', 'PrincessPeachesCastle-Repeat',
+    'fluddrepeat', 'FluddSwitch', '*rocket-charge', '*rocket-blast',
+    'PrincessPeachesCastle-Intro', 'PrincessPeachesCastle-Repeat',
 ]
+# '*' sounds are not in the original: the 2010 SWF's Rocket nozzle is silent
+# (Rocket Fludd Water 1340/1349/1370 attach no sound; Char's "fluddrepeat" loop
+# is Hover/Turbo only). They are synthesised here, deterministically, from
+# filtered noise like the original water sounds, peaking at -9 dBFS.
+CUSTOM_RATE = 22050
+
+
+def synth(name):
+    rng = np.random.default_rng(63)
+    if name == 'rocket-charge':   # pressure building for the 15-frame charge (0.47 s)
+        n = int(CUSTOM_RATE * 0.47)
+        t = np.arange(n) / CUSTOM_RATE
+        noise = rng.standard_normal(n)
+        out, low = np.zeros(n), 0.0
+        for i in range(n):        # one-pole low-pass whose cut-off rises with the charge
+            a = 0.04 + 0.35 * (t[i] / t[-1]) ** 1.5
+            low += a * (noise[i] - low)
+            out[i] = low
+        env = np.minimum(1, t / 0.05) * (0.35 + 0.65 * t / t[-1]) * np.minimum(1, (t[-1] - t) / 0.02 + 0.2)
+        out *= env
+    elif name == 'rocket-blast':  # the release: a short burst of water pressure (0.4 s)
+        n = int(CUSTOM_RATE * 0.4)
+        t = np.arange(n) / CUSTOM_RATE
+        noise = rng.standard_normal(n)
+        out, low, band = np.zeros(n), 0.0, 0.0
+        for i in range(n):
+            low += 0.45 * (noise[i] - low)
+            band += 0.08 * (low - band)
+            out[i] = low - 0.6 * band
+        thump = np.sin(2 * np.pi * (90 - 50 * t / t[-1]) * t) * np.exp(-t / 0.06)
+        out = out * np.exp(-t / 0.12) * np.minimum(1, t / 0.004) + 0.8 * thump
+    else:
+        raise ValueError(name)
+    out = out / np.max(np.abs(out)) * (32767 * 10 ** (-9 / 20))
+    return out.astype(np.int32)
 RATES = [5512, 11025, 22050, 44100]
 STEPS = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80,
          88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544,
@@ -105,6 +141,11 @@ def export(source, out_dir):
     names, defined = linkage(raw, start), sounds(raw, start)
     entries, blobs = [], []
     for name in SOUNDS:
+        if name.startswith('*'):
+            pcm, rate = synth(name[1:]), CUSTOM_RATE
+            blob = adpcm(pcm)
+            entries.append((rate, len(pcm), blob))
+            continue
         fmt, rate, stereo, count, data = defined[names[name]]
         pcm = decode(fmt, rate, stereo, count, data)
         blob = adpcm(pcm)

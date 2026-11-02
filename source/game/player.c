@@ -21,7 +21,7 @@ void player_init(Player *p, float x, float y)
     p->y = p->previous_y = y;
     p->animation = PLAYER_FALL;
     p->source_phase=28;
-    p->height=PLAYER_HEIGHT; p->water=100; p->power=100; p->nozzle=NOZZLE_HOVER; p->has_fludd=true;
+    p->height=PLAYER_HEIGHT; p->water=100; p->power=100; p->nozzle=NOZZLE_HOVER; p->has_fludd=true; p->nozzles=(1u<<NOZZLE_COUNT)-1;
 }
 
 void player_step(Player *p, const World *world, GameInput input)
@@ -51,7 +51,7 @@ void player_step(Player *p, const World *world, GameInput input)
     /* Ground pound in the air: not during the diveflip clip, nor before frame 14 of
        Backflip.xml (its KeyZ handler). */
     const bool pound_ok = p->action!=ACTION_ROLL && !(p->action==ACTION_BACKFLIP && p->action_time<14.0f/32);
-    if(input.pound_pressed && pound_ok && !p->submerged && !was_grounded && p->action!=ACTION_BONK && !p->pounding) {
+    if(input.pound_pressed && pound_ok && !p->submerged && !was_grounded && p->action!=ACTION_BONK && p->action!=ACTION_HURT && !p->pounding) {
         p->action=ACTION_NONE;p->pounding=true;p->pound_windup=POUND_WINDUP_FRAMES/32.0f;p->pound_frame=0;
         p->spin_time=0;p->vx=p->vy=0;p->coyote=p->jump_buffer=0;
     }
@@ -133,7 +133,7 @@ void player_step(Player *p, const World *world, GameInput input)
             if (p->pound_frame < 26) ++p->pound_frame; /* stop() at frame 26 */
         }
     } else if (!p->submerged && p->spin_time==0) { /* CharCode gravity also runs during hurt2 */
-        if (!input.jump_held && p->vy < 0 && !p->jump_cut && p->action!=ACTION_BONK) {
+        if (!input.jump_held && p->vy < 0 && !p->jump_cut && p->action!=ACTION_BONK && p->action!=ACTION_HURT) {
             p->vy *= 0.45f;
             p->jump_cut = true;
         }
@@ -169,7 +169,7 @@ void player_step(Player *p, const World *world, GameInput input)
         p->pound_windup = 0;
     }
     if(p->submerged) p->animation=p->spin_time>0 ? PLAYER_SPIN : PLAYER_SWIM;
-    else if(p->action==ACTION_BONK) p->animation=PLAYER_BONK;
+    else if(p->action==ACTION_BONK || p->action==ACTION_HURT) p->animation=PLAYER_BONK;
     else if(p->action==ACTION_DIVE && p->grounded)
         /* Dive.xml bitmap layer: frames 1..5 Slide, frames 0 and 6..9 Air - 2. */
         p->animation=p->dive_frame>=1 && p->dive_frame<=5 ? PLAYER_CROUCH : PLAYER_DIVE_RECOVER;

@@ -14,6 +14,11 @@ enum {
 float input_stick_axis(float value);
 /* Pure GameCube/WaveBird mapping: buttons held/pressed this poll, raw stick (-128..127). */
 GameInput input_map_gamecube(unsigned held, unsigned down, int stick_x, int stick_y);
+/* C-stick (raw -128..127) vertical axis as GameInput.zoom_axis: up zooms in (-1). */
+float input_map_zoom_stick(int stick_y);
+/* Which controller the player is using: the last one with any button or stick
+   activity; `previous` while none moves. */
+unsigned input_active_controller(unsigned previous, bool gamecube_active, bool wpad_active, unsigned wpad_kind);
 #ifdef __cplusplus
 }
 #endif

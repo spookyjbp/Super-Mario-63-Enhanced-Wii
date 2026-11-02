@@ -27,6 +27,7 @@ import xfl
 import export_course as C
 import art_repair
 import swf_bitmap_fix
+import controller_signs
 
 ZOOM = 1.6
 TILE = 1024
@@ -290,9 +291,30 @@ def export(source, jar, output, areas):
            str(pictures_swf)]
     with (work / 'export.log').open('a') as log:
         subprocess.run(cmd, check=True, stdout=log, stderr=log)
-    count = struct.unpack_from('>I', out, 12)[0]
+    # Wii controller versions of the keyboard pages (controller_signs.py): the
+    # page's background shape, rendered alone, is what keyboard parts clear to.
+    shapes = sorted(set(controller_signs.BACKGROUND.values()))
+    for label, shape in controller_signs.BACKGROUND.items():
+        frame = sprites[pic[0]]['stage'][sprites[pic[0]]['labels'][label]]
+        if shape not in {e.get('id') for e in frame.values()}:
+            raise ValueError(f'Picture page {label} does not place shape {shape}')
+    with (work / 'export.log').open('a') as log:
+        subprocess.run(cmd[:cmd.index('-selectid')] + ['-selectid', ','.join(map(str, shapes)), '-format', 'shape:png',
+                                                         '-export', 'shape', str(work / 'picture-shapes'),
+                                                         str(pictures_swf)], check=True, stdout=log, stderr=log)
+    variants = []
     for label in labels:
         im = Image.open(C.sprite_dir(pages, pic[0]) / f'{sprites[pic[0]]["labels"][label] + 1}.png').convert('RGBA')
+        im = im.crop(im.getchannel('A').getbbox())  # the page itself, drawn centred on screen
+        variants.append((label, im))
+        if label in controller_signs.PAGES:
+            bg = Image.open(work / 'picture-shapes' / f'{controller_signs.BACKGROUND[label]}.png').convert('RGBA')
+            for k, kind in enumerate(controller_signs.CONTROLLERS):
+                page = controller_signs.make(label, im, bg, kind)
+                page.save(work / 'picture-shapes' / f'{label}@{k}.png')
+                variants.append((f'{label}@{k}', page))
+    count = struct.unpack_from('>I', out, 12)[0]
+    for label, im in variants:
         W, H, tiles = encode_layer(im, repair=False)
         out += C.pack_string('*') + C.pack_string(label) + struct.pack('>ffffII', 0, 0, 0, ZOOM, W, H)
         out += struct.pack('>I', len(tiles))

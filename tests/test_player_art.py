@@ -19,7 +19,7 @@ class BuilderTests(unittest.TestCase):
             im = Image.new('RGBA', (8, 8)); im.putpixel((3, 2), (1, 2, 3, 255)); im.save(root / 'a.png')
             im.save(root / 'b.png')
             data = {'clips': [{'id': 0, 'frames': [{'file': 'a.png', 'offset_twips': [-20, 0]}]},
-                              {'id': 191, 'frames': [{'file': 'b.png', 'offset_twips': [0, 0]}]}]}
+                              {'id': 255, 'frames': [{'file': 'b.png', 'offset_twips': [0, 0]}]}]}
             raw = build(data, root)
             magic, version, w, h, clips, frames, size = struct.unpack('>8s6I', raw[:32])
             self.assertEqual((magic, version, clips, frames), (b'SM63ART1', 2, 2, 2))
@@ -27,7 +27,7 @@ class BuilderTests(unittest.TestCase):
             f0 = struct.unpack('>4H2h2H', raw[32 + 16:32 + 32]); f1 = struct.unpack('>4H2h2H', raw[64:80])
             self.assertEqual(f0[2:6], (1, 1, -20 + 60, 40))      # trimmed to one pixel, offset moved
             self.assertEqual(f0[:2], f1[:2])                      # identical image stored once
-            data['clips'][1]['id'] = 192
+            data['clips'][1]['id'] = 256  # MAX_CLIPS (include/art_pack.h ART_CLIP_COUNT)
             with self.assertRaises(ValueError): build(data, root)
 
     def test_reject_empty_clips(self):

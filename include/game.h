@@ -29,7 +29,15 @@ typedef struct {
     bool jump_pressed, jump_held, spin_pressed, spin_held, pound_pressed;
     bool pause_pressed, confirm_pressed, cancel_pressed;
     int menu_delta;
+    /* Camera zoom (not in the original's controls): a second stick's vertical
+       axis, -1 (up: zoom in) .. 1 (down: zoom out), or a press that steps
+       through zoom levels on controllers without one. */
+    float zoom_axis;
+    bool zoom_step_pressed;
+    /* Controller the player used last (for the controller picture signs). */
+    unsigned char controller;
 } GameInput;
+enum { CONTROLLER_GAMECUBE, CONTROLLER_NUNCHUK, CONTROLLER_CLASSIC, CONTROLLER_WIIMOTE, CONTROLLER_KINDS };
 
 typedef enum {
     PLAYER_IDLE, PLAYER_RUN, PLAYER_RISE, PLAYER_FALL,
@@ -40,7 +48,9 @@ typedef enum {
     PLAYER_ANIMATION_COUNT
 } PlayerAnimation;
 
-typedef enum { ACTION_NONE, ACTION_DIVE, ACTION_BACKFLIP, ACTION_ROLL, ACTION_BONK } PlayerAction;
+/* ACTION_BONK: Mario Main "hurt2" (wall bonk, or knocked backward by MarioHit);
+   ACTION_HURT: "hurt1" / "hurt3" (hurt_kind 1 or 3). */
+typedef enum { ACTION_NONE, ACTION_DIVE, ACTION_BACKFLIP, ACTION_ROLL, ACTION_BONK, ACTION_HURT } PlayerAction;
 typedef enum { NOZZLE_HOVER, NOZZLE_ROCKET, NOZZLE_TURBO, NOZZLE_COUNT } Nozzle;
 
 typedef struct {
@@ -66,13 +76,16 @@ typedef struct {
     float water, power, rocket_charge, rocket_boost, tap_window;
     int wall_normal, last_tap, bonk_direction;
     bool submerged, jet_active, dashing, tap_released;
-    bool has_fludd;          /* false until the FLUDD box (StartChar Fluddpow "") */
+    bool has_fludd;          /* FLUDD worn: _root.Fluddpow != "" (false until the FLUDD box) */
+    unsigned nozzles;        /* nozzles collected, bit (1 << Nozzle) (FluddArray / SaveFludd*) */
     int blink, stun;         /* MarioHit: invulnerable blink and stun, 32 Hz frames */
     bool ejump;              /* attackFrame "EJump": held on a stomped enemy */
     float input_horizontal;  /* held direction this tick, for wall rules */
     int hurtfall;            /* CharCode hurtfallcount (0..7); "Mario-Fall" at 5 */
     unsigned bonk_frame;     /* Mario Main "hurt2" clip (1422) frame, 0-based, during ACTION_BONK */
     bool reading_sign;       /* attackFrame "Sign": the reading pose (Main "Sign", 1487) */
+    unsigned hurt_kind, hurt_frame; /* ACTION_HURT: "hurt1" (1411) or "hurt3" (1430), 0-based clip frame */
+    float set_vx, set_vy;    /* MarioHit setXspeed / setYspeed, added at hurt1 frame 4 (px/s) */
     bool fall_sfx;           /* fallingsfx: once per fall */
     TileType material;
     PlayerAction action;
@@ -86,7 +99,11 @@ typedef struct {
     PlayerAnimation animation;
 } Player;
 
-typedef struct { float x, y, previous_x, previous_y; float cx, cy, ychange; } Camera;
+/* x, y: view top-left in world px, published every 60 Hz tick. The original
+   camera moves once per 32 Hz source frame; (from_x, from_y) -> (to_x, to_y)
+   is the latest such move, shown progressively over the following source frame
+   so the view does not jump on 32 of every 60 ticks (Mario judder / doubling). */
+typedef struct { float x, y, previous_x, previous_y; float cx, cy, ychange; float from_x, from_y, to_x, to_y; } Camera;
 typedef struct {
     Player player;
     Camera camera;
@@ -101,6 +118,9 @@ void player_step(Player *player, const World *world, GameInput input);
 float player_height(const Player *player);
 bool player_special_step(Player *player, const World *world, GameInput input, bool was_grounded);
 void player_fludd_step(Player *player, GameInput input);
+/* Next FLUDD state: None -> Hover -> Rocket -> Turbo -> None, skipping nozzles
+   not collected. False (nothing happens) before any nozzle is collected. */
+bool player_change_fludd(Player *player);
 /* Advance presentation-only clip counters; call once at the end of player_step. */
 void player_animation_step(Player *player, GameInput input);
 void player_collision_step(Player *player, const World *world);

@@ -18,7 +18,7 @@ except ImportError:  # only needed for compressed (v3) packs
     lz4block = None
 
 VERSION = 2
-MAX_CLIPS = 192
+MAX_CLIPS = 256
 MAX_FRAMES = 4096
 OFFSET_LIMIT = 8192
 SIZES = [(256, 256), (512, 256), (512, 512), (1024, 512), (1024, 1024)]

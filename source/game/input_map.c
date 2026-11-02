@@ -8,6 +8,20 @@ float input_stick_axis(float value)
     const float scaled = fminf(1, (magnitude - 0.18f) / 0.82f);
     return value < 0 ? -scaled : scaled;
 }
+float input_map_zoom_stick(int stick_y)
+{
+    /* Wider dead zone than movement: a resting C-stick must never drift the zoom. */
+    const float v = stick_y / 70.0f, m = fabsf(v);
+    if (m <= 0.35f) return 0;
+    const float scaled = fminf(1, (m - 0.35f) / 0.65f);
+    return v > 0 ? -scaled : scaled;
+}
+unsigned input_active_controller(unsigned previous, bool gamecube_active, bool wpad_active, unsigned wpad_kind)
+{
+    if (wpad_active) return wpad_kind;
+    if (gamecube_active) return CONTROLLER_GAMECUBE;
+    return previous;
+}
 GameInput input_map_gamecube(unsigned held, unsigned down, int stick_x, int stick_y)
 {
     GameInput state = {0};

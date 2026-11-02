@@ -3,6 +3,7 @@
 #include "art_pack.h"
 #include "user_art.h"
 #include "player_art_select.h"
+#include "player_spray.h"
 #include "graphics.h"
 #include <assert.h>
 #include <errno.h>
@@ -97,6 +98,10 @@ static void test_selection_rules(void)
     /* Bug 6: the HitWall bonk shows Main "hurt2" by its frame, over running/falling. */
     p=(Player){.has_fludd=true,.action=ACTION_BONK,.bonk_frame=12,.vy=200,.dashing=true};
     a=player_art_select(&p);assert(a.state==ART_HURT2 && a.index==12 && a.variant==1);
+    p=(Player){.has_fludd=true,.action=ACTION_HURT,.hurt_kind=1,.hurt_frame=4};
+    a=player_art_select(&p);assert(a.state==ART_HURT1 && a.index==4);        /* hurt1 beats the fall pose */
+    p.hurt_kind=3;p.hurt_frame=15;p.grounded=true;p.dashing=true;
+    a=player_art_select(&p);assert(a.state==ART_HURT3 && a.index==15);       /* ... and the run pose */
     /* Bug 10: reading a sign shows Main "Sign" while standing still. */
     p=(Player){.grounded=true,.reading_sign=true};a=player_art_select(&p);assert(a.state==ART_SIGN && a.variant==0);
 }
@@ -154,7 +159,10 @@ static void test_committed_pack(void)
     assert(art_pack_clip_length(&pack,art_clip(ART_LAND,3))==8);
     assert(art_pack_clip_length(&pack,art_clip(ART_HURT2,1))==32);  /* hurt2 frames 1-32 */
     assert(art_pack_clip_length(&pack,art_clip(ART_SIGN,0))==1);
-    assert(art_pack_clip_length(&pack,60)==5);                      /* FLUDD spray levels 0-4 */
+    assert(art_pack_clip_length(&pack,art_clip(ART_HURT1,2))==9);   /* hurt1 frames 1-9 (frame 9: attack = false) */
+    assert(art_pack_clip_length(&pack,art_clip(ART_HURT3,0))==23);  /* hurt3 frames 1-23 */
+    assert(art_pack_clip_length(&pack,PLAYER_SPRAY_CLIP)==5);       /* FLUDD spray levels 0-4 */
+    assert(art_pack_clip_length(&pack,PLAYER_ROCKET_SPRAY_CLIP)==39); /* Rocket Fludd Water 1349 */
     for(unsigned v=1;v<ART_VARIANTS;++v) {
         const unsigned walk=art_clip(ART_WALK,v),blast=v==2 ? 24 : 10; /* Rocket / spray */
         assert(art_pack_clip_length(&pack,ART_BACK_EFFECT+walk)+art_pack_clip_length(&pack,ART_FRONT_EFFECT+walk)>=blast);
@@ -178,6 +186,20 @@ static void test_spray_during_specials(void)
     p=(Player){.has_fludd=true,.nozzle=NOZZLE_HOVER,.height=44,.jump_stage=3,.jump_time=0.1f,.blast_level=4,.facing_left=true};
     quads=0;user_art_draw_player(&p,100,100);assert(quads==1);         /* Hfrontflip: water._rotation = frame._rotation */
     p.nozzle=NOZZLE_HOVER;p.has_fludd=false;quads=0;user_art_draw_player(&p,100,100);assert(quads==0);
+    /* Phase 2 item 4: the Rocket water nested in RDive / Rfrontflip is drawn
+       while charging and during the blast, never when the Rocket is idle. */
+    p=(Player){.has_fludd=true,.nozzle=NOZZLE_ROCKET,.height=26,.action=ACTION_DIVE,.dive_frame=2,.facing_left=true};
+    quads=0;user_art_draw_player(&p,100,100);assert(quads==0);
+    p.rocket_charge=5.0f/32;quads=0;user_art_draw_player(&p,100,100);assert(quads==1);
+    ArtPick a=player_art_select(&p);SprayPick sp;
+    assert(player_spray_pick(&p,&a,PLAYER_SPRAY_CLIP,PLAYER_ROCKET_SPRAY_CLIP,&sp) && sp.clip==PLAYER_ROCKET_SPRAY_CLIP &&
+           sp.frame==9 && !sp.flip);
+    p.rocket_charge=0;p.rocket_boost=4.0f/32;a=player_art_select(&p);
+    assert(player_spray_pick(&p,&a,PLAYER_SPRAY_CLIP,PLAYER_ROCKET_SPRAY_CLIP,&sp) && sp.frame==34); /* blast */
+    quads=0;user_art_draw_player(&p,100,100);assert(quads==1);
+    p=(Player){.has_fludd=true,.nozzle=NOZZLE_ROCKET,.height=44,.jump_stage=3,.jump_time=0.1f,.rocket_charge=0.2f,.facing_left=true};
+    quads=0;user_art_draw_player(&p,100,100);assert(quads==1);         /* Rfrontflip 'waterclip' */
+    p.has_fludd=false;quads=0;user_art_draw_player(&p,100,100);assert(quads==0); /* None: no water */
     user_art_shutdown();
 }
 int main(void)

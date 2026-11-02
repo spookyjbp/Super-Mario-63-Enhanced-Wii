@@ -115,9 +115,11 @@ static void test_goomba_hurts_and_stomps(void)
     course_place_player(&s.runtime, &s.game.player, gm->x - 4, gm->y);
     s.game.player.vx = s.game.player.vy = 0; s.game.player.grounded = true;
     ticks((GameInput){0}, 2);
-    assert(s.progress.hp == 7 && s.game.player.blink > 80 && s.game.player.vy < 0);
-    ticks((GameInput){0}, 2);
-    assert(s.progress.hp == 7); /* invulnerable while blinking */
+    /* hurt1: the speed halves now; setYspeed/setXspeed are added on the clip's frame 4. */
+    assert(s.progress.hp == 7 && s.game.player.blink > 80 && s.game.player.action == ACTION_HURT &&
+           s.game.player.hurt_kind == 1 && s.game.player.vy >= 0);
+    ticks((GameInput){0}, 8);
+    assert(s.progress.hp == 7 && s.game.player.vy < 0); /* knocked up; invulnerable while blinking */
     /* Stomp: fall onto the head from above. */
     play_area("8-E1-1");
     gm = first(LIVE_GOOMBA);
@@ -406,12 +408,95 @@ static void test_cheep_animation(void)
     object_select(ch, d);
     assert(d[0].flip_x && d[0].rotation == 30);
 }
+/* Phase 2 item 1: MarioHit picks hurt1 / hurt2 / hurt3 as the original, the
+   clip runs its timeline over the normal poses, then control returns. */
+static void test_hurt_animations(void)
+{
+    play_area("8-E1-1");
+    Player *p = &s.game.player;
+    course_place_player(&s.runtime, p, 300, 60);
+    ticks((GameInput){0}, 40);
+    assert(p->grounded);
+    /* g == true, new xspeed the way Mario faces (xspeed * _xscale < 0): hurt3. */
+    p->facing_left = false; p->vx = 0; p->blink = 0;
+    course_mario_hit(p, &s.progress, 1, 90, -7, 5, 10, true);
+    assert(p->action == ACTION_HURT && p->hurt_kind == 3 && p->vx > 0 && p->vy < 0);
+    int t = 0;
+    while (p->action == ACTION_HURT && t < 600) {
+        course_session_step(&s, (GameInput){.horizontal = t > 200 ? 1.0f : 0.0f}); /* frame 16 waits for a key */
+        ++t;
+        if (p->hurt_frame == 15) assert(t > 20);
+    }
+    assert(p->action == ACTION_NONE && t > 200 && t < 260);
+    /* g == true, pushed away from where he faces: hurt2 from its "afterwall" part. */
+    p->blink = 0; p->facing_left = false; p->vx = 0;
+    course_mario_hit(p, &s.progress, 1, 90, -7, -5, 10, true);
+    assert(p->action == ACTION_BONK && p->bonk_frame == 11);
+    for (t = 0; p->action == ACTION_BONK && t < 600; ++t) course_session_step(&s, (GameInput){.jump_held = t > 100});
+    assert(p->action == ACTION_NONE);
+    /* g == false: hurt1, the set speeds added on its frame 4, attack off at frame 9. */
+    p->blink = 0; p->vx = 0; p->vy = 0;
+    course_mario_hit(p, &s.progress, 1, 90, -5, 7, 7, false);
+    assert(p->action == ACTION_HURT && p->hurt_kind == 1 && p->vx == 0 && p->vy == 0);
+    for (t = 0; p->hurt_frame < 3 && t < 20; ++t) course_session_step(&s, (GameInput){0});
+    assert(p->vy < 0 && p->vx > 0);
+    for (t = 0; p->action == ACTION_HURT && t < 40; ++t) course_session_step(&s, (GameInput){.horizontal = -1});
+    assert(p->action == ACTION_NONE && t < 20 && p->blink > 0); /* still invulnerable afterwards */
+    /* no shove animation: a == 0 only adds the speed */
+    p->blink = 0;
+    course_mario_hit(p, &s.progress, 0, 0, 0, 3, 0, false);
+    assert(p->action == ACTION_NONE);
+}
+/* Phase 2 item 7: Toad's reactions from Toad Main Clip 2517 / head 2498. */
+static unsigned fixed_rand(void *ctx, unsigned n) { (void)ctx; return n - 1; }
+static void test_toad_reactions(void)
+{
+    /* Head moods: each loops inside its own label segment, Skip jumps included. */
+    for (int m = 0; m < TOAD_MOODS; ++m) {
+        const unsigned start = course_toad_mood_label(m), end = m + 1 < TOAD_MOODS ? course_toad_mood_label(m + 1) : 397;
+        unsigned f = start, wraps = 0;
+        for (int i = 0; i < 2000; ++i) {
+            const unsigned n = course_toad_head_step(f, m, fixed_rand, NULL);
+            assert(n >= start && n < end);
+            wraps += n == start; f = n;
+        }
+        assert(wraps > 1);                          /* it loops, never sticks */
+        assert(course_toad_head_step(5, TOAD_MAD, fixed_rand, NULL) == course_toad_mood_label(TOAD_MAD)); /* ChangeFrame */
+    }
+    const CourseString mad = {"Mad", 3}, odd = {"Sleepy", 6};
+    assert(course_toad_mood(mad) == TOAD_MAD && course_toad_mood(odd) == TOAD_SMILE);
+    /* 8-E1-2's Toad: Mood Mad, frame walk, _xscale -100 (StartMood / Startframe). */
+    play_area("8-E1-2");
+    LiveObject *t = first(LIVE_TOAD);
+    assert(t && t->state == TOAD_MAD && t->p0 == 1 && t->facing_left);
+    ObjectDraw d[OBJECT_DRAW_MAX];
+    assert(object_select(t, d) >= 2 && d[0].clip == OBJ_TOAD_WALK && d[1].clip == OBJ_TOAD_HEAD && d[0].flip_x);
+    /* Talking: both face each other, the head takes each page's mood, and the
+       start mood comes back when the conversation ends. */
+    course_place_player(&s.runtime, &s.game.player, t->x - 12, t->y);
+    ticks((GameInput){0}, 30);
+    ticks((GameInput){.pound_pressed = true}, 1);
+    assert(s.state == SESSION_TALK && t->state == TOAD_TALK && t->facing_left && !s.game.player.facing_left); /* _xscale -100: Mario is to the left */
+    assert(t->eye >= course_toad_mood_label(TOAD_TALK) && t->eye < course_toad_mood_label(TOAD_SAD)); /* Talk segment */
+    ticks((GameInput){0}, 4);
+    ticks((GameInput){.pound_pressed = true}, 1);
+    assert(s.state == SESSION_TALK && t->state == TOAD_CRAZY);   /* M2Moo */
+    while (s.state == SESSION_TALK) { ticks((GameInput){.pound_pressed = true}, 1); ticks((GameInput){0}, 2); }
+    assert(t->state == TOAD_MAD);                                  /* Mood = StartMood */
+    /* Idle body frames advance (and are drawn from the idle clip). */
+    play_area("8-E1-1");
+    t = first(LIVE_TOAD);
+    const int before = t->timer;
+    ticks((GameInput){0}, 8);
+    assert(t->timer != before && t->state == TOAD_SMILE);
+    assert(object_select(t, d) >= 2 && d[0].clip == OBJ_TOAD_IDLE);
+}
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
     const size_t n = fread(blob, 1, sizeof(blob), f); fclose(f);
     assert(course_pack_parse(blob, n, &pack));
-    test_coins_heal_and_persist(); test_toad_dialogue_pages(); test_falling_log(); test_birds_and_butterflies_move();
+    test_coins_heal_and_persist(); test_toad_dialogue_pages(); test_toad_reactions(); test_hurt_animations(); test_falling_log(); test_birds_and_butterflies_move();
     test_goomba_hurts_and_stomps();
     test_cheep_cheep();
     test_bob_omb();
@@ -420,5 +505,5 @@ int main(void)
     test_breakable_box();
     test_platforms_and_camera_boxes();
     test_cheep_animation();
-    puts("12 course object (coins/Toad/log/birds/Goomba/Cheep/Bob-omb/Koopa/FLUDD/boxes/platforms/Cheep animation) test groups passed"); return 0;
+    puts("14 course object (hurt clips/Toad reactions/coins/Toad/log/birds/Goomba/Cheep/Bob-omb/Koopa/FLUDD/boxes/platforms/Cheep animation) test groups passed"); return 0;
 }

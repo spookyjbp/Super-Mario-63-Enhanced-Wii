@@ -37,7 +37,11 @@ SPEC = [
     ('GOONIE_FLY', 2300, None, 1, (0, 0, 1, 1), ()),          # GoonieCode frame 'fly'
     ('GOONIE_RIDE', 2301, None, 1, (0, 0, 1, 1), ()),         # frame 'ride'
     ('GOONIE_DIVE', 2304, None, 1, (0, 8, 1, 1), ()),         # frame 'dive'
-    ('TOAD_IDLE', 2501, None, 4, None, ()),           # Toad 'body' (sampled 1/4)
+    ('TOAD_IDLE', 2501, None, 4, None, (2,)),         # Toad 'body' (sampled 1/4), its 'head' (d2) drawn apart
+    ('TOAD_WALK', 2516, None, 1, None, (2,)),         # Toad Main Clip frame 'walk' body, without 'head'
+    # Toad 'head' (2498): mood segments Smile 1, Talk 69, Sad 99, Mad 160, Shocked 185,
+    # Happy 270, Confused 299, Crazy 360 (frames 1-397); placed per body frame at runtime.
+    ('TOAD_HEAD', 2498, list(range(0, 397)), 1, (0, 0, 1, 1), ()),
     ('TOAD_BZ', 2505, None, 3, None, ()),                      # Toad 'bz' talk prompt
     ('LOG', 3317, [0], 1, (0, 0, 1, 1), ()),                  # Falling Log (graphics)
     ('ARROW', 3410, None, 1, (0, 0, 1, 1), ()),               # YI Arrow Animation
@@ -94,7 +98,7 @@ def child_matrix(sprites, parent, child):
     raise ValueError(f'{child} not placed in {parent}')
 
 
-PARENTS = {17: 963, 3485: 3495, 2323: 2324, 2501: 2517, 981: 986, 2505: 2517, 2380: 2386, 2344: 2380, 2360: 2380, 2369: 2380, 2377: 2380, 2379: 2380,
+PARENTS = {2516: 2517, 17: 963, 3485: 3495, 2323: 2324, 2501: 2517, 981: 986, 2505: 2517, 2380: 2386, 2344: 2380, 2360: 2380, 2369: 2380, 2377: 2380, 2379: 2380,
            2385: 2386, 2216: 2233, 2217: 2233, 2220: 2233, 2229: 2233, 2230: 2233, 2232: 2233,
            3280: 3310, 3282: 3310, 3294: 3310, 3309: 3310, 3367: 3402, 3377: 3402, 3396: 3402, 3401: 3402, 976: 977}
 # Chains whose own placement in the object must also be applied.
@@ -255,7 +259,22 @@ def export(source, jar, out_dir):
         (out_dir / f'objects_8e1_{p}.bin').write_bytes(blob)
         for c in pack:
             header.append(f'    OBJ_{c["name"]} = {c["id"]}, /* pack {p} */')
-    header += ['    OBJ_CLIP_COUNT = %d' % len(clips), '};', 'static const unsigned char object_art_pack_of[] = {',
+    header += ['    OBJ_CLIP_COUNT = %d' % len(clips), '};',
+               '/* Toad head (2498) registration per TOAD_IDLE / TOAD_WALK frame, course px from',
+               '   the Toad Main Clip origin (the body placement plus the head matrix in it). */']
+    for name, ident, step in (('idle', 2501, 4), ('walk', 2516, 1)):
+        btx, bty, _, _ = placement(sprites, ident)
+        last, rows = {}, []
+        for n, f in enumerate(sprites[ident]['stage']):
+            for d, e in f.items():
+                if e.get('matrix') or d not in last:
+                    last[d] = e
+            if n % step:
+                continue
+            m = next(e for e in last.values() if e.get('name') == 'head')['matrix']
+            rows.append(f'{{{btx + m["tx"] / 20:.2f}f, {bty + m["ty"] / 20:.2f}f}}')
+        header.append(f'static const float toad_head_{name}[][2] = {{' + ', '.join(rows) + '};')
+    header += [ 'static const unsigned char object_art_pack_of[] = {',
                '    ' + ', '.join(str(next(p for p, pk in enumerate(packs) if any(c['id'] == i for c in pk)))
                                   for i in range(len(clips))), '};', '#endif', '']
     (out_dir / 'object_art_ids.h').write_text('\n'.join(header))

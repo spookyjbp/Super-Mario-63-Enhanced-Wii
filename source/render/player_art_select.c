@@ -30,7 +30,9 @@ ArtPick player_art_select(const Player *p)
         a.state=ART_SPIN;
         a.index=(unsigned)p->spin_frame+(p->spin_speed>10 ? 0u : 40u);
     } else if(p->action==ACTION_BONK) {
-        a.state=ART_HURT2;a.index=p->bonk_frame;    /* hurt2 (HitWall) timeline */
+        a.state=ART_HURT2;a.index=p->bonk_frame;    /* hurt2 (HitWall / knocked back) timeline */
+    } else if(p->action==ACTION_HURT) {
+        a.state=p->hurt_kind==1 ? ART_HURT1 : ART_HURT3;a.index=p->hurt_frame; /* hurt1 / hurt3 timelines */
     } else if(p->reading_sign) {
         a.state=ART_SIGN;a.index=0;                 /* Main "Sign": Mario faces the sign */
     } else if(p->pounding || p->landing_time>0) {
@@ -57,4 +59,21 @@ ArtPick player_art_select(const Player *p)
         a.state=ART_WALK;a.index=clampu(roundf(p->walk_frame)-1,79); /* Walk.xml */
     }
     return a;
+}
+
+bool player_spray_pick(const Player *p,const ArtPick *a,unsigned spray_clip,unsigned rocket_clip,SprayPick *out)
+{
+    if(!p->has_fludd || (a->state!=ART_DIVE && a->state!=ART_FRONTFLIP)) return false;
+    if(p->nozzle==NOZZLE_ROCKET) {
+        if(p->rocket_boost>0) {
+            const float done=(8.0f/32-p->rocket_boost)*32;            /* 0..8 boost frames */
+            *out=(SprayPick){rocket_clip,30u+clampu(done,8),false};    /* frames 31-39 */
+        } else if(p->rocket_charge>0) {
+            *out=(SprayPick){rocket_clip,clampu(p->rocket_charge/(15.0f/32)*29,29),false}; /* frames 1-30 */
+        } else return false;
+        return true;
+    }
+    if(p->blast_level==0) return false;
+    *out=(SprayPick){spray_clip,p->blast_level,p->blast_parity};
+    return true;
 }

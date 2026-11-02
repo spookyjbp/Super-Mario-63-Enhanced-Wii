@@ -21,6 +21,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 from PIL import Image
 import swf_states as S
+import swf_bitmap_fix
 from build_player_art import build
 
 SOURCE_SHA = '6f8dc22d74963cb75928fcac6ad67769384c3088bb419f9995e24b81d8411e1c'
@@ -30,15 +31,22 @@ CHAR_TO_MAIN = (0, -60)  # DefineSprite 2061 places 1707 at ty=-60 twips.
 VARIANTS = ['', 'H', 'R', 'T']
 # Body states. Value: label suffix in Mario Main ("" variant uses frame numbers 1-4).
 STATES = ['walk', 'rise', 'fall', 'Dive', 'diveflip', 'backflip', 'frontflip',
-          'Spin', 'swim1', 'swim2', 'land', 'Run', 'Ground', 'hurt2', 'Sign']
-SHARED = {'land', 'Run', 'Ground', 'hurt2', 'Sign'}  # same label for every FLUDD state
-# Frames kept per state: hurt2 (Mario Main "hurt2", the HitWall bonk) runs 1-32;
-# its later frames are the faint sequence.
-FRAME_CAP = {'hurt2': 32}
+          'Spin', 'swim1', 'swim2', 'land', 'Run', 'Ground', 'hurt2', 'Sign', 'hurt1', 'hurt3']
+SHARED = {'land', 'Run', 'Ground', 'hurt2', 'Sign', 'hurt1', 'hurt3'}  # same label for every FLUDD state
+# Frames kept per state, up to the frame whose script clears the attack (the
+# later frames are the 0 HP faint sequences): hurt2 (1422, HitWall / knocked
+# back) 1-32, hurt1 (1411, MarioHit with set speeds) 1-9, hurt3 (1430, knocked
+# forward) 1-23.
+FRAME_CAP = {'hurt2': 32, 'hurt1': 9, 'hurt3': 23}
 # FLUDD spray (Wait WaterBlast 1157) frames 2-5 = levels 1-4, unplaced, for the
 # sprays nested inside the Dive and Frontflip bodies (drawn at runtime with the
 # matrices in assets/generated/player_spray.h).
-SPRAY_CLIP = 60
+SPRAY_CLIP = 72
+# Rocket nozzle water nested in RDive (1349 in 1355) and Rfrontflip (1370 in
+# 1372 'waterclip'): 39 frames (charge 1-30, blast 31-39); 1349 and 1370 differ
+# only in their scripts' _parent depth, so 1349's frames serve both.
+ROCKET_SPRAY_CLIP = 73
+ROCKET_WATER = (1349, 1370)
 SPRAY_STATES = ('Dive', 'frontflip')
 NUMBERED = {'walk': '1', 'rise': '3', 'fall': '4'}
 BLAST_IDS = {1157: 'blast', 1340: 'rocket_blast'}
@@ -50,7 +58,7 @@ NESTED_WATER = (1157, 1349, 1370)
 # whose frame the Floating script picks from yspeed.
 EXPAND = {1441: (1440, 8), 1234: (1119, 2), 1391: (1119, 2), 1305: (1119, 2),
           1237: (1124, 2), 1393: (1124, 2), 1307: (1124, 2)}
-BACK_EFFECT, FRONT_EFFECT = 64, 128
+BACK_EFFECT, FRONT_EFFECT = 80, 160  # include/art_pack.h ART_BACK_EFFECT / ART_FRONT_EFFECT
 
 
 def clip_id(state, variant):
@@ -137,7 +145,9 @@ def patched_swf(swf, choice, variant, freeze=None):
         out += data
     if not found:
         raise ValueError('Expected Wing Code was not found')
-    return b'FWS' + swf[3:4] + struct.pack('<I', len(out) + 8) + bytes(out)
+    # FFDec draws non-smoothed bitmap fills half a texel off (swf_bitmap_fix.py):
+    # Mario's pixel art came out with doubled/shifted pixel rows and columns.
+    return swf_bitmap_fix.fix_swf(b'FWS' + swf[3:4] + struct.pack('<I', len(out) + 8) + bytes(out))
 
 
 def ffdec(jar, directory, swf_path, ids, log):
@@ -220,18 +230,21 @@ def spray_matrices(all_sprites, main, variant):
                 if e.get('matrix') or d not in last:
                     last[d] = e
             items = sorted(last.items())
-            body_depth = max((d for d, e in items if e['id'] not in (1157, WING_CODE) and e.get('name') != 'water'), default=0)
+            sprays_ids = (1157,) + ROCKET_WATER
+            holders = ('water', 'waterclip')
+            body_depth = max((d for d, e in items if e['id'] not in sprays_ids + (WING_CODE,) and e.get('name') not in holders),
+                             default=0)
             frame_rot = next((mat(e.get('matrix')) for d, e in items if e.get('name') == 'frame'), None)
             sprays = []
             for d, e in items:
-                if e['id'] == 1157:
+                if e['id'] in sprays_ids:
                     sprays.append((mul(base, mat(e.get('matrix'))), d < body_depth))
-                elif e['id'] in all_sprites and e.get('name') == 'water':
-                    inner = [x for x in all_sprites[e['id']]['stage'][0].values() if x.get('id') == 1157]
+                elif e['id'] in all_sprites and e.get('name') in holders:
+                    inner = [x for x in all_sprites[e['id']]['stage'][0].values() if x.get('id') in sprays_ids]
                     if not inner:
                         continue
                     m = mat(e.get('matrix'))
-                    if frame_rot is not None:  # water._rotation = frame._rotation
+                    if frame_rot is not None:  # water._rotation = frame._rotation (waterclip for Rocket)
                         r = math.atan2(frame_rot[1], frame_rot[0])
                         m = (math.cos(r), math.sin(r), -math.sin(r), math.cos(r), m[4], m[5])
                     for x in inner:
@@ -249,6 +262,8 @@ def write_spray_header(path, tables):
              '   Char origin in twips (x\' = a x + c y + tx), canonical-left. */',
              '#ifndef SM63_PLAYER_SPRAY_H', '#define SM63_PLAYER_SPRAY_H',
              f'#define PLAYER_SPRAY_CLIP {SPRAY_CLIP}',
+             f'#define PLAYER_ROCKET_SPRAY_CLIP {ROCKET_SPRAY_CLIP}',
+             '/* variant 2 (Rocket) tables place the Rocket water (PLAYER_ROCKET_SPRAY_CLIP); the others 1157. */',
              'typedef struct { float a, b, c, d, tx, ty; unsigned char behind; } SprayPlacement;',
              'typedef struct { unsigned char state, variant, frames, per_frame; const SprayPlacement *data; } SprayTable;']
     tables_out = []
@@ -298,6 +313,8 @@ def export(source, jar, output):
             blasts = sorted({e['id'] for st in stages for _, e in stages[st] if e['id'] in BLAST_IDS})
             water = {w: 0 for w in NESTED_WATER}
             passes = {'body': (dict(water), [b for b in bodies if b not in EXPAND])}
+            if v == 'R':
+                passes['rocketwater'] = ({}, [ROCKET_WATER[0]])
             if blasts:
                 passes['fx'] = ({}, blasts)
             for b in bodies:
@@ -358,6 +375,13 @@ def export(source, jar, output):
                 frames = [{'file': str((pdir / 'png' / 'DefineSprite_1157' / f'{n}.png').resolve()),
                            'offset_twips': [round(-ox), round(-oy)], 'duration': 1} for n in range(1, 6)]
                 clips.append({'id': SPRAY_CLIP, 'loop': False, 'frames': frames})
+            if v == 'R' and not any(c['id'] == ROCKET_SPRAY_CLIP for c in clips):
+                pdir = rendered[ROCKET_WATER[0]][0]
+                ox, oy = canvas_origin(pdir, ROCKET_WATER[0])
+                count = all_sprites[ROCKET_WATER[0]]['frames']
+                frames = [{'file': str((pdir / 'png' / f'DefineSprite_{ROCKET_WATER[0]}' / f'{n}.png').resolve()),
+                           'offset_twips': [round(-ox), round(-oy)], 'duration': 1} for n in range(1, count + 1)]
+                clips.append({'id': ROCKET_SPRAY_CLIP, 'loop': False, 'frames': frames})
             spray_tables[v] = spray_matrices(all_sprites, main, v)
     write_spray_header(output.parent / 'player_spray.h', spray_tables)
     (work / 'report.json').write_text(json.dumps(report, indent=1))

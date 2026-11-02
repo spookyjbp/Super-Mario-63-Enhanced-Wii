@@ -159,7 +159,19 @@ static void test_nozzles(void)
     ticks(&p,&flat,(GameInput){.nozzle_held=true},30);
     assert(p.vx>400 && p.water<100);
     player_step(&p,&flat,(GameInput){.nozzle_next_pressed=true});
-    assert(p.nozzle==NOZZLE_HOVER && p.rocket_charge==0);
+    assert(!p.has_fludd && p.rocket_charge==0);                 /* Turbo -> None */
+    {   /* None: the spray button does nothing (no water, no lift, no loop). */
+        const float water=p.water;
+        ticks(&p,&flat,(GameInput){.nozzle_held=true},20);
+        assert(p.water==water && !p.jet_active && p.blast_level==0);
+    }
+    player_step(&p,&flat,(GameInput){.nozzle_next_pressed=true});
+    assert(p.has_fludd && p.nozzle==NOZZLE_HOVER);              /* None -> Hover */
+    /* Only collected nozzles are in the cycle (the tutorial gives Hover only). */
+    p.nozzles=1u<<NOZZLE_HOVER;
+    player_change_fludd(&p);assert(!p.has_fludd);
+    player_change_fludd(&p);assert(p.has_fludd && p.nozzle==NOZZLE_HOVER);
+    p.nozzles=0;p.has_fludd=false;assert(!player_change_fludd(&p) && !p.has_fludd);
     uint8_t water_tiles[64];
     for(unsigned i=0;i<64;++i) water_tiles[i]=TILE_WATER;
     const Level water_level={1,16,4,64,water_tiles,NULL,0};

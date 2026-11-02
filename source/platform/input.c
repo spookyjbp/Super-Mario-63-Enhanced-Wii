@@ -1,6 +1,7 @@
 #include "input.h"
 #include <gccore.h>
 #include <math.h>
+#include <stdlib.h>
 #include <wiiuse/wpad.h>
 
 #include "input_map.h"
@@ -15,6 +16,12 @@ GameInput input_poll(void)
     WPAD_ScanPads();
     PAD_ScanPads();
     GameInput state = input_map_gamecube(PAD_ButtonsHeld(0), PAD_ButtonsDown(0), PAD_StickX(0), PAD_StickY(0));
+    /* GameCube C-stick: zoom (unused by the game's other controls). */
+    state.zoom_axis = input_map_zoom_stick(PAD_SubStickY(0));
+    const bool gc_active = PAD_ButtonsHeld(0) != 0 || abs(PAD_StickX(0)) > 30 || abs(PAD_StickY(0)) > 30 ||
+                           state.zoom_axis != 0;
+    bool wpad_active = false;
+    unsigned wpad_kind = CONTROLLER_WIIMOTE;
 
     u32 type;
     if (WPAD_Probe(0, &type) == WPAD_ERR_NONE) {
@@ -51,6 +58,16 @@ GameInput input_poll(void)
         state.nozzle_next_pressed |= (down & next_nozzle)!=0;
         if (held & left) state.horizontal = -1;
         if (held & right) state.horizontal = 1;
+        /* Zoom: Classic Controller right stick (unused otherwise); the Wii
+           Remote's - button (unused otherwise) steps through zoom levels. */
+        if (classic) {
+            const joystick_t *r = &expansion.classic.rjs;
+            const float zv = input_stick_axis(r->mag * cosf(r->ang * (3.14159265f / 180)));
+            if (fabsf(zv) > 0.35f && fabsf(zv) > fabsf(state.zoom_axis)) state.zoom_axis = -zv;
+            state.zoom_step_pressed |= (down & WPAD_CLASSIC_BUTTON_MINUS) != 0;
+        } else state.zoom_step_pressed |= (down & WPAD_BUTTON_MINUS) != 0;
+        wpad_kind = classic ? CONTROLLER_CLASSIC : type == WPAD_EXP_NUNCHUK ? CONTROLLER_NUNCHUK : CONTROLLER_WIIMOTE;
+        wpad_active = held != 0 || (stick && stick->mag > 0.3f);
         state.jump_pressed |= (down & jump) != 0;
         state.jump_held |= (held & jump) != 0;
         state.spin_pressed |= (down & spin) != 0;
@@ -62,6 +79,9 @@ GameInput input_poll(void)
         if (down & below) state.menu_delta = 1;
         if (down & up) state.menu_delta = -1;
     }
+    static unsigned active = CONTROLLER_GAMECUBE;
+    active = input_active_controller(active, gc_active, wpad_active, wpad_kind);
+    state.controller = (unsigned char)active;
     return state;
 }
 void input_shutdown(void) { WPAD_Shutdown(); }

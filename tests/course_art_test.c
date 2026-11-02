@@ -2,6 +2,7 @@
 #include "course_art.h"
 #include "lz4_block.h"
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,8 +46,41 @@ int main(void)
                         if (q->x == p->x + p->width && q->y == p->y) assert(qx[0] == px[1] && qy[0] == py[0]);
                         if (q->y == p->y + p->height && q->x == p->x) assert(qy[0] == py[2] && qx[0] == px[0]);
                     }
+    /* Phase 2 item 2: every keyboard page has a version per controller; the
+       others (goomba, refill, ttt) fall back to the original page. */
+    const char *keyboard[] = {"Start", "controls", "bomb", "hover", "stomp", "zoom"};
+    for (unsigned i = 0; i < 6; ++i) {
+        const CourseString label = {keyboard[i], (uint16_t)strlen(keyboard[i])};
+        const CourseArtLayer *orig = course_art_picture(&pack, keyboard[i], strlen(keyboard[i]));
+        for (unsigned k = 0; k < 4; ++k) {
+            const CourseArtLayer *l = course_art_controller_picture(&pack, label, k);
+            assert(l && l != orig && l->width == orig->width && l->height == orig->height);
+            assert(l->tile_count == 1 && (size_t)l->width * l->height * 2 <= 1024u * 1024); /* one picture texture */
+            for (unsigned j = 0; j < k; ++j) assert(course_art_controller_picture(&pack, label, j) != l);
+        }
+        assert(course_art_controller_picture(&pack, label, 9) == orig);
+    }
+    const CourseString goomba = {"goomba", 6};
+    assert(course_art_controller_picture(&pack, goomba, 0) == course_art_picture(&pack, "goomba", 6));
+    /* Phase 2 item 5: water quads tile one texel per course px, abut, and keep
+       the surface frame's V range half a texel inside its frame. */
+    for (float t = 0; t < 30; t += 0.37f) {
+        CourseWaterQuad q[2];
+        const float scale = 1.375f;
+        assert(course_water_quads(100, 200, 400 * scale, 150 * scale, scale, t, q) == 2);
+        assert(q[0].y0 == q[1].y1 && q[1].y0 < 200 && q[0].y1 == 200 + 150 * scale);   /* body under the strip */
+        assert(fabsf((q[0].u1 - q[0].u0) - 400.0f / 64) < 1e-3f && fabsf((q[1].u1 - q[1].u0) - 400.0f / 64) < 1e-3f);
+        const unsigned f = (unsigned)(t * 8) % 8;
+        assert(q[1].v0 > f / 8.0f && q[1].v1 < (f + 1) / 8.0f);                       /* inside its frame */
+        assert(fabsf(q[0].u0) < 1.01f && fabsf(q[1].u0) < 1.01f);                     /* wrapped: no precision loss */
+    }
+    {
+        CourseWaterQuad q[2];
+        assert(course_water_quads(0, 0, 50, 5 * 1.375f, 1.375f, 0, q) == 1);             /* shallow: surface only */
+        assert(course_water_quads(0, 0, 0, 50, 1.375f, 0, q) == 0);
+    }
     pack.layer_count = 0;
     assert(!course_art_parse(blob, 100, &pack));
     printf("course art: %u layers, %u tiles decoded\n", 0u + (unsigned)(sizeof(areas) / sizeof(*areas)), tiles);
-    puts("1 course-art pack test group passed"); return 0;
+    puts("3 course-art pack/controller page/water test groups passed"); return 0;
 }

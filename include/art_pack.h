@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#define ART_CLIP_COUNT 192
+#define ART_CLIP_COUNT 256
 #define ART_MAX_FRAMES 4096
 #define ART_PACK_VERSION 2
 #define ART_PACK_VERSION_COMPRESSED 3
@@ -13,10 +13,10 @@
    behind/in front of that body clip, as layered in Mario Main. */
 typedef enum { ART_WALK, ART_RISE, ART_FALL, ART_DIVE, ART_DIVEFLIP, ART_BACKFLIP,
                ART_FRONTFLIP, ART_SPIN, ART_SWIM_FLOAT, ART_SWIM_STROKE, ART_LAND,
-               ART_RUN, ART_GROUND, ART_HURT2, ART_SIGN, ART_STATE_COUNT } ArtState;
+               ART_RUN, ART_GROUND, ART_HURT2, ART_SIGN, ART_HURT1, ART_HURT3, ART_STATE_COUNT } ArtState;
 #define ART_VARIANTS 4
-#define ART_BACK_EFFECT 64
-#define ART_FRONT_EFFECT 128
+#define ART_BACK_EFFECT 80
+#define ART_FRONT_EFFECT 160
 static inline unsigned art_clip(ArtState state, unsigned variant) {return (unsigned)state*ART_VARIANTS+variant;}
 typedef struct {uint16_t first,count,flags;} ArtClip;
 typedef struct {uint16_t x,y,width,height,duration;int16_t offset_x,offset_y;} ArtFrame;

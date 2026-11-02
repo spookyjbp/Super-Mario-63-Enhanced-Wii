@@ -65,3 +65,35 @@ void course_layer_tile_quad(float bx, float by, float px, unsigned x, unsigned y
     xs[0] = x0; xs[1] = x1; xs[2] = x1; xs[3] = x0;
     ys[0] = y0; ys[1] = y0; ys[2] = y1; ys[3] = y1;
 }
+
+const CourseArtLayer *course_art_controller_picture(const CourseArtPack *pack, CourseString label, unsigned controller)
+{
+    char key[64];
+    if ((size_t)label.length + 3 <= sizeof(key) && controller < 10) {
+        memcpy(key, label.text, label.length);
+        key[label.length] = '@'; key[label.length + 1] = (char)('0' + controller);
+        const CourseArtLayer *l = course_art_picture(pack, key, label.length + 2);
+        if (l) return l;
+    }
+    return course_art_picture(pack, label.text, label.length);
+}
+
+unsigned course_water_quads(float x, float y, float w, float h, float scale, float seconds, CourseWaterQuad out[2])
+{
+    /* tools/make_water_texture.py: body 64x64, surface 64x16 x 8 frames stacked. */
+    const float body = 64, sw = 64, sh = 16, frames = 8;
+    unsigned n = 0;
+    const float cw = w / scale, ch = h / scale;     /* course px */
+    if (cw <= 0 || ch <= 0) return 0;
+    const float top = fminf(11, ch);
+    if (ch > top) {
+        const float du = fmodf(seconds * 3.0f, body) / body, dv = fmodf(seconds * 1.5f, body) / body; /* slow drift */
+        out[n++] = (CourseWaterQuad){x, y + top * scale, x + w, y + h, du, dv, du + cw / body, dv + (ch - top) / body};
+    }
+    const unsigned f = (unsigned)(fmaxf(0, seconds) * 8) % (unsigned)frames;
+    const float du = -fmodf(seconds * 6.0f, sw) / sw;
+    const float rows = fminf(sh - 0.5f, 5 + top);  /* texture rows shown: one per course px */
+    const float v0 = ((float)f * sh + 0.5f) / (sh * frames), v1 = ((float)f * sh + rows) / (sh * frames);
+    out[n++] = (CourseWaterQuad){x, y - 5 * scale, x + w, y + top * scale, du, v0, du + cw / sw, v1};
+    return n;
+}
