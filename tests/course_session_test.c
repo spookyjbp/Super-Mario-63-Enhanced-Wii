@@ -230,25 +230,55 @@ static void test_hud_power_meter(void)
 /* Phase 2 item 9: zoom by stick or Wii Remote +/- (smooth, limited). */
 static void test_zoom_controls(void)
 {
+    /* The original's zoom: KeyPlus / KeyMinus change CameraZoom by 2 a frame,
+       clamped to Maxzoomout 50 .. Maxzoomin 200; the view (CameraZoom2) follows
+       a twentieth of the rounded difference a frame. */
     Player *p = tutorial_mario(300);
-    const float x = p->x, y = p->y;
     assert(course_session_zoom(&s) == 1);
     float last = 1;
-    for (int i = 0; i < 600; ++i) {   /* full stick up: zoom in, eased, to the limit */
-        course_session_zoom_step(&s, -1, false, false);
+    for (int i = 0; i < 400; ++i) {   /* hold zoom in: 32 source frames a second */
+        course_session_zoom_step(&s, -1, false, true, 1);
         const float z = course_session_zoom(&s);
-        assert(z >= last && z - last < 0.05f);
+        assert(z >= last && z - last < 0.06f);
         last = z;
     }
-    assert(fabsf(course_session_zoom(&s) - COURSE_ZOOM_MAX) < 0.01f);
-    for (int i = 0; i < 900; ++i) course_session_zoom_step(&s, 1, false, false);
-    assert(fabsf(course_session_zoom(&s) - COURSE_ZOOM_MIN) < 0.01f);
-    course_session_zoom_step(&s, 0, false, false);
-    const float rest = s.zoom_target;
-    for (int i = 0; i < 60; ++i) course_session_zoom_step(&s, 0, false, false);
-    assert(s.zoom_target == rest);     /* neutral keeps the zoom */
-    /* Visual only: Mario and the camera's world framing are untouched. */
-    assert(p->x == x && p->y == y);
+    assert(s.camera_zoom == 200 && fabsf(course_session_zoom(&s) - 2.0f) < 0.11f);
+    course_session_zoom_step(&s, -1, false, true, 1);
+    assert(s.camera_zoom == 200);                                  /* Maxzoomin */
+    for (int i = 0; i < 400; ++i) course_session_zoom_step(&s, 1, false, true, 1);
+    assert(s.camera_zoom == 50 && fabsf(course_session_zoom(&s) - 0.5f) < 0.11f);   /* Maxzoomout */
+    /* 2 a frame: from 100, 25 frames in is 150 */
+    s.camera_zoom = s.zoom2 = s.zoom2_from = 100;
+    for (int i = 0; i < 25; ++i) course_session_zoom_step(&s, -1, false, true, 1);
+    assert(s.camera_zoom == 150);
+    const float rest = s.camera_zoom;
+    for (int i = 0; i < 60; ++i) course_session_zoom_step(&s, 0, false, true, 1);
+    assert(s.camera_zoom == rest);     /* neutral keeps the zoom */
+    /* Between source frames the view moves smoothly from the last frame's value. */
+    s.zoom2_from = 100; s.zoom2 = 110;
+    course_session_zoom_step(&s, 0, false, false, 0.5f);
+    assert(fabsf(course_session_zoom(&s) - 1.05f) < 1e-4f);
+    /* Toad's talk: CameraZoom to 150 (capped), then back to 100 after the talk. */
+    s.camera_zoom = s.zoom2 = 80;
+    for (int i = 0; i < 40; ++i) course_session_zoom_step(&s, 0, true, true, 1);
+    assert(s.camera_zoom == 150 && s.talk_zoomed);
+    for (int i = 0; i < 40; ++i) course_session_zoom_step(&s, 0, false, true, 1);
+    assert(s.camera_zoom == 100 && !s.talk_zoomed);
+    s.camera_zoom = 190;                               /* already in past 150: capped, not restored */
+    course_session_zoom_step(&s, 0, true, true, 1);
+    assert(s.camera_zoom == 150 && !s.talk_zoomed);
+    /* Zoomed out, the camera keeps the wider view inside CamEdge: the view's
+       half height in course px doubles, so the camera centre moves away from the
+       area's bottom edge. */
+    s.camera_zoom = s.zoom2 = s.zoom2_from = 100; s.zoom = 1;
+    course_camera_set_zoom(1);
+    ticks((GameInput){0}, 120);
+    const float cy1 = s.game.camera.cy;
+    s.camera_zoom = s.zoom2 = s.zoom2_from = 50;
+    ticks((GameInput){0}, 120);
+    assert(fabsf(course_session_zoom(&s) - 0.5f) < 1e-4f);
+    assert(s.game.camera.cy < cy1 - 10);
+    (void)p;
 }
 /* Phase 2 item 8: None is in the nozzle cycle, shown by the HUD (tank hidden,
    switch banner), and the spray button then does nothing. */

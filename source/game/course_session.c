@@ -70,7 +70,8 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     if (!a) return false;
     memset(s, 0, sizeof(*s));
     s->pack = pack; s->view_width = view_width; s->warp_target = -1;
-    s->zoom = s->zoom_target = s->talk_zoom = 1;
+    s->zoom = 1; s->camera_zoom = s->zoom2 = s->zoom2_from = 100; s->talk_zoomed = false;
+    course_camera_set_zoom(1);
     s->game.player.has_fludd = false; s->game.player.nozzles = 0; /* StartChar(..., Fluddpow "") */
     s->progress.hp = 8;                 /* _root.CharHP = 8 */
     hud_init(&s->hud, s->progress.hp);
@@ -248,22 +249,32 @@ static void try_talk(CourseSession *s, bool z_pressed)
     pm->facing_left = mario_right;
     ((LiveObject *)t)->facing_left = !mario_right;
 }
-void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool source_step)
+void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool source_step, float frac)
 {
-    if (s->zoom <= 0) s->zoom = s->zoom_target = s->talk_zoom = 1;
-    /* Stick or +/-: about 1.2x per second at full tilt, -1 = in. */
-    if (axis != 0) s->zoom_target *= expf(-axis * 1.2f * GAME_DT);
-    s->zoom_target = fminf(COURSE_ZOOM_MAX, fmaxf(COURSE_ZOOM_MIN, s->zoom_target));
-    s->zoom += (s->zoom_target - s->zoom) * (1 - expf(-8 * GAME_DT));   /* frame-rate independent easing */
-    if (fabsf(s->zoom - s->zoom_target) < 0.0005f) s->zoom = s->zoom_target;
-    /* Toad Main Clip: CameraZoom += 3 while talking (to 150), -= 3 after. */
-    if (source_step) s->talk_zoom = talking ? fminf(1.5f, s->talk_zoom + 0.03f) : fmaxf(1, s->talk_zoom - 0.03f);
+    if (s->camera_zoom <= 0) { s->camera_zoom = s->zoom2 = s->zoom2_from = 100; s->zoom = 1; }
+    if (source_step) {
+        s->zoom2_from = s->zoom2;
+        /* KeyPlus / KeyMinus: CameraZoom += / -= 2 a frame (a stick scales it). */
+        s->camera_zoom -= 2 * axis;
+        /* Toad Main Clip: CameraZoom += 3 while talking (to 150), -= 3 to 100 after. */
+        if (talking) {
+            if (s->camera_zoom < 150) { s->camera_zoom += 3; s->talk_zoomed = true; }
+            else s->camera_zoom = fminf(s->camera_zoom + 3, 150);
+        } else if (s->talk_zoomed) {
+            if (s->camera_zoom > 100) s->camera_zoom -= 3;
+            else { s->camera_zoom = 100; s->talk_zoomed = false; }
+        }
+        s->camera_zoom = fminf(COURSE_ZOOM_MAX * 100, fmaxf(COURSE_ZOOM_MIN * 100, s->camera_zoom));
+        s->zoom2 += roundf(s->camera_zoom - s->zoom2) / 20;    /* Math.round(CameraZoom - CameraZoom2) / 20 */
+    }
+    s->zoom = (s->zoom2_from + (s->zoom2 - s->zoom2_from) * fminf(1, fmaxf(0, frac))) / 100;
 }
 void course_session_step(CourseSession *s, GameInput in)
 {
     s->controller = in.controller;
     course_session_zoom_step(s, in.zoom_axis, s->state == SESSION_TALK,
-                             s->game.player.source_step);
+                             s->game.player.source_step, s->game.player.source_phase / 60.0f);
+    course_camera_set_zoom(course_session_zoom(s));
     /* KeyZ(): Z (read/talk/stomp). The port maps it to the pound button. */
     const bool z_pressed = in.pound_pressed; /* already a button-down event */
     if (s->area_title_time > 0) s->area_title_time = fmaxf(0, s->area_title_time - GAME_DT);

@@ -47,9 +47,13 @@ typedef struct {
        last page's text stays in toad_text while the cloud fades out. */
     float tm_alpha, tm_bz;
     bool tm_message;
-    /* View zoom on top of the course scale: the player's zoom (eased toward
-       zoom_target) times _root.CameraZoom / 100 (Toad talk: up to 150, 3 a frame). */
-    float zoom, zoom_target, talk_zoom;
+    /* _root.CameraZoom (camera_zoom: +/- 2 a frame from the zoom input, Toad's
+       talk +3 to 150 and back to 100 after it, clamped to Maxzoomout 50 ..
+       Maxzoomin 200) and CameraZoom2 (zoom2: eased a twentieth of the rounded
+       difference a frame). zoom: CameraZoom2 / 100 between source frames (the
+       view scale on top of the course scale; zoom2_from is the last frame's). */
+    float zoom, camera_zoom, zoom2, zoom2_from;
+    bool talk_zoomed;            /* Toad Main Clip's camerazoom flag */
     unsigned char controller;    /* GameInput.controller, for the controller picture signs */
     /* Nozzle switch banner (port HUD): ticks left, and the FLUDD state it shows
        (0 = none, 1 + Nozzle). The original only hides the tank without FLUDD. */
@@ -59,13 +63,16 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
 void course_session_step(CourseSession *s, GameInput input);
 /* Object is on the current BackGFX/FrontGFX frame (and not a removed one). */
 bool course_session_object_active(const CourseSession *s, const CourseObject *o);
-#define COURSE_ZOOM_MIN 0.85f
-#define COURSE_ZOOM_MAX 1.6f
-/* Total extra view zoom (1 = the original framing). Visual only: the camera,
-   CamEdge and collisions keep the original view size. */
-static inline float course_session_zoom(const CourseSession *s) { return s->zoom * s->talk_zoom; }
-/* One tick of the zoom control (input axis) and easing. */
-void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool source_step);
+/* _root.Maxzoomout / Maxzoomin (the defaults; no 8-E1 area overrides them). */
+#define COURSE_ZOOM_MIN 0.5f
+#define COURSE_ZOOM_MAX 2.0f
+/* The view zoom (1 = the original framing): coursescale / 100. The camera keeps
+   the zoomed view inside CamEdge like the original (CamEdge is tested at the
+   screen's edges, in the scaled course). */
+static inline float course_session_zoom(const CourseSession *s) { return s->zoom; }
+/* One tick of the zoom control (input axis: -1 in .. 1 out) and easing; the
+   original's steps run on source frames, `frac` is the progress to the next. */
+void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool source_step, float frac);
 /* A text sign's message with keyboard keys replaced by the controller's buttons. */
 CourseString course_sign_message(CourseString text, unsigned controller);
 /* The original message box (Stats.Message 253) frame for a text sign: 0 none,

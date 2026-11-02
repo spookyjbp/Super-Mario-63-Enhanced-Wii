@@ -336,14 +336,25 @@ void course_render(const CourseSession *s, float t)
     const float camy = roundf((centre_y - vh / 2) * zoom) / zoom;
     const float ccx = course_cx(c, camx + vw / 2), ccy = course_cy(c, camy + vh / 2); /* camera centre */
     graphics_rect(0, 0, width, 480, (GXColor){0, 0, 0, 255});
+    /* Backgrounds follow the zoom less than the course, as in the original:
+       BGCourse (Background) (coursescale - 100) / 5 + 100, MidBackground / 2,
+       BGCloseCourse (CloseBackground) / 1; the far background is not scaled.
+       Each is drawn in its own view about the screen centre. */
+    const float z = course_session_zoom(s);
+    {
+        const float zf = base, vwf = width / zf, vhf = 480.0f / zf;
+        graphics_set_zoom(zf);
+        /* Far background: fixed at the view centre; widened to fill 16:9. */
+        draw_layer(ART_LAYER_FAR, vwf / 2, vhf / 2, fmaxf(1, vwf / COURSE_SCALE / 450.0f));
+    }
+    static const struct { CourseArtKind kind; float follow, parallax; } bgs[] = {
+        {ART_LAYER_BG, 0.2f, 0.1f}, {ART_LAYER_MID, 0.5f, 0.2f}, {ART_LAYER_CLOSE, 1.0f, 0.5f}};
+    for (unsigned i = 0; i < 3; ++i) {
+        const float zl = base * (1 + (z - 1) * bgs[i].follow), sx = width / zl / 2, sy = 240.0f / zl;
+        graphics_set_zoom(zl);
+        draw_layer(bgs[i].kind, sx - ccx * bgs[i].parallax * COURSE_SCALE, sy - ccy * bgs[i].parallax * COURSE_SCALE, 1);
+    }
     graphics_set_zoom(zoom);
-    /* Far background: fixed at the view centre; widened to fill 16:9. */
-    const float far_scale = fmaxf(1, vw / COURSE_SCALE / 450.0f);
-    draw_layer(ART_LAYER_FAR, vw / 2, vh / 2, far_scale);
-    const float sx = vw / 2, sy = vh / 2;
-    draw_layer(ART_LAYER_BG, sx - ccx * 0.1f * COURSE_SCALE, sy - ccy * 0.1f * COURSE_SCALE, 1);
-    draw_layer(ART_LAYER_MID, sx - ccx * 0.2f * COURSE_SCALE, sy - ccy * 0.2f * COURSE_SCALE, 1);
-    draw_layer(ART_LAYER_CLOSE, sx - ccx * 0.5f * COURSE_SCALE, sy - ccy * 0.5f * COURSE_SCALE, 1);
     const float ox = course_wx(c, 0) - camx, oy = course_wy(c, 0) - camy; /* course origin on screen */
     draw_layer(ART_LAYER_BACK, ox, oy, 1);
     draw_objects(s, ox, oy, false);

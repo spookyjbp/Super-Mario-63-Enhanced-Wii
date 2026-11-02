@@ -33,6 +33,8 @@ void course_collision_step(Player *p, const World *w);
 bool course_stand_clear(const Player *p, const World *w);
 void course_camera_init(Camera *camera, const Player *p, const World *w, float view_width);
 void course_camera_step(Camera *camera, const Player *p, const World *w, float view_width);
+/* The view zoom (course_session_zoom): CamEdge keeps the zoomed view inside it. */
+void course_camera_set_zoom(float zoom);
 /* Camera centred on another clip (sign targets, Toad): replaces the step above. */
 void course_camera_step_to(Camera *camera, const CourseRuntime *c, float tx, float ty, const Player *p,
                            float view_width);

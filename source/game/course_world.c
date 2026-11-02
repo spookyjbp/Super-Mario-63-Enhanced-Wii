@@ -122,10 +122,13 @@ void course_collision_step(Player *p, const World *w)
 /* Camera: Mario is the camera centre's anchor. Each 32 Hz frame the original
    moves the course by (-Char + CamChange)/Camspeed - speed/4 (Camspeed 10), then
    pushes the screen-edge midpoints out of CamEdge by up to 50 px. */
-static float half_width(float view_width) { return view_width / course_view_zoom() / COURSE_SCALE / 2; }
+static float view_zoom = 1;   /* coursescale / 100: CamEdge is tested at the zoomed screen's edges */
+void course_camera_set_zoom(float zoom) { view_zoom = zoom > 0 ? zoom : 1; }
+static float half_width(float view_width) { return view_width / course_view_zoom() / COURSE_SCALE / 2 / view_zoom; }
+static float half_height(void) { return COURSE_VIEW_HEIGHT / 2 / view_zoom; }
 static void edge_push(const CourseRuntime *c, Camera *cam, float hw)
 {
-    const float hh = COURSE_VIEW_HEIGHT / 2;
+    const float hh = half_height();
     const CourseArea *a = c->area;
     int n = 0;
     while (n < 50 && course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx, cam->cy + hh - n)) ++n;
@@ -167,7 +170,7 @@ void course_camera_init(Camera *cam, const Player *p, const World *w, float view
    1 px, then the edge midpoints are pushed out of CamEdge. */
 static void camera_move(Camera *cam, const CourseRuntime *c, float dx, float dy, float view_width)
 {
-    const float hw = half_width(view_width), hh = COURSE_VIEW_HEIGHT / 2;
+    const float hw = half_width(view_width), hh = half_height();
     const CourseArea *a = c->area;
     if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx, cam->cy + hh + fmaxf(dy, 0) + 1)) dy = fminf(1, dy);
     if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx, cam->cy - hh + fminf(dy, 0) - 1)) dy = fmaxf(-1, dy);
