@@ -58,7 +58,6 @@ void game_input_latch(GameInput *p, GameInput current)
     p->cancel_pressed |= current.cancel_pressed;
     if (current.menu_delta) p->menu_delta = current.menu_delta;
     p->zoom_axis = current.zoom_axis;
-    p->zoom_step_pressed |= current.zoom_step_pressed;
     p->controller = current.controller;
 }
 void game_input_consume(GameInput *p)

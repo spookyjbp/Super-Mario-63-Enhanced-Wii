@@ -39,14 +39,19 @@ static void test_water_recurrence_and_strokes(void)
     assert(player_swim_step(&p,&w,(GameInput){0}));
     const float expected=(((1.0f/3-0.05f)/1.01f)/1.001f-0.05f)/1.1f*44;
     assert(fabsf(p.vy-expected)<0.001f && p.vy>0); /* Original slowly sinks at rest. */
-    player_swim_step(&p,&w,(GameInput){.jump_held=true});
+    {   /* the jump button does nothing in water (port control choice) */
+        Player q=p;player_swim_step(&q,&w,(GameInput){.jump_held=true,.jump_pressed=true});
+        Player r=p;player_swim_step(&r,&w,(GameInput){0});
+        assert(q.vy==r.vy && !q.swim_stroke);
+    }
+    player_swim_step(&p,&w,(GameInput){.vertical=-1});
     const float first=p.vy;assert(first<-200 && p.swim_stroke);
-    player_swim_step(&p,&w,(GameInput){.jump_held=true});
+    player_swim_step(&p,&w,(GameInput){.vertical=-1});
     assert(p.vy>first); /* Held Up is sustained stroke, not another -6 impulse. */
     for(int i=0;i<6;++i)player_swim_step(&p,&w,(GameInput){0});
     assert(!p.swim_stroke);
     const float before=p.vy;
-    player_swim_step(&p,&w,(GameInput){.jump_held=true});assert(p.vy<before-150);
+    player_swim_step(&p,&w,(GameInput){.vertical=-1});assert(p.vy<before-150);
     p.vy=8*44;p.submerged=false;
     player_swim_step(&p,&w,(GameInput){0});assert(p.vy<8*44*0.7f*0.9f);
 }

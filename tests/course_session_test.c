@@ -227,7 +227,7 @@ static void test_hud_power_meter(void)
     hud_step(&h, 8);                             /* healed while shown: stays */
     assert(h.meter == 1 && h.count == 0);
 }
-/* Phase 2 item 9: zoom by stick (smooth, limited) or by step (Wii Remote -). */
+/* Phase 2 item 9: zoom by stick or Wii Remote +/- (smooth, limited). */
 static void test_zoom_controls(void)
 {
     Player *p = tutorial_mario(300);
@@ -235,22 +235,18 @@ static void test_zoom_controls(void)
     assert(course_session_zoom(&s) == 1);
     float last = 1;
     for (int i = 0; i < 600; ++i) {   /* full stick up: zoom in, eased, to the limit */
-        course_session_zoom_step(&s, -1, false, false, false);
+        course_session_zoom_step(&s, -1, false, false);
         const float z = course_session_zoom(&s);
         assert(z >= last && z - last < 0.05f);
         last = z;
     }
     assert(fabsf(course_session_zoom(&s) - COURSE_ZOOM_MAX) < 0.01f);
-    for (int i = 0; i < 900; ++i) course_session_zoom_step(&s, 1, false, false, false);
+    for (int i = 0; i < 900; ++i) course_session_zoom_step(&s, 1, false, false);
     assert(fabsf(course_session_zoom(&s) - COURSE_ZOOM_MIN) < 0.01f);
-    course_session_zoom_step(&s, 0, false, false, false);
+    course_session_zoom_step(&s, 0, false, false);
     const float rest = s.zoom_target;
-    for (int i = 0; i < 60; ++i) course_session_zoom_step(&s, 0, false, false, false);
+    for (int i = 0; i < 60; ++i) course_session_zoom_step(&s, 0, false, false);
     assert(s.zoom_target == rest);     /* neutral keeps the zoom */
-    /* Step: 1 -> 1.25 -> 1.5 -> 0.85 -> 1. */
-    s.zoom = s.zoom_target = 1;
-    const float levels[] = {1.25f, 1.5f, COURSE_ZOOM_MIN, 1};
-    for (int k = 0; k < 4; ++k) { course_session_zoom_step(&s, 0, true, false, false); assert(fabsf(s.zoom_target - levels[k]) < 1e-4f); }
     /* Visual only: Mario and the camera's world framing are untouched. */
     assert(p->x == x && p->y == y);
 }
@@ -295,7 +291,8 @@ static void test_sign_messages_per_controller(void)
     for (unsigned k = 0; k < CONTROLLER_KINDS; ++k) {
         const CourseString m = course_sign_message(run, k);
         /* only "pressing Up and back" changes (Up is the keyboard jump) */
-        const char *jump = k == CONTROLLER_CLASSIC ? "pressing a and back." : "pressing A and back.";
+        const char *jump = k == CONTROLLER_CLASSIC ? "pressing B and back." : k == CONTROLLER_WIIMOTE ?
+                           "pressing 2 and back." : "pressing A and back.";
         assert(m.length == run.length - 1 && !memcmp(m.text + m.length - strlen(jump), jump, strlen(jump)));
         assert(!memcmp(m.text, run.text, run.length - strlen("pressing Up and back.")));
     }
@@ -311,8 +308,10 @@ static void test_sign_messages_per_controller(void)
     assert(pause.length);
     CourseString m = course_sign_message(pause, CONTROLLER_GAMECUBE);
     assert(strstr(m.text, "<b>START</b>") && !strstr(m.text, "<b>P</b>"));
-    m = course_sign_message(pause, CONTROLLER_NUNCHUK);
-    assert(strstr(m.text, "<b>+</b>"));
+    m = course_sign_message(pause, CONTROLLER_CLASSIC);
+    assert(strstr(m.text, "<b>PLUS</b>.  There"));
+    m = course_sign_message(pause, CONTROLLER_WIIMOTE);
+    assert(strstr(m.text, "<b>PLUS and MINUS</b> together.  There"));
     /* the rest of the message is the original's */
     const char *tail = ".  There, you can change settings";
     assert(strstr(m.text, tail) && strstr(pause.text, tail));

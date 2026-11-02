@@ -8,25 +8,25 @@ this module keeps the original page artwork and replaces only the keyboard
 parts: they are cleared back to the page's own background shape (319, or 255
 for "Start"), and the action is redrawn with that controller's button.
 
-Buttons come from the port's real mapping (source/platform/input.c and
-source/game/input_map.c, README "Controls"):
+Buttons come from the port's real mapping (source/game/input_map.c, README
+"Controls"); every controller moves with its D-pad:
 
-    action        GameCube    Wii Remote + Nunchuk   Classic       Wii Remote
-    move          Stick       Nunchuk stick          Left stick    Control Pad
-    jump          A           A                      a             A
-    spin          B           B (or C)               x             B
-    stomp / read  Z           Nunchuk Z              ZR            Down (Pad)
-    FLUDD         R           1                      y             1
-    nozzle        L           2                      ZL            2
-    pause         START       +                      +             +
-    zoom          C-Stick     - (steps)              Right stick   - (steps)
+    action        GameCube    Classic       Wii Remote (sideways)
+    move          D-pad       D-pad         Control Pad
+    jump          A           b             2
+    spin          B           y             1
+    stomp / read  Z           L or R        A + B together
+    FLUDD         R           ZR            B
+    nozzle        L           ZL            A
+    pause         START       +             + and - together
+    zoom          C-Stick     Right stick   + in, - out
 
 Pages are named "<label>@<n>", n = the CONTROLLER_* value in include/game.h.
 """
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-CONTROLLERS = ['gamecube', 'nunchuk', 'classic', 'wiimote']  # include/game.h CONTROLLER_* order
+CONTROLLERS = ['gamecube', 'classic', 'wiimote']  # include/game.h CONTROLLER_* order
 PAGES = ['Start', 'controls', 'bomb', 'hover', 'stomp', 'zoom']
 # Each page's background shape in Message Picture 619 (placed on that frame):
 # keyboard parts are cleared back to it.
@@ -72,19 +72,20 @@ CC_ZL = ('rect', 'ZL', (238, 238, 242), (60, 60, 70))
 CC_LSTICK = ('stick', 'L', (238, 238, 242), (60, 60, 70))
 CC_RSTICK = ('stick', 'R', (238, 238, 242), (60, 60, 70))
 
+GC_PAD = ('dpad', '', (175, 175, 185), (40, 40, 50))
+CC_B = ('small', 'b', (238, 238, 242), (60, 60, 70))
+CC_L = ('trigger', 'L', (238, 238, 242), (60, 60, 70))
+CC_R = ('trigger', 'R', (238, 238, 242), (60, 60, 70))
 MAP = {
-    'gamecube': {'name': 'GameCube Controller', 'move': [GC_STICK], 'jump': [GC_A], 'spin': [GC_B],
+    'gamecube': {'name': 'GameCube Controller', 'move': [GC_PAD], 'jump': [GC_A], 'spin': [GC_B],
                  'stomp': [GC_Z], 'fludd': [GC_R], 'nozzle': [GC_L], 'pause': [GC_START],
                  'zoom_in': [GC_CSTICK], 'zoom_out': [GC_CSTICK], 'zoom_stick': True},
-    'nunchuk': {'name': 'Wii Remote + Nunchuk', 'move': [NUN_STICK], 'jump': [WII_A], 'spin': [WII_B],
-                'stomp': [NUN_Z], 'fludd': [WII_1], 'nozzle': [WII_2], 'pause': [WII_PLUS],
-                'zoom_in': [WII_MINUS], 'zoom_out': [WII_MINUS], 'zoom_stick': False},
-    'classic': {'name': 'Classic Controller', 'move': [CC_LSTICK], 'jump': [CC_A], 'spin': [CC_X],
-                'stomp': [CC_ZR], 'fludd': [CC_Y], 'nozzle': [CC_ZL], 'pause': [WII_PLUS],
+    'classic': {'name': 'Classic Controller', 'move': [WII_PAD], 'jump': [CC_B], 'spin': [CC_Y],
+                'stomp': [CC_L, CC_R], 'fludd': [CC_ZR], 'nozzle': [CC_ZL], 'pause': [WII_PLUS],
                 'zoom_in': [CC_RSTICK], 'zoom_out': [CC_RSTICK], 'zoom_stick': True},
-    'wiimote': {'name': 'Wii Remote', 'move': [WII_PAD], 'jump': [WII_A], 'spin': [WII_B],
-                'stomp': [WII_DOWN], 'fludd': [WII_1], 'nozzle': [WII_2], 'pause': [WII_PLUS],
-                'zoom_in': [WII_MINUS], 'zoom_out': [WII_MINUS], 'zoom_stick': False},
+    'wiimote': {'name': 'Wii Remote', 'move': [WII_PAD], 'jump': [WII_2], 'spin': [WII_1],
+                'stomp': [WII_A, WII_B], 'fludd': [WII_B], 'nozzle': [WII_A], 'pause': [WII_PLUS, WII_MINUS],
+                'zoom_in': [WII_PLUS], 'zoom_out': [WII_MINUS], 'zoom_stick': False},
 }
 OUTLINE = (20, 20, 24, 255)
 
@@ -342,8 +343,8 @@ def make(label, original, background, kind):
             rich_line(page, 0, 220, [buttons(m['zoom_in'], 44), arrow_image('up', 30, blue), 'In'], 30, blue,
                       white, centre=372)
         else:
-            rich_line(page, 0, 230, ['Press', buttons(m['zoom_in'], 44), 'to change the zoom'], 26, blue, white,
-                      centre=W / 2)
+            rich_line(page, 0, 226, [buttons(m['zoom_out'], 44), 'Out'], 30, blue, white, centre=140)
+            rich_line(page, 0, 220, [buttons(m['zoom_in'], 44), 'In'], 30, blue, white, centre=372)
     else:
         raise ValueError(label)
     return page

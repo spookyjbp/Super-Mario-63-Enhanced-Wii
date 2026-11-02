@@ -1,5 +1,6 @@
 /* Course art pack: every area layer and picture page parses and decodes. */
 #include "course_art.h"
+#include "game.h"
 #include "lz4_block.h"
 #include <assert.h>
 #include <math.h>
@@ -46,13 +47,13 @@ int main(void)
                         if (q->x == p->x + p->width && q->y == p->y) assert(qx[0] == px[1] && qy[0] == py[0]);
                         if (q->y == p->y + p->height && q->x == p->x) assert(qy[0] == py[2] && qx[0] == px[0]);
                     }
-    /* Phase 2 item 2: every keyboard page has a version per controller; the
+    /* Phase 2 item 2: every keyboard page has a version per controller (GameCube, Classic, Wii Remote); the
        others (goomba, refill, ttt) fall back to the original page. */
     const char *keyboard[] = {"Start", "controls", "bomb", "hover", "stomp", "zoom"};
     for (unsigned i = 0; i < 6; ++i) {
         const CourseString label = {keyboard[i], (uint16_t)strlen(keyboard[i])};
         const CourseArtLayer *orig = course_art_picture(&pack, keyboard[i], strlen(keyboard[i]));
-        for (unsigned k = 0; k < 4; ++k) {
+        for (unsigned k = 0; k < CONTROLLER_KINDS; ++k) {
             const CourseArtLayer *l = course_art_controller_picture(&pack, label, k);
             assert(l && l != orig && l->width == orig->width && l->height == orig->height);
             assert(l->tile_count == 1 && (size_t)l->width * l->height * 2 <= 1024u * 1024); /* one picture texture */

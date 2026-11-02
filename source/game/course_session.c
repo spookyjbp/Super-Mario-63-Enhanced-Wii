@@ -228,18 +228,11 @@ static void try_talk(CourseSession *s, bool z_pressed)
     pm->facing_left = mario_right;
     ((LiveObject *)t)->facing_left = !mario_right;
 }
-void course_session_zoom_step(CourseSession *s, float axis, bool step, bool talking, bool source_step)
+void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool source_step)
 {
     if (s->zoom <= 0) s->zoom = s->zoom_target = s->talk_zoom = 1;
-    /* Stick: about 1.2x per second at full tilt, up = in. */
+    /* Stick or +/-: about 1.2x per second at full tilt, -1 = in. */
     if (axis != 0) s->zoom_target *= expf(-axis * 1.2f * GAME_DT);
-    if (step) { /* Wii Remote -: 1 -> 1.25 -> 1.5 -> 0.85 -> 1 */
-        static const float levels[] = {1.0f, 1.25f, 1.5f, COURSE_ZOOM_MIN};
-        unsigned next = 0;
-        for (unsigned i = 0; i < 4; ++i)
-            if (fabsf(s->zoom_target - levels[i]) < 0.06f) next = (i + 1) % 4;
-        s->zoom_target = levels[next];
-    }
     s->zoom_target = fminf(COURSE_ZOOM_MAX, fmaxf(COURSE_ZOOM_MIN, s->zoom_target));
     s->zoom += (s->zoom_target - s->zoom) * (1 - expf(-8 * GAME_DT));   /* frame-rate independent easing */
     if (fabsf(s->zoom - s->zoom_target) < 0.0005f) s->zoom = s->zoom_target;
@@ -249,7 +242,7 @@ void course_session_zoom_step(CourseSession *s, float axis, bool step, bool talk
 void course_session_step(CourseSession *s, GameInput in)
 {
     s->controller = in.controller;
-    course_session_zoom_step(s, in.zoom_axis, in.zoom_step_pressed, s->state == SESSION_TALK,
+    course_session_zoom_step(s, in.zoom_axis, s->state == SESSION_TALK,
                              s->game.player.source_step);
     /* KeyZ(): Z (read/talk/stomp). The port maps it to the pound button. */
     const bool z_pressed = in.pound_pressed; /* already a button-down event */
@@ -359,24 +352,17 @@ void course_session_step(CourseSession *s, GameInput in)
    jump key; P its pause key. */
 CourseString course_sign_message(CourseString text, unsigned controller)
 {
-    static const char *const backflip[CONTROLLER_KINDS] = {
-        "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n"
-        "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing A and back.",
-        "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n"
-        "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing A and back.",
-        "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n"
-        "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing a and back.",
-        "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n"
-        "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing A and back."};
-    static const char *const pause[CONTROLLER_KINDS] = {
-        "Oh!  Mario!  You can pause the game by pressing <b>START</b>.  There, you can change settings, view stuff "
-        "you've collected, and switch FLUDD power-ups.",
-        "Oh!  Mario!  You can pause the game by pressing <b>+</b>.  There, you can change settings, view stuff "
-        "you've collected, and switch FLUDD power-ups.",
-        "Oh!  Mario!  You can pause the game by pressing <b>+</b>.  There, you can change settings, view stuff "
-        "you've collected, and switch FLUDD power-ups.",
-        "Oh!  Mario!  You can pause the game by pressing <b>+</b>.  There, you can change settings, view stuff "
-        "you've collected, and switch FLUDD power-ups."};
+#define RUN_SIGN "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n" \
+    "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing "
+#define PAUSE_SIGN "Oh!  Mario!  You can pause the game by pressing "
+#define PAUSE_END ".  There, you can change settings, view stuff you've collected, and switch FLUDD power-ups."
+    /* Jump: GameCube A, Classic b, Wii Remote 2. Pause: START, PLUS, PLUS and MINUS together.
+       (The sign font has letters and digits only, so + and - are spelled out.) */
+    static const char *const backflip[CONTROLLER_KINDS] = {RUN_SIGN "A and back.", RUN_SIGN "B and back.",
+                                                           RUN_SIGN "2 and back."};
+    static const char *const pause[CONTROLLER_KINDS] = {PAUSE_SIGN "<b>START</b>" PAUSE_END,
+                                                        PAUSE_SIGN "<b>PLUS</b>" PAUSE_END,
+                                                        PAUSE_SIGN "<b>PLUS and MINUS</b> together" PAUSE_END};
     if (controller >= CONTROLLER_KINDS) return text;
     const char *pick = NULL;
     if (text.length >= 29 && !memcmp(text.text, "You can run by double tapping", 29)) pick = backflip[controller];

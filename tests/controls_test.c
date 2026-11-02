@@ -16,21 +16,81 @@ static float away(bool left){return left?1.0f:-1.0f;}
 
 static void test_gamecube_down_reaches_gameplay(void)
 {
-    GameInput in=input_map_gamecube(GC_DOWN,GC_DOWN,0,0);
+    GameInput in=input_map_gamecube(GC_DOWN,GC_DOWN);
     assert(in.crouch_held && in.vertical==1 && in.menu_delta==1); /* D-pad Down. */
-    in=input_map_gamecube(0,0,0,-80);
-    assert(in.crouch_held && in.vertical>=0.5f);                   /* Stick fully down. */
-    in=input_map_gamecube(0,0,57,-57);
-    assert(in.crouch_held && in.horizontal>0.5f);                 /* Diagonal down-right gate. */
-    in=input_map_gamecube(0,0,0,-30);
-    assert(!in.crouch_held);                                      /* Slight tilt is not Down. */
-    in=input_map_gamecube(GC_DOWN|GC_LEFT|GC_A,GC_A,0,0);
+    in=input_map_gamecube(GC_DOWN|GC_LEFT|GC_A,GC_A);
     assert(in.crouch_held && in.horizontal==-1 && in.jump_pressed && in.jump_held);
-    in=input_map_gamecube(GC_B,GC_B,0,0);
+    in=input_map_gamecube(GC_B,GC_B);
     assert(in.spin_pressed && in.spin_held && !in.crouch_held);   /* Spin mapping unchanged. */
+    in=input_map_gamecube(GC_Z|GC_R,GC_Z|GC_L|GC_START);
+    assert(in.pound_pressed && in.nozzle_held && in.nozzle_next_pressed && in.pause_pressed);
     /* The latch must carry held Down across catch-up ticks. */
-    GameInput pending={0};game_input_latch(&pending,input_map_gamecube(GC_DOWN,GC_DOWN,0,0));
+    GameInput pending={0};game_input_latch(&pending,input_map_gamecube(GC_DOWN,GC_DOWN));
     game_input_consume(&pending);assert(pending.crouch_held);
+}
+/* New control scheme: D-pad movement only; Classic and sideways Wii Remote buttons. */
+static void test_classic_mapping(void)
+{
+    GameInput in=input_map_classic(CC_RIGHT|CC_B,CC_B,0);
+    assert(in.horizontal==1 && in.jump_pressed && in.jump_held && !in.spin_pressed);
+    in=input_map_classic(CC_Y|CC_DOWN,CC_Y|CC_DOWN,0);
+    assert(in.spin_pressed && in.crouch_held && in.vertical==1 && in.menu_delta==1);
+    in=input_map_classic(CC_ZR,CC_L,0); assert(in.nozzle_held && in.pound_pressed);
+    in=input_map_classic(0,CC_R,0); assert(in.pound_pressed);
+    in=input_map_classic(0,CC_ZL|CC_PLUS,0); assert(in.nozzle_next_pressed && in.pause_pressed);
+    in=input_map_classic(CC_A|CC_X,CC_A|CC_X,0);                     /* a and x do nothing */
+    assert(!in.jump_pressed && !in.spin_pressed && !in.pound_pressed && !in.nozzle_held && !in.nozzle_next_pressed);
+    assert(input_map_classic(0,0,1).zoom_axis==-1 && input_map_classic(0,0,-1).zoom_axis==1); /* right stick */
+    assert(input_map_classic(0,0,0.3f).zoom_axis==0);
+}
+static GameInput wm(WiimoteState *w,unsigned *last,unsigned held)
+{const unsigned down=held&~*last;*last=held;return input_map_wiimote(w,held,down);}
+static void test_wiimote_mapping(void)
+{
+    WiimoteState w={0};unsigned last=0;
+    /* Sideways: pad Up = left, Down = right, Right = up, Left = down (crouch). */
+    assert(wm(&w,&last,WM_UP).horizontal==-1 && wm(&w,&last,WM_DOWN).horizontal==1);
+    GameInput in=wm(&w,&last,WM_LEFT);assert(in.vertical==1 && in.crouch_held);
+    in=wm(&w,&last,WM_RIGHT);assert(in.vertical==-1 && !in.crouch_held);
+    in=wm(&w,&last,WM_2);assert(in.jump_pressed && in.jump_held);
+    in=wm(&w,&last,WM_1);assert(in.spin_pressed && !in.jump_held);
+    wm(&w,&last,0);
+    /* B: FLUDD at once. */
+    in=wm(&w,&last,WM_B);assert(in.nozzle_held && !in.pound_pressed);
+    /* A joins within the window: stomp once, FLUDD stops, no nozzle switch. */
+    in=wm(&w,&last,WM_B|WM_A);assert(in.pound_pressed && !in.nozzle_held && !in.nozzle_next_pressed);
+    for(int i=0;i<20;++i){in=wm(&w,&last,WM_B|WM_A);assert(!in.pound_pressed && !in.nozzle_held && !in.nozzle_next_pressed);}
+    wm(&w,&last,0);
+    /* A then B within the window: stomp too. */
+    in=wm(&w,&last,WM_A);assert(!in.nozzle_next_pressed);
+    in=wm(&w,&last,WM_A|WM_B);assert(in.pound_pressed && !in.nozzle_held);
+    wm(&w,&last,0);
+    /* A alone: the nozzle switches once, after the window (or on release). */
+    int switches=0;
+    for(int i=0;i<30;++i) switches+=wm(&w,&last,WM_A).nozzle_next_pressed;
+    assert(switches==1);
+    wm(&w,&last,0);
+    switches=wm(&w,&last,WM_A).nozzle_next_pressed;switches+=wm(&w,&last,0).nozzle_next_pressed;
+    assert(switches==1);                                           /* quick tap */
+    /* Spraying a while, then A: a nozzle switch, not a stomp. */
+    for(int i=0;i<20;++i) in=wm(&w,&last,WM_B);
+    assert(in.nozzle_held);
+    bool pound=false;switches=0;
+    for(int i=0;i<10;++i){in=wm(&w,&last,WM_B|WM_A);pound|=in.pound_pressed;switches+=in.nozzle_next_pressed;}
+    assert(!pound && switches==1);
+    wm(&w,&last,0);
+    /* + / - zoom while held (after the window); together: pause once, no zoom. */
+    for(int i=0;i<10;++i) in=wm(&w,&last,WM_PLUS);
+    assert(in.zoom_axis==-1 && !in.pause_pressed);
+    wm(&w,&last,0);
+    for(int i=0;i<10;++i) in=wm(&w,&last,WM_MINUS);
+    assert(in.zoom_axis==1);
+    wm(&w,&last,0);
+    in=wm(&w,&last,WM_PLUS);assert(in.zoom_axis==0);
+    in=wm(&w,&last,WM_PLUS|WM_MINUS);assert(in.pause_pressed && in.zoom_axis==0);
+    for(int i=0;i<10;++i){in=wm(&w,&last,WM_PLUS|WM_MINUS);assert(!in.pause_pressed && in.zoom_axis==0);}
+    wm(&w,&last,0);
+    assert(wm(&w,&last,WM_HOME).pause_pressed);
 }
 static void test_crouch_holds_with_slide_pose(void)
 {
@@ -136,19 +196,19 @@ static void test_controller_detection_and_zoom_stick(void)
 {
     assert(input_active_controller(CONTROLLER_GAMECUBE,false,false,CONTROLLER_CLASSIC)==CONTROLLER_GAMECUBE);
     assert(input_active_controller(CONTROLLER_GAMECUBE,false,true,CONTROLLER_CLASSIC)==CONTROLLER_CLASSIC);
-    assert(input_active_controller(CONTROLLER_CLASSIC,true,false,CONTROLLER_NUNCHUK)==CONTROLLER_GAMECUBE);
-    assert(input_active_controller(CONTROLLER_NUNCHUK,false,false,CONTROLLER_WIIMOTE)==CONTROLLER_NUNCHUK); /* idle: keep */
+    assert(input_active_controller(CONTROLLER_CLASSIC,true,false,CONTROLLER_WIIMOTE)==CONTROLLER_GAMECUBE);
+    assert(input_active_controller(CONTROLLER_WIIMOTE,false,false,CONTROLLER_CLASSIC)==CONTROLLER_WIIMOTE); /* idle: keep */
     assert(input_map_zoom_stick(0)==0 && input_map_zoom_stick(20)==0 && input_map_zoom_stick(-24)==0); /* dead zone */
     assert(input_map_zoom_stick(90)==-1 && input_map_zoom_stick(-90)==1);   /* up: in (-1), down: out */
     assert(input_map_zoom_stick(50)<0 && input_map_zoom_stick(50)>-1);
     /* The zoom never reaches the game's movement/action inputs. */
-    const GameInput a=input_map_gamecube(0,0,0,0);
+    const GameInput a=input_map_gamecube(0,0);
     assert(a.horizontal==0 && a.vertical==0 && !a.jump_pressed && a.zoom_axis==0);
 }
 int main(void)
 {
     test_gamecube_down_reaches_gameplay();test_crouch_holds_with_slide_pose();
     test_nozzle_dive_recovery();test_backflip_activation_paths();test_not_a_backflip();test_spin_and_jump_unchanged();
-    test_controller_detection_and_zoom_stick();
-    puts("7 Down/crouch/backflip/controller control regression groups passed");return 0;
+    test_controller_detection_and_zoom_stick();test_classic_mapping();test_wiimote_mapping();
+    puts("9 Down/crouch/backflip/controller/Classic/Wii Remote control regression groups passed");return 0;
 }

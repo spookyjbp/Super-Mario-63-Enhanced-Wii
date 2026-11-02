@@ -29,15 +29,15 @@ typedef struct {
     bool jump_pressed, jump_held, spin_pressed, spin_held, pound_pressed;
     bool pause_pressed, confirm_pressed, cancel_pressed;
     int menu_delta;
-    /* Camera zoom (not in the original's controls): a second stick's vertical
-       axis, -1 (up: zoom in) .. 1 (down: zoom out), or a press that steps
-       through zoom levels on controllers without one. */
+    /* Camera zoom (not in the original's controls): -1 (zoom in) .. 1 (zoom
+       out), from a second stick's vertical axis or the Wii Remote's + / -. */
     float zoom_axis;
-    bool zoom_step_pressed;
     /* Controller the player used last (for the controller picture signs). */
     unsigned char controller;
 } GameInput;
-enum { CONTROLLER_GAMECUBE, CONTROLLER_NUNCHUK, CONTROLLER_CLASSIC, CONTROLLER_WIIMOTE, CONTROLLER_KINDS };
+/* Supported controllers (the Nunchuk is not supported: a Wii Remote with one
+   attached plays as a sideways Wii Remote). */
+enum { CONTROLLER_GAMECUBE, CONTROLLER_CLASSIC, CONTROLLER_WIIMOTE, CONTROLLER_KINDS };
 
 typedef enum {
     PLAYER_IDLE, PLAYER_RUN, PLAYER_RISE, PLAYER_FALL,

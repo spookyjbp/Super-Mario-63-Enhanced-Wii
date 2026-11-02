@@ -12,3 +12,28 @@
 | 8 | None nozzle | `_root.ChangeFludd`'s cycle: Hover -> Rocket -> Turbo -> None -> Hover over the collected nozzles. None: no spray, water, lift, sounds or FLUDD on Mario's back; the tank is hidden as in the original (Fluddpow ""). A banner names the selected nozzle for 1.5 s. Picking up FLUDD still makes every nozzle available (the port's existing rule). | `player_special.c` `player_change_fludd`, `course_session.c`, `course_render.c` | `movement_v04_test` nozzles, `course_session_test` `test_none_nozzle` |
 | 9 | Analog zoom | GameCube C-stick and Classic right stick: up zooms in, down out (wide dead zone, about 1.2x a second, eased frame-rate independently, 0.85x-1.6x). Wii Remote (both setups): - steps 1x -> 1.25x -> 1.5x -> 0.85x. Visual only: the camera, CamEdge and collisions keep the original framing. Toad's CameraZoom works on top. | `input.c`, `input_map.c`, `course_session.c` `course_session_zoom_step`, `course_render.c` | `course_session_test` `test_zoom_controls`, `controls_test` |
 | 10 | Nozzle and Rocket audio | Switching (to None too) plays the original "FluddSwitch"; it only plays when the selection changes. The 2010 Rocket is silent, so two short port-made sounds (synthesised filtered noise, -9 dBFS): a pressure charge when the charge starts and a burst when it fires. Both go through the voice manager from the coin fix (no stacking, no clipping). | `export_audio.py`, `sfx.h`, `player_special.c` | `sound_test` (pack has every sound, voice rules) |
+
+## Control scheme change (after Phase 2 testing)
+
+Requested by the user: the Nunchuk is no longer supported (a Wii Remote with one
+attached plays as a sideways Wii Remote), every controller moves with its D-pad
+(no analog movement), and the jump button does nothing in water (Up swims).
+
+| Action | GameCube | Classic Controller | Wii Remote (sideways) |
+|---|---|---|---|
+| Move | D-pad | D-pad | Control Pad (Up on the pad = left) |
+| Jump | A | b | 2 |
+| Spin | B | y | 1 |
+| Stomp / read / talk | Z | L or R | A + B together |
+| FLUDD | R | ZR | B |
+| Nozzle | L | ZL | A |
+| Zoom | C-stick | Right stick | + in, - out |
+| Pause | START | + (or HOME) | + and - together (or HOME) |
+
+Combos (`input_chord_step`): the second button counts if pressed within 6 polls
+(~0.1 s). A waits that long before switching the nozzle (or switches on a quick
+release); B sprays at once and stops when A joins it; + and - zoom only after
+the wait. Mapping code: `source/game/input_map.c` (host tested in
+`controls_test`), hardware reading: `source/platform/input.c`. The controller
+picture pages now exist for GameCube, Classic and Wii Remote (their look is
+still to be redesigned).

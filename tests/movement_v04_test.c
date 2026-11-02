@@ -138,7 +138,8 @@ static void test_water_transitions(void)
     assert(p.spin_time==0);
     const float before_down=p.vy;
     ticks(&p,&w,(GameInput){.crouch_held=true},10);assert(p.vy>before_down);
-    ticks(&p,&w,(GameInput){.jump_held=true},3);assert(p.vy<0);
+    ticks(&p,&w,(GameInput){.jump_held=true},3);assert(p.vy>0);   /* jump does nothing in water */
+    ticks(&p,&w,(GameInput){.vertical=-1},3);assert(p.vy<0);       /* Up swims */
     p.x=10;
     player_step(&p,&w,(GameInput){0});assert(!p.submerged);
 }

@@ -52,23 +52,29 @@ outside this milestone. There is no Level Designer.
 
 ## Controls
 
-Use Wii Remote channel 1 or GameCube port 1. Analog sticks and D-pads work;
-vertical analog movement uses a dead zone.
+Use Wii Remote channel 1 (alone, held sideways, or with a Classic Controller)
+or GameCube port 1. Every controller moves with its D-pad; analog sticks do not
+move Mario. A Nunchuk is not supported (the Wii Remote plays as if it were not
+attached).
 
-| Action | Wii Remote + Nunchuk | Classic Controller | GameCube |
+| Action | Wii Remote (sideways) | Classic Controller | GameCube |
 | --- | --- | --- | --- |
-| Move / swim vertically | Nunchuk stick or upright Remote D-pad | Left stick / D-pad | Stick / D-pad |
-| Jump / rise in water | A (hold for higher jump) | A | A |
-| Spin / hold to repeat when eligible | B or Nunchuk C | X | B |
-| Ground pound in air | Nunchuk Z | ZR | Z |
-| Low dive / slide / descend in water | Stick down or D-pad Down | Stick down or D-pad Down | Stick down or D-pad Down |
-| Activate selected FLUDD | Hold Remote 1 | Hold Y | Hold R |
-| Cycle Hover → Rocket → Turbo → None | Remote 2 | ZL | L |
-| Zoom in / out | Remote − (steps 1×, 1.25×, 1.5×, 0.85×) | Right stick up / down (or −) | C-stick up / down |
-| Pause / resume | PLUS or HOME | PLUS or HOME | START |
-| Menu select / confirm / cancel | D-pad / A / B | D-pad / A / B | D-pad / A / B |
+| Move / swim (Up swims, Down descends) | Control Pad | D-pad | D-pad |
+| Jump (does nothing in water) | 2 (hold for a higher jump) | b | A |
+| Spin / hold to repeat when eligible | 1 | y | B |
+| Ground pound in air / read signs / talk | A and B together | L or R | Z |
+| Activate selected FLUDD | Hold B | Hold ZR | Hold R |
+| Cycle Hover → Rocket → Turbo → None | A | ZL | L |
+| Zoom in / out | + / − | Right stick up / down | C-stick up / down |
+| Pause / resume | + and − together (or HOME) | + (or HOME) | START |
+| Menu select / confirm / cancel | Pad / 2 / 1 | D-pad / b / y | D-pad / A / B |
 
-Swimming: A or Up starts an original-style stroke, holding sustains it, and
+Combos on the Wii Remote: A and B count as together when the second is pressed
+within about 0.1 s of the first; A alone switches the nozzle after that wait (or
+when released). B sprays at once and stops if A joins for a ground pound. +
+and − work the same way for pause and zoom.
+
+Swimming: Up starts an original-style stroke, holding sustains it, and
 release after the minimum five source frames permits another stroke. Down
 descends. Spin cannot start during a fast ascent (source vertical speed <= -3),
 and pressing repeatedly does not reset an active spin. Holding it can start
@@ -88,8 +94,7 @@ nozzles (None included: no FLUDD, the tank is hidden) shows the nozzle's name
 above the tank for 1.5 s. Water refills in the pool and on puddle tiles;
 power recovers when grounded, in water, or while releasing the nozzle. Nozzle
 switching is allowed while neutral. RESET exits safely; power callbacks retain
-shutdown behavior. Remote-only fallback is also available through the D-pad,
-A/B, 1/2 and Down-to-pound fallback, but Nunchuk is the intended Wii control setup.
+shutdown behavior.
 
 ## Build and install
 

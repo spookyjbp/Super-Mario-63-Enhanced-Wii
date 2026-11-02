@@ -58,8 +58,8 @@ bool course_session_object_active(const CourseSession *s, const CourseObject *o)
 /* Total extra view zoom (1 = the original framing). Visual only: the camera,
    CamEdge and collisions keep the original view size. */
 static inline float course_session_zoom(const CourseSession *s) { return s->zoom * s->talk_zoom; }
-/* One tick of the zoom controls (input axis / step) and easing. */
-void course_session_zoom_step(CourseSession *s, float axis, bool step, bool talking, bool source_step);
+/* One tick of the zoom control (input axis) and easing. */
+void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool source_step);
 /* A text sign's message with keyboard keys replaced by the controller's buttons. */
 CourseString course_sign_message(CourseString text, unsigned controller);
 #define COURSE_WARP_SECONDS 0.5f
