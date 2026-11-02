@@ -499,6 +499,12 @@ static void test_toad_reactions(void)
     assert(t && t->state == TOAD_MAD && t->p0 == 1 && t->facing_left);
     ObjectDraw d[OBJECT_DRAW_MAX];
     assert(object_select(t, d) >= 2 && d[0].clip == OBJ_TOAD_WALK && d[1].clip == OBJ_TOAD_HEAD && d[0].flip_x);
+    {   /* walk frames 16-20: the head sits at depth 1, behind the body */
+        LiveObject w = *t; w.timer = 17;
+        assert(object_select(&w, d) >= 2 && d[0].clip == OBJ_TOAD_HEAD && d[1].clip == OBJ_TOAD_WALK);
+        w.timer = 14;
+        assert(object_select(&w, d) >= 2 && d[0].clip == OBJ_TOAD_WALK && d[1].clip == OBJ_TOAD_HEAD);
+    }
     /* Talking: both face each other, the head takes each page's mood, and the
        start mood comes back when the conversation ends. */
     course_place_player(&s.runtime, &s.game.player, t->x - 12, t->y);

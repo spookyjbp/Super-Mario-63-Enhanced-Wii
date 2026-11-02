@@ -120,8 +120,15 @@ def placement(sprites, ident):
     return tx, ty, sx, sy
 
 
-def strip_blanks(raw, start, strip_depths):
-    """Remove Blank Movieclip placements everywhere and per-sprite depths."""
+# Characters removed wherever they are placed in a sprite (by id, not depth):
+# Toad's head moves from depth 2 to depth 1 on walk frames 16-20, so a depth
+# rule left a smiling head baked into those body frames (the "normal face for
+# a frame" flicker on the walking, angry Toad).
+STRIP_CHARS = {2516: {2498}, 2501: {2498}}
+
+
+def strip_blanks(raw, start, strip_depths, strip_chars=STRIP_CHARS):
+    """Remove Blank Movieclip placements everywhere, per-sprite depths and per-sprite characters."""
     out = bytearray(raw[:start])
     for code, pos, length in S.tags(raw, start, len(raw)):
         data = raw[pos:pos + length]
@@ -129,6 +136,7 @@ def strip_blanks(raw, start, strip_depths):
             ident, frames = struct.unpack_from('<HH', data)
             body, blank = bytearray(), set()
             drop = set(strip_depths.get(ident, ()))
+            chars = strip_chars.get(ident, set())
             for c, p, n in S.tags(raw, pos + 4, pos + length):
                 d = raw[p:p + n]
                 if c in (26, 70):
@@ -136,7 +144,7 @@ def strip_blanks(raw, start, strip_depths):
                     depth = struct.unpack_from('<H', d, 2 if c == 70 else 1)[0]
                     if flags & 0x02:
                         cid = struct.unpack_from('<H', d, 3 if c == 26 else 4)[0]
-                        if cid in BLANKS: blank.add(depth)
+                        if cid in BLANKS or cid in chars: blank.add(depth)
                         else: blank.discard(depth)
                     if depth in blank or depth in drop:
                         continue

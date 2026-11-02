@@ -34,6 +34,8 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         o[1] = base(l, OBJ_TOAD_HEAD, l->eye);
         o[1].flip_x = l->facing_left;
         o[1].dx = l->facing_left ? -h[0] : h[0]; o[1].dy = h[1];
+        /* walk frames 16-20 place the head at depth 1, behind the body (depth 5) */
+        if (walk && body >= 15) { const ObjectDraw head = o[1]; o[1] = o[0]; o[0] = head; }
         if (l->alpha < 1) return 2;
         o[2] = base(l, OBJ_TOAD_BZ, (f / 3) % 17); o[2].alpha = l->alpha;
         return 3;

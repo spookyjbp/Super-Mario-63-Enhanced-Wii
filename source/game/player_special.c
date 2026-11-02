@@ -179,7 +179,9 @@ void player_fludd_step(Player *p,GameInput in)
     if(!p->has_fludd) {p->jet_active=false;p->rocket_charge=p->rocket_boost=0;return;}
     if(!in.nozzle_held || p->water<=0 || p->action==ACTION_BONK || p->action==ACTION_HURT || p->pounding || p->spin_time>0) {
         p->rocket_charge=fmaxf(0,p->rocket_charge-GAME_DT);
-        if(!in.nozzle_held && p->rocket_boost<=0) p->power=fminf(100,p->power+32*GAME_DT);
+        /* CharCode: if(!KeySPACE() && Fluddpow !== "H") Power += 1 a frame. The
+           Hover nozzle only refills on the ground (Power = TotalPower) or in water. */
+        if(!in.nozzle_held && p->rocket_boost<=0 && p->nozzle!=NOZZLE_HOVER) p->power=fminf(100,p->power+32*GAME_DT);
     } else if(p->nozzle==NOZZLE_HOVER && p->power>0) {
         float v=p->vy/44;
         v*=powf(0.8f,32*GAME_DT);
@@ -205,6 +207,9 @@ void player_fludd_step(Player *p,GameInput in)
     if(p->rocket_boost>0) {
         p->rocket_boost=fmaxf(0,p->rocket_boost-GAME_DT);
         p->vy-=(p->submerged ? 1486 : 704)*GAME_DT;p->jet_active=true;
+        /* Rocket water frames 16-23 (1340): onEnterFrame keeps Power = 0, so the ground
+           refill cannot re-arm the Rocket while Mario is still leaving the ground. */
+        p->power=0;
     }
     p->vx=fmaxf(-1400,fminf(1400,p->vx));
 }

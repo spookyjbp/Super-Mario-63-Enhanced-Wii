@@ -42,6 +42,16 @@ class ObjectArtTests(unittest.TestCase):
         self.assertAlmostEqual(left + w / zoom / 2, 0, delta=3)   # centred
         self.assertAlmostEqual(bottom, 13.9, delta=1.5)           # feet: body placed at y 13.9
 
+    def test_toad_bodies_have_no_head(self):
+        """The head (2498) is drawn on its own with the mood's face; it must not be
+        baked into a body frame. Walk frames 16-20 move it to another depth, which
+        left a smiling head in them (the angry Toad's face flicker)."""
+        table, zoom = ids()
+        for name in ('TOAD_WALK', 'TOAD_IDLE'):
+            clip, pack = table[name]
+            heights = [f[3] / zoom for f in frames(pack, clip)]
+            self.assertLess(max(heights), 16, name)   # body only (with a head: ~30 course px)
+
     def test_sign_post_ends_at_origin(self):
         table, zoom = ids()
         clip, pack = table['SIGN']

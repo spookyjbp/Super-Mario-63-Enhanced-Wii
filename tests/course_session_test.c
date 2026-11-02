@@ -335,6 +335,32 @@ static void test_camera_moves_every_tick(void)
         lc = s.game.camera.x; lp = p->x; lrel = rel;
     }
 }
+static void test_rocket_once_per_jump(void)
+{
+    /* Rocket water 1340 frames 16-23 hold Power at 0, and the Rocket needs Power 100:
+       one blast per jump (the course ground kept Mario "grounded" for a tick after
+       the blast, which refilled Power and allowed a second blast). */
+    Player *p = tutorial_mario(300);
+    p->has_fludd = true; p->nozzles = (1u << NOZZLE_COUNT) - 1; p->nozzle = NOZZLE_ROCKET;
+    int blasts = 0, left = 0; float last = 0;
+    for (int t = 0; t < 60 * 10; ++t) {
+        ticks((GameInput){.nozzle_held = (t % 10) < 8}, 1);
+        if (p->rocket_boost > last) ++blasts;
+        last = p->rocket_boost;
+        if (!p->grounded) left = 1;
+        if (left && p->grounded) break;
+    }
+    assert(left && blasts == 1);
+    /* Hover: no refill in the air (Fluddpow == "H"); full again on the ground. */
+    p->nozzle = NOZZLE_HOVER;
+    course_place_player(&s.runtime, p, 300, 60); p->vx = p->vy = 0; p->grounded = false; p->power = 30;
+    ticks((GameInput){0}, 6);
+    assert(!p->grounded && p->power == 30);
+    for (int i = 0; i < 400 && !p->grounded; ++i) ticks((GameInput){0}, 1);
+    ticks((GameInput){0}, 2);
+    assert(p->grounded && p->power == 100);
+}
+
 static void test_message_box_frames(void)
 {
     /* Stats.Message 253: frames 2-6 open, 6 holds with the text, 7-11 close; the prompt starts on frame 6. */
@@ -361,6 +387,6 @@ int main(void)
     test_opening_and_controls_sign(); test_hints(); test_area_chain_and_completion(); test_hud_power_meter();
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
-    test_message_box_frames();
-    puts("13 course session (message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_message_box_frames(); test_rocket_once_per_jump();
+    puts("14 course session (Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }
