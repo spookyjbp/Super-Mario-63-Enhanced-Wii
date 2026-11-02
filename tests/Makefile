@@ -16,8 +16,9 @@ SESSION := $(ROOT)/build/host/course_session_tests
 CART := $(ROOT)/build/host/course_art_tests
 OBJS := $(ROOT)/build/host/course_objects_tests
 SOUND := $(ROOT)/build/host/sound_tests
+TEXT := $(ROOT)/build/host/text_layout_tests
 .PHONY: test clean
-test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND)
+test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND) $(TEXT)
 	$(OUTPUT)
 	$(ORIENTATION)
 	$(RENDER)
@@ -31,6 +32,7 @@ test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) 
 	cd $(ROOT)/build/host && ./course_art_tests
 	cd $(ROOT)/build/host && ./course_objects_tests
 	cd $(ROOT)/build/host && ./sound_tests
+	$(TEXT)
 $(OUTPUT): $(SOURCES) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated $(SOURCES) -lm -o $@
@@ -70,5 +72,8 @@ $(OBJS): course_objects_test.c $(wildcard $(ROOT)/source/game/*.c) $(ROOT)/sourc
 $(SOUND): sound_test.c $(ROOT)/source/assets/sound_pack.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated sound_test.c $(ROOT)/source/assets/sound_pack.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
+$(TEXT): text_layout_test.c $(ROOT)/source/render/text_layout.c $(ROOT)/include/text_layout.h $(ROOT)/assets/generated/font_metrics.h
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated text_layout_test.c $(ROOT)/source/render/text_layout.c -lm -o $@
 clean:
-	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND)
+	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND) $(TEXT)

@@ -28,6 +28,7 @@ import export_course as C
 import art_repair
 import swf_bitmap_fix
 import controller_signs
+import ui_art
 
 ZOOM = 1.6
 TILE = 1024
@@ -302,21 +303,31 @@ def export(source, jar, output, areas):
         subprocess.run(cmd[:cmd.index('-selectid')] + ['-selectid', ','.join(map(str, shapes)), '-format', 'shape:png',
                                                          '-export', 'shape', str(work / 'picture-shapes'),
                                                          str(pictures_swf)], check=True, stdout=log, stderr=log)
+    # Page placement: Stats.Picture (620) places the page sprite at stage (225, 150);
+    # the canvas origin comes from the frame's SVG (the same for every frame).
+    psvg = ui_art.ffdec(jar, work, pictures_swf, pic[0], [1], work / 'pictures-svg', svg=True)
+    pox, poy = ui_art.svg_origin(psvg / '1.svg')
     variants = []
     for label in labels:
         im = Image.open(C.sprite_dir(pages, pic[0]) / f'{sprites[pic[0]]["labels"][label] + 1}.png').convert('RGBA')
-        im = im.crop(im.getchannel('A').getbbox())  # the page itself, drawn centred on screen
-        variants.append((label, im))
+        bb = im.getchannel('A').getbbox()
+        im = im.crop(bb)  # the page itself; (x, y) its stage position
+        x, y = 225 + pox + bb[0] / ZOOM, 150 + poy + bb[1] / ZOOM
+        variants.append((label, im, x, y))
         if label in controller_signs.PAGES:
             bg = Image.open(work / 'picture-shapes' / f'{controller_signs.BACKGROUND[label]}.png').convert('RGBA')
             for k, kind in enumerate(controller_signs.CONTROLLERS):
                 page = controller_signs.make(label, im, bg, kind)
                 page.save(work / 'picture-shapes' / f'{label}@{k}.png')
-                variants.append((f'{label}@{k}', page))
+                variants.append((f'{label}@{k}', page, x, y))
+    # The message box and its controller prompts (ui_art.py); origins in stage px.
+    ui_layers, ui_header = ui_art.build(work / 'ui', jar, pictures_swf.read_bytes(), sprites)
+    (output.parent / 'ui_layout.h').write_text(ui_header)
+    variants += list(ui_layers)
     count = struct.unpack_from('>I', out, 12)[0]
-    for label, im in variants:
+    for label, im, ox, oy in variants:
         W, H, tiles = encode_layer(im, repair=False)
-        out += C.pack_string('*') + C.pack_string(label) + struct.pack('>ffffII', 0, 0, 0, ZOOM, W, H)
+        out += C.pack_string('*') + C.pack_string(label) + struct.pack('>ffffII', ox, oy, 0, ZOOM, W, H)
         out += struct.pack('>I', len(tiles))
         for tx, ty, tw, th, blob, size in tiles:
             out += struct.pack('>HHHHII', tx, ty, tw, th, size, len(blob)) + blob

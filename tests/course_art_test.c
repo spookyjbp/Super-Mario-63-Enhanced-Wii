@@ -63,6 +63,17 @@ int main(void)
     }
     const CourseString goomba = {"goomba", 6};
     assert(course_art_controller_picture(&pack, goomba, 0) == course_art_picture(&pack, "goomba", 6));
+    /* Text signs: the original message box (Stats.Message frame 6) and one
+       "Press .. to Continue" prompt per controller. */
+    const CourseArtLayer *box = course_art_picture(&pack, "Message", 7);
+    assert(box && box->width > 500 && box->height > 100 && box->ox > 0 && box->oy > 0 && box->ox < 100);
+    for (unsigned k = 0; k < CONTROLLER_KINDS; ++k) {
+        char key[16]; snprintf(key, sizeof key, "Prompt@%u", k);
+        const CourseArtLayer *p = course_art_picture(&pack, key, strlen(key));
+        /* origin from the prompt's registration (placed by ui_layout.h), the button centred like the "Z" */
+        assert(p && p->tile_count == 1 && p->width > 100 && p->height > 10 && (size_t)p->width * p->height * 4 <= 128u * 1024);
+        assert(p->ox < 0 && p->ox > -(float)p->width / 1.6f && p->oy < 0 && p->oy > -(float)p->height / 1.6f);
+    }
     /* Phase 2 item 5: water quads tile one texel per course px, abut, and keep
        the surface frame's V range half a texel inside its frame. */
     for (float t = 0; t < 30; t += 0.37f) {

@@ -62,6 +62,23 @@ static inline float course_session_zoom(const CourseSession *s) { return s->zoom
 void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool source_step);
 /* A text sign's message with keyboard keys replaced by the controller's buttons. */
 CourseString course_sign_message(CourseString text, unsigned controller);
+/* The original message box (Stats.Message 253) frame for a text sign: 0 none,
+   1-6 opening (PlayMessage: gotoAndPlay(1), stop at 6, text shown on 6),
+   7-11 closing (StopMessage: gotoAndPlay(7)). One frame per source frame. */
+static inline unsigned course_message_frame(const CourseSession *s)
+{
+    if (s->state != SESSION_SIGN || s->sign_picture || s->sign_phase == 0) return 0;
+    if (s->sign_phase == 1) return s->sign_frames + 1 < 6 ? s->sign_frames + 1 : 6;
+    return s->sign_frames + 7 < 11 ? s->sign_frames + 7 : 11;
+}
+/* Frames the "Press .. to Continue" prompt (250) has played, or -1: it starts
+   when the message box reaches frame 6, or with the picture page. */
+static inline int course_prompt_frame(const CourseSession *s)
+{
+    if (s->state != SESSION_SIGN || s->sign_phase != 1) return -1;
+    if (s->sign_picture) return (int)s->sign_frames;
+    return s->sign_frames >= 5 ? (int)s->sign_frames - 5 : -1;
+}
 #define COURSE_WARP_SECONDS 0.5f
 #ifdef __cplusplus
 }

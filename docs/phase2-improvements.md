@@ -37,3 +37,18 @@ the wait. Mapping code: `source/game/input_map.c` (host tested in
 `controls_test`), hardware reading: `source/platform/input.c`. The controller
 picture pages now exist for GameCube, Classic and Wii Remote (their look is
 still to be redesigned).
+
+## Text signs (original message box and font)
+
+Text signs use the original message box, Stats.Message (sprite 253), rendered from the SWF without its text field and prompt (`tools/ui_art.py`):
+
+- **Animation.** Frames 2-6 open the box and frames 7-11 close it; the port scales the frame-6 box into each frame's rectangle (`ui_layout.h` `message_box_rects`).
+- **Text.** The message is drawn in the original font 155 (bold Arial, the 2010 SWF's embedded font) at the field's size 17, centred and white within the field's bounds. Font 155 has no 'q', so that glyph comes from Liberation Sans Bold, which has Arial's metrics (`tools/export_fonts.py`, `font_atlas.bin`, `font_metrics.h`). Tags and entities are stripped and lines wrap at spaces (`source/render/text_layout.c`).
+- **Prompt.** The original "Press Z to Continue" (sprite 250) comes in one version per controller, with the "Z" replaced by that controller's read button from `tools/sign_buttons.py`. It fades in and pulses with the original's per-frame brightness (frames 80-135 loop), in the message box and at each picture page's own prompt position. Picture pages are now placed at their original stage position.
+- **Other text.** Toad's talk cloud uses font 155 at size 15 in the original light yellow (255,255,179), left aligned like field 185. The hint bar, area title, completion screen and nozzle banner use the same font instead of the old block letters.
+
+Tests:
+
+- `text_layout_test`: HTML stripping, wrapping and the original fonts.
+- `course_session_test` `test_message_box_frames`.
+- `course_art_test`: the box and the three prompts.

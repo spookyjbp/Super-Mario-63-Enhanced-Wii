@@ -11,6 +11,9 @@
 #include "object_art_ids.h"
 #include "object_select.h"
 #include "water_tex.h"
+#include "font_atlas_bin.h"
+#include "text_layout.h"
+#include "ui_layout.h"
 #include "objects_8e1_0_bin.h"
 #if OBJECT_ART_PACKS > 1
 #include "objects_8e1_1_bin.h"
@@ -26,8 +29,9 @@
 #define MEM2_RESERVE (26u * 1024 * 1024)
 #define PICTURE_BYTES (1024u * 1024)
 #define OBJECT_BYTES (5u * 1024 * 1024)
+#define PROMPT_BYTES (128u * 1024)
 static CourseArtPack art;
-static unsigned char *mem2, *picture_mem;
+static unsigned char *mem2, *picture_mem, *prompt_mem;
 static GXTexObj layer_tex[ART_LAYER_PICTURE][COURSE_ART_MAX_TILES];
 static const CourseArtLayer *layers[ART_LAYER_PICTURE];
 static const CourseArea *loaded_area;
@@ -35,7 +39,8 @@ static GXTexObj picture_tex;
 static ArtPack object_packs[OBJECT_ART_PACKS];
 static GXTexObj object_tex[OBJECT_ART_PACKS];
 static bool objects_ready;
-static GXTexObj water_body, water_surface;
+static GXTexObj water_body, water_surface, font_tex, prompt_tex;
+static const CourseArtLayer *loaded_prompt;
 
 /* Decode the three compressed object packs (art pack v3) into MEM2 once. */
 static bool load_objects(unsigned char *dst, size_t cap)
@@ -134,6 +139,8 @@ static void hud_number(unsigned value, float x, float y, float width, float scal
     float left = centre ? x - n * advance / 2 : x;
     for (int i = 0; i < n; ++i) hud_clip(OBJ_HUD_DIGITS, (unsigned)(buf[i] - '0'), left + i * advance, y, width, scale);
 }
+enum { ALIGN_LEFT, ALIGN_CENTRE, ALIGN_RIGHT };
+static void draw_cstring(unsigned font, const char *t, float x0, float x1, float y, GXColor c, int align);
 static void draw_hud(const CourseSession *s, float width)
 {
     /* Shine and star coin icons with "=" (left), TotalStars / TotalStarCoins. */
@@ -158,13 +165,12 @@ static void draw_hud(const CourseSession *s, float width)
         hud_number((unsigned)lroundf(p->water), 431.2f, 266.9f - 20.7f + 1, width, 15.0f / 16, true);
     }
     if (s->nozzle_banner) { /* port HUD: which nozzle was just selected (1.5 s) */
-        static const char *const names[] = {"NO NOZZLE", "HOVER NOZZLE", "ROCKET NOZZLE", "TURBO NOZZLE"};
+        static const char *const names[] = {"No Nozzle", "Hover Nozzle", "Rocket Nozzle", "Turbo Nozzle"};
         const char *name = names[s->banner_fludd < 4 ? s->banner_fludd : 0];
         const unsigned char a = (unsigned char)(s->nozzle_banner > 20 ? 255 : s->nozzle_banner * 12);
-        const float tw = (float)strlen(name) * 6 * 2.5f, x = width - 24 - tw, y = 480 - 190;
-        graphics_rect(x - 10, y - 8, tw + 18, 34, (GXColor){0, 0, 0, (unsigned char)(a / 2)});
-        graphics_text(x + 2, y + 2, name, 2.5f, (GXColor){0, 0, 0, a});
-        graphics_text(x, y, name, 2.5f, (GXColor){120, 200, 255, a});
+        const float tw = text_width(&font_info[FONT_SIGN], name, (unsigned)strlen(name)), x = width - 24 - tw, y = 480 - 190;
+        graphics_rect(x - 10, y - 6, tw + 20, 36, (GXColor){0, 0, 0, (unsigned char)(a / 2)});
+        draw_cstring(FONT_SIGN, name, x, x + tw + 1, y, (GXColor){120, 200, 255, a}, ALIGN_LEFT);
     }
 }
 static const CourseArtLayer *loaded_picture;
@@ -175,10 +181,15 @@ bool course_render_init(void)
     /* Reserve MEM2 for one area's textures plus a picture page, once. */
     unsigned char *lo = (unsigned char *)(((uintptr_t)SYS_GetArena2Lo() + 31) & ~(uintptr_t)31);
     if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES)) return false;
-    if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES)) return false;
-    mem2 = lo; picture_mem = lo + MEM2_RESERVE;
-    SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES);
+    if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES))
+        return false;
+    mem2 = lo; picture_mem = lo + MEM2_RESERVE; prompt_mem = lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES;
+    SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES);
     objects_ready = load_objects(lo + MEM2_RESERVE + PICTURE_BYTES, OBJECT_BYTES);
+    /* The original font 155 (tools/export_fonts.py): RGBA8 after a 32-byte header. */
+    GX_InitTexObj(&font_tex, (void *)(font_atlas_bin + 32), FONT_ATLAS_W, FONT_ATLAS_H, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP,
+                  GX_FALSE);
+    GX_InitTexObjLOD(&font_tex, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
     /* Water textures repeat across a volume (GX_REPEAT); data lives in the DOL. */
     GX_InitTexObj(&water_body, (void *)water_body_tex, WATER_BODY_W, WATER_BODY_H, GX_TF_RGB5A3, GX_REPEAT, GX_REPEAT,
                   GX_FALSE);
@@ -232,27 +243,74 @@ static void draw_layer(CourseArtKind k, float anchor_x, float anchor_y, float sc
         graphics_quad_alpha(&layer_tex[k][t], xs, ys, 0, 0, 1, 1, 255);
     }
 }
-static void text_block(float x, float y, CourseString s, float scale, GXColor color, unsigned wrap)
+/* Stage x (0..450) to screen x, centred on wide screens (the message box,
+   picture pages and their prompts are centred on the original stage). */
+static float stage_x(float x, float width) { return width / 2 + (x - 225) * HUD_K; }
+/* Text in the original font 155 (text_layout.c): HTML dropped, wrapped to
+   [x0, x1] (screen px), first line's top at y; at most max_chars plain characters. */
+static void draw_text(unsigned font, const char *src, size_t len, float x0, float x1, float y, GXColor colour, int align,
+                      unsigned max_chars)
 {
-    char line[96]; unsigned n = 0; bool tag = false;
-    for (unsigned i = 0; i <= s.length; ++i) {
-        const char c = i < s.length ? s.text[i] : '\n';
-        if (c == '<') {tag = true; continue;}
-        if (c == '>') {tag = false; continue;}
-        if (tag) continue;
-        if (c == '\n' || n >= wrap || n >= sizeof(line) - 1) {
-            /* break at the last space when wrapping mid-word */
-            unsigned cut = n;
-            if (c != '\n' && n >= wrap) for (unsigned k = n; k > 0; --k) if (line[k - 1] == ' ') {cut = k - 1; break;}
-            line[cut] = 0;
-            graphics_text(x, y, line, scale, color);
-            y += 10 * scale;
-            unsigned rest = cut < n ? n - cut - 1 : 0;
-            memmove(line, line + n - rest, rest); n = rest;
-            if (c == '\n') continue;
+    static char plain[2048];
+    TextLine lines[32];
+    unsigned n = text_plain(src, len, plain, sizeof plain);
+    if (max_chars < n) n = max_chars;
+    const FontInfo *f = &font_info[font];
+    const unsigned count = text_wrap(f, plain, n, x1 - x0, lines, 32);
+    const float lh = text_line_height(f, 2 * HUD_K);              /* Flash leading 2 */
+    const float mul[4] = {colour.r / 255.0f, colour.g / 255.0f, colour.b / 255.0f, colour.a / 255.0f}, add[3] = {0, 0, 0};
+    for (unsigned l = 0; l < count; ++l) {
+        float x = align == ALIGN_CENTRE ? (x0 + x1 - lines[l].width) / 2 : align == ALIGN_RIGHT ? x1 - lines[l].width : x0;
+        const float base = y + f->ascent + (float)l * lh;
+        for (unsigned k = lines[l].start; k < lines[l].end; ++k) {
+            const unsigned char c = (unsigned char)plain[k];
+            if (c < FONT_FIRST || c > FONT_LAST) continue;
+            const FontGlyph *g = &f->glyphs[c - FONT_FIRST];
+            if (g->w) {
+                const float gx = roundf(x) + g->ox, gy = roundf(base) + g->oy;
+                const float xs[4] = {gx, gx + g->w, gx + g->w, gx}, ys[4] = {gy, gy, gy + g->h, gy + g->h};
+                graphics_quad_cxform(&font_tex, xs, ys, (float)g->x / FONT_ATLAS_W, (float)g->y / FONT_ATLAS_H,
+                                     (float)(g->x + g->w) / FONT_ATLAS_W, (float)(g->y + g->h) / FONT_ATLAS_H, mul, add);
+            }
+            x += g->advance;
         }
-        line[n++] = (c >= 'a' && c <= 'z') ? (char)(c - 32) : c;
     }
+}
+static void draw_cstring(unsigned font, const char *t, float x0, float x1, float y, GXColor c, int align)
+{ draw_text(font, t, strlen(t), x0, x1, y, c, align, ~0u); }
+/* A picture-slot layer (picture page or message box), one texture at a time. */
+static bool load_picture(const CourseArtLayer *pic)
+{
+    if (!pic || pic->tile_count != 1) return false;
+    if (pic != loaded_picture) {
+        if (!upload(&pic->tiles[0], picture_mem, PICTURE_BYTES, &picture_tex)) return false;
+        GX_InvalidateTexAll(); loaded_picture = pic;
+    }
+    return true;
+}
+/* The "Press .. to Continue" prompt (250) for the controller in use, placed at
+   its page's position, faded as the original's frames. */
+static void draw_prompt(const CourseSession *s, const char *page, size_t page_len, float width)
+{
+    int f = course_prompt_frame(s);
+    if (f < 0) return;
+    if (f >= PROMPT_FRAMES) f = PROMPT_LOOP + (f - PROMPT_LOOP) % (PROMPT_FRAMES - PROMPT_LOOP);
+    const unsigned char a = prompt_alpha[f];
+    if (!a) return;
+    const PromptPlace *place = NULL;
+    for (unsigned i = 0; i < PROMPT_PLACES; ++i)
+        if (strlen(prompt_places[i].page) == page_len && !memcmp(prompt_places[i].page, page, page_len)) place = &prompt_places[i];
+    if (!place) return;
+    char key[12];
+    snprintf(key, sizeof key, "Prompt@%u", (unsigned)s->controller);
+    const CourseArtLayer *l = course_art_picture(&art, key, strlen(key));
+    if (!l || l->tile_count != 1) return;
+    if (l != loaded_prompt) {
+        if (!upload(&l->tiles[0], prompt_mem, PROMPT_BYTES, &prompt_tex)) return;
+        GX_InvalidateTexAll(); loaded_prompt = l;
+    }
+    const float x = stage_x(place->x + l->ox, width), y = (place->y + l->oy) * HUD_K;
+    graphics_sprite_alpha(&prompt_tex, x, y, (float)l->width, (float)l->height, 0, 0, 1, 1, a);
 }
 void course_render(const CourseSession *s, float t)
 {
@@ -308,38 +366,46 @@ void course_render(const CourseSession *s, float t)
     const GXColor white = {255, 255, 255, 255};
     if (s->hint.length) {
         graphics_rect(20, 420, width - 40, 40, (GXColor){0, 0, 0, 150});
-        text_block(30, 428, s->hint, 1.5f, white, (unsigned)((width - 60) / 9));
+        draw_text(FONT_TALK, s->hint.text, s->hint.length, 30, width - 30, 424, white, ALIGN_LEFT, ~0u);
     }
     draw_hud(s, width);
     if (s->state == SESSION_TALK && s->toad_text.length) {
         /* 'tm' (186 at (246, 259)): cloud, text typed two characters a frame
            (a blank first line when shorter than 40), Z prompt once complete. */
         hud_clip(OBJ_HUD_TALK_BOX, 0, 246, 259, width, 1);
-        const CourseString shown = {s->toad_text.text, (uint16_t)s->toad_chars};
-        const float tx = hud_x(246, width) - 141.45f * HUD_K, ty = (259 - 26.9f + (s->toad_text.length < 40 ? 14 : 0)) * HUD_K;
-        const unsigned wrap = (unsigned)(280 * HUD_K / 9);
-        text_block(tx + 2, ty + 2, shown, 1.5f, (GXColor){0, 0, 0, 160}, wrap);
-        text_block(tx, ty, shown, 1.5f, white, wrap);
+        /* tm's text field (185): font 155 size 15, light yellow, left aligned, at
+           (-143.45, -28.9) in tm; a blank first line when the message is short. */
+        const float x0 = hud_x(246, width) + (-143.45f + 2) * HUD_K, x1 = hud_x(246, width) + (-143.45f + 288.9f - 2) * HUD_K;
+        const float lh = text_line_height(&font_info[FONT_TALK], 2 * HUD_K);
+        const float ty = (259 - 28.9f + 2) * HUD_K + (s->toad_text.length < 40 ? lh : 0);
+        draw_text(FONT_TALK, s->toad_text.text, s->toad_text.length, x0, x1, ty, (GXColor){255, 255, 179, 255}, ALIGN_LEFT,
+                  s->toad_chars);
         if (s->toad_chars >= s->toad_text.length) hud_clip(OBJ_HUD_TALK_Z, (s->hud.ticks / 2) % 50, 246, 259, width, 1);
     }
     if (s->area_title_time > 0)
-        text_block(width / 2 - 100, 60, s->area_title, 3, white, 30);
-    if (s->state == SESSION_SIGN && s->sign_phase == 1) {
-        if (s->sign_picture) {
-            const CourseArtLayer *pic = course_art_controller_picture(&art, s->sign_text, s->controller);
-            if (pic && pic != loaded_picture && pic->tile_count == 1 &&
-                upload(&pic->tiles[0], picture_mem, PICTURE_BYTES, &picture_tex)) {
-                GX_InvalidateTexAll(); loaded_picture = pic;
-            }
-            if (pic && pic == loaded_picture) {
-                /* One texel per screen pixel (pages are rendered at 1.6 px per stage px,
-                   the stage's own scale on the 480-line screen), centred. */
-                const float w = fminf(width - 16, (float)pic->width), h = w * pic->height / pic->width;
-                graphics_sprite(&picture_tex, (width - w) / 2, (480 - h) / 2, w, h, 0, 0, 1, 1);
-            }
-        } else {
-            graphics_rect(40, 120, width - 80, 200, (GXColor){20, 20, 40, 220});
-            text_block(56, 136, course_sign_message(s->sign_text, s->controller), 2, white, (unsigned)((width - 112) / 12));
+        draw_text(FONT_SIGN, s->area_title.text, s->area_title.length, 40, width - 40, 50, white, ALIGN_CENTRE, ~0u);
+    if (s->state == SESSION_SIGN && s->sign_picture && s->sign_phase == 1) {
+        /* Stats.Picture: the page (one texel per screen pixel) at its stage position. */
+        const CourseArtLayer *pic = course_art_controller_picture(&art, s->sign_text, s->controller);
+        if (load_picture(pic))
+            graphics_sprite(&picture_tex, stage_x(pic->ox, width), pic->oy * HUD_K, (float)pic->width, (float)pic->height,
+                            0, 0, 1, 1);
+        draw_prompt(s, s->sign_text.text, s->sign_text.length, width);
+    }
+    const unsigned mf = course_message_frame(s);
+    if (mf > 1) {
+        /* Stats.Message (253): the box opens (frames 2-6) and closes (7-11) as the
+           original morph, scaled into each frame's rectangle; text on frame 6. */
+        const CourseArtLayer *box = course_art_picture(&art, "Message", 7);
+        const float *r = message_box_rects[mf - 1];
+        if (load_picture(box))
+            graphics_sprite(&picture_tex, stage_x(r[0], width), r[1] * HUD_K, (r[2] - r[0]) * HUD_K, (r[3] - r[1]) * HUD_K,
+                            0, 0, 1, 1);
+        if (mf == 6) {
+            const CourseString m = course_sign_message(s->sign_text, s->controller);
+            draw_text(FONT_SIGN, m.text, m.length, stage_x(MESSAGE_TEXT_X0 + 2, width), stage_x(MESSAGE_TEXT_X1 - 2, width),
+                      (MESSAGE_TEXT_Y0 + 2) * HUD_K, white, ALIGN_CENTRE, ~0u);
+            draw_prompt(s, "Message", 7, width);
         }
     }
     if (s->state == SESSION_WARP) { /* righttransition: wipe to black and back */
@@ -348,7 +414,8 @@ void course_render(const CourseSession *s, float t)
     }
     if (s->state == SESSION_COMPLETE) {
         graphics_rect(0, 0, width, 480, (GXColor){0, 0, 0, 230});
-        graphics_text(width / 2 - 228, 200, "TUTORIAL COMPLETE", 4, white);
-        graphics_text(width / 2 - 270, 260, "INTRO MOVIE 2 AND THE CASTLE ARE NOT IN THIS PORT YET", 1.5f, white);
+        draw_cstring(FONT_SIGN, "Tutorial complete!", 20, width - 20, 190, white, ALIGN_CENTRE);
+        draw_cstring(FONT_TALK, "Intro movie 2 and the castle are not in this port yet.", 20, width - 20, 240, white,
+                     ALIGN_CENTRE);
     }
 }

@@ -335,6 +335,24 @@ static void test_camera_moves_every_tick(void)
         lc = s.game.camera.x; lp = p->x; lrel = rel;
     }
 }
+static void test_message_box_frames(void)
+{
+    /* Stats.Message 253: frames 2-6 open, 6 holds with the text, 7-11 close; the prompt starts on frame 6. */
+    CourseSession m = {0};
+    m.state = SESSION_SIGN; m.sign_phase = 1;
+    const unsigned open[] = {1, 2, 3, 4, 5, 6, 6, 6};
+    for (unsigned f = 0; f < 8; ++f) { m.sign_frames = f; assert(course_message_frame(&m) == open[f]); }
+    m.sign_frames = 4; assert(course_prompt_frame(&m) == -1);
+    m.sign_frames = 5; assert(course_prompt_frame(&m) == 0);
+    m.sign_frames = 40; assert(course_prompt_frame(&m) == 35);
+    m.sign_phase = 2;
+    for (unsigned f = 0; f < 6; ++f) { m.sign_frames = f; assert(course_message_frame(&m) == (f + 7 < 11 ? f + 7 : 11)); }
+    assert(course_prompt_frame(&m) == -1);
+    m.sign_phase = 1; m.sign_picture = true; m.sign_frames = 3;
+    assert(course_message_frame(&m) == 0 && course_prompt_frame(&m) == 3);  /* picture pages have no box */
+    m.state = SESSION_PLAY; assert(course_message_frame(&m) == 0 && course_prompt_frame(&m) == -1);
+}
+
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
@@ -343,5 +361,6 @@ int main(void)
     test_opening_and_controls_sign(); test_hints(); test_area_chain_and_completion(); test_hud_power_meter();
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
-    puts("12 course session (tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_message_box_frames();
+    puts("13 course session (message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }
