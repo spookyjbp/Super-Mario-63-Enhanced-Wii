@@ -32,3 +32,19 @@ Decisions
 
 Later (user request): every picture sign animates like the original (the
 stomp boxes' 101-frame demo, the controls page Marios, the Goomba demo, ...).
+
+## "Press … to Continue" prompt, redone (approved 2026-11-02, not in the game yet)
+
+Preview: `prompt_preview.png` (at in-game size on a Dolphin screenshot; the top row is the original).
+
+- **Split:** the original prompt (sprite 250, shape 244 at frame 50) is split into its two layers, the teal words and the white glow. `tools/sign_mockup/prompt_split.py` makes the other layer's fills transparent and renders each one.
+- **Words:** "Press" and "to Continue" keep the original letters.
+- **Glow:** the original glow is stretched smoothly to the new width and stays centred.
+- **Button:** the controller's read button replaces the "Z", sized 1.6 × the Z's cap height and centred on it, with the original word spacing. Code: `tools/sign_mockup/prompt_build.py`, `build(kind, 1.6)`.
+- **Classic:** "L or R", with "or" cut from the prompt's own letters (the r of Press, the o of to).
+- **Wii Remote:** "A + B", with a "+" drawn in the same teal.
+
+To do when it is added to the game:
+
+- Replace `ui_art.prompt_versions` with this method.
+- The fade and pulse stay as they are (`prompt_alpha`).
