@@ -61,3 +61,13 @@ To do when it is added to the game:
 
 - Text signs keep the prompt inside the message box.
 - Preview it on every picture sign for every controller before adding it to the game.
+
+## Text signs: centred text (user request 2026-11-02, saved for later)
+
+**Request.** The text in the message box should be centred. Each line is already centred left-right, as in the original field 251. What is missing is centring top-to-bottom: the text block starts at the field's top (MESSAGE_TEXT_Y0), so short messages leave the lower half of the box empty. See the user's screenshot of the run/dive sign.
+
+**Plan.**
+
+- Centre the wrapped text block vertically in the space between the box's top and the "Press … to Continue" prompt.
+- Keep long messages from overlapping the prompt.
+- Show previews of several signs (short and long) before adding it to the game.
