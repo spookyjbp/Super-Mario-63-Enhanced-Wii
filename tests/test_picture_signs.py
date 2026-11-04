@@ -3,7 +3,8 @@ tools/controller_signs.py): checked on the generated art pack.
 
 * every controller page keeps the original page art outside the keys;
 * the keys are gone (the controls page's arrow and Z/X/C keycaps, the stomp
-  page's keycaps) and the boxes show Mario's ground-pound demo;
+  page's keycaps);
+* the moving parts (walking Marios, the stomp demo, the refill drops) animate;
 * Toad's talk prompt and the message box exist for every controller.
 """
 import sys, unittest
@@ -15,6 +16,33 @@ sys.path.insert(0, str(ROOT / 'tests'))
 from test_art_repair import course_layers
 
 LAYERS = {layer: image for area, layer, image in course_layers() if area == '*'}
+
+
+def anim_layers():
+    """Animated layers ("<label>~"): [(x, y, frame image)] per tile."""
+    import struct, lz4.block
+    from test_art_repair import GEN, rgb5a3
+    d = (GEN / 'course_8e1_art.bin').read_bytes()
+    n = struct.unpack_from('>8sIIf', d)[2]; q = 20; out = {}
+    def string():
+        nonlocal q
+        L = struct.unpack_from('>H', d, q)[0]; s = d[q + 2:q + 2 + L].decode(); q += 2 + L; return s
+    for _ in range(n):
+        area, name = string(), string()
+        q += 24
+        count = struct.unpack_from('>I', d, q)[0]; q += 4
+        tiles = []
+        for _ in range(count):
+            tx, ty, tw, th, size, packed = struct.unpack_from('>HHHHII', d, q); q += 16
+            if name.endswith('~'):
+                tiles.append((tx, ty, rgb5a3(lz4.block.decompress(d[q:q + packed], uncompressed_size=size), tw, th)))
+            q += packed; q += (-q) % 4
+        if name.endswith('~'):
+            out[name] = tiles
+    return out
+
+
+ANIM = anim_layers()
 KINDS = 3
 # (x0, y0, x1, y1) of each page that must stay the original art
 KEPT = {'controls': [(0, 0, 487, 70)],                       # "Controls" title
@@ -54,15 +82,34 @@ class PictureSigns(unittest.TestCase):
             page = LAYERS[f'controls@{k}']
             self.assertLess(keycap_grey(page[y0:y1, x0:x1]), 400, k)   # only anti-aliased edges (the original: ~4800)
 
-    def test_stomp_boxes_show_the_demo(self):
+    def test_pages_animate(self):
+        """The moving parts play over the still page, one frame per tile, as long
+        as the original's cycle: the controls page's walking Marios (80), the
+        stomp boxes' ground-pound demo (101), the refill page's drops (123)."""
         def red(region):   # Mario's cap and shirt
             rgb = region[..., :3].astype(int)
             return ((rgb[..., 0] > 180) & (rgb[..., 1] < 80) & (rgb[..., 2] < 80) & (region[..., 3] > 200)).sum()
-        boxes = [(12, 147, 160, 275), (324, 147, 472, 275)]
-        for x0, y0, x1, y1 in boxes:
-            self.assertEqual(red(LAYERS['stomp'][y0:y1, x0:x1]), 0)      # frame 1: no Mario in the box yet
-            for k in range(KINDS):
-                self.assertGreater(red(LAYERS[f'stomp@{k}'][y0:y1, x0:x1]), 30, (k, x0))
+        for label, count in (('controls', 80), ('stomp', 101), ('refill', 123)):
+            frames = ANIM[label + '~']
+            self.assertEqual(len(frames), count, label)
+            pictures = {f[2].tobytes() for f in frames}
+            self.assertGreater(len(pictures), count // 8, label)            # it moves
+            page = LAYERS[label]
+            for x, y, im in frames:   # every frame lies on the page
+                self.assertLessEqual(x + im.shape[1], -(-page.shape[1] // 4) * 4)
+                self.assertLessEqual(y + im.shape[0], -(-page.shape[0] // 4) * 4)
+        # the boxes' Mario is only in the animation, in both boxes
+        for x0, x1 in ((12, 160), (324, 472)):
+            self.assertEqual(red(LAYERS['stomp'][147:275, x0:x1]), 0)
+            seen = 0
+            for x, y, im in ANIM['stomp~']:
+                canvas = np.zeros(LAYERS['stomp'].shape[:2] + (4,), np.uint8)
+                h, w = im.shape[:2]
+                canvas[y:y + h, x:x + w] = im[:canvas.shape[0] - y, :canvas.shape[1] - x]
+                seen += red(canvas[147:275, x0:x1]) > 30
+            self.assertGreater(seen, 50, x0)
+        # the controls page's walking Marios are not in the still page
+        self.assertLess(red(LAYERS['controls@0'][90:160, 0:230]), red(LAYERS['controls'][90:160, 0:230]) + 1)
 
     def test_talk_prompt_and_message_box(self):
         self.assertIn('Message', LAYERS)

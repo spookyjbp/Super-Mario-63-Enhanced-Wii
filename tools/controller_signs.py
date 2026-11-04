@@ -44,7 +44,6 @@ BACKGROUND = {'Start': 255, 'controls': 319, 'bomb': 406, 'hover': 560, 'stomp':
 # Keys removed from the render itself: {sprite: {characters}} (ui_art.hide).
 HIDE = {371: {327, 329, 358, 359, 363}, 619: {416}, 424: {417}}
 DIVE_BITMAP, EXPLOSION_BITMAP = 362, 412
-DEMO_SPRITE, DEMO_FRAMES = 424, (45, 57)   # the boxes' demo: a mid-pound frame in each box
 FONT = B.FONT
 # Controls page button heights (as approved)
 CONTROL_SIZES = {'gamecube': dict(jump=62, spin=46, stomp=58, fludd=50),
@@ -160,7 +159,7 @@ def hover(page, bg, kind, art):
 
 def stomp(page, bare, kind, art):
     o = bare.copy()
-    for im, x, y in art['demo']:   # may start left of / above the page: clip
+    for im, x, y in art.get('demo', ()):   # may start left of / above the page: clip
         sx, sy = max(0, -x), max(0, -y)
         o.alpha_composite(im.crop((sx, sy, im.width, im.height)), (x + sx, y + sy))
     put(o, fit(B.STYLE[kind]['stomp'](56), 86, 60), 436, 38)

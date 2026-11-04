@@ -82,6 +82,18 @@ def svg_origin(path):
     return -t[4], -t[5]
 
 
+def png_origin(svg_path, png_size, zoom=None):
+    """svg_origin for FFDec's PNG of the same frame: the PNG canvas is padded
+    evenly around filters (glows, blurs), so its (0, 0) sits half the size
+    difference further up-left."""
+    zoom = zoom or ZOOM
+    root = ET.parse(svg_path).getroot()
+    sw = float(re.search(r'[\d.]+', root.get('width')).group())
+    sh = float(re.search(r'[\d.]+', root.get('height')).group())
+    ox, oy = svg_origin(svg_path)
+    return ox - (png_size[0] / zoom - sw) / 2, oy - (png_size[1] / zoom - sh) / 2
+
+
 def build(work, jar, swf, sprites):
     """Returns (layers [(name, image, ox, oy)], ui_layout.h text)."""
     work.mkdir(parents=True, exist_ok=True)
@@ -89,7 +101,8 @@ def build(work, jar, swf, sprites):
     hidden.write_bytes(hide(swf, {MESSAGE: {MESSAGE_TEXT, PROMPT}}))
     box_dir = ffdec(jar, work, hidden, MESSAGE, range(1, 12), work / 'message')
     svg_dir = ffdec(jar, work, hidden, MESSAGE, [6], work / 'message-svg', svg=True)
-    ox, oy = svg_origin(svg_dir / '6.svg')
+    with Image.open(box_dir / '6.png') as p6:
+        ox, oy = png_origin(svg_dir / '6.svg', p6.size)
     rects = []
     for f in range(1, 12):
         im = Image.open(box_dir / f'{f}.png').convert('RGBA')
@@ -101,7 +114,8 @@ def build(work, jar, swf, sprites):
     # the prompt
     prompt_dir = ffdec(jar, work, hidden, PROMPT, range(1, sprites[PROMPT]['frames'] + 1), work / 'prompt')
     psvg = ffdec(jar, work, hidden, PROMPT, [50], work / 'prompt-svg', svg=True)
-    pox, poy = svg_origin(psvg / '50.svg')
+    with Image.open(prompt_dir / '50.png') as p50:
+        pox, poy = png_origin(psvg / '50.svg', p50.size)
     env = []
     for f in range(1, sprites[PROMPT]['frames'] + 1):
         env.append(int(np.asarray(Image.open(prompt_dir / f'{f}.png').convert('RGBA'))[..., 3].max()))
@@ -117,7 +131,8 @@ def build(work, jar, swf, sprites):
     # button in the key's two poses, right-aligned with the key, at its centre.
     zpng = ffdec(jar, work, hidden, TALK_Z, [1], work / 'talkz')
     zsvg = ffdec(jar, work, hidden, TALK_Z, [1], work / 'talkz-svg', svg=True)
-    zox, zoy = svg_origin(zsvg / '1.svg')
+    with Image.open(zpng / '1.png') as z1:
+        zox, zoy = png_origin(zsvg / '1.svg', z1.size)
     zb = Image.open(zpng / '1.png').convert('RGBA').getchannel('A').getbbox()
     to_tm = lambda px, o, at: at + TALK_Z_SCALE * (o + px / ZOOM)
     z_right = to_tm(zb[2], zox, TALK_Z_AT[0])

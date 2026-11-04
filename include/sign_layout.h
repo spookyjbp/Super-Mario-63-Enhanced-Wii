@@ -29,4 +29,6 @@ static inline float sign_text_top(float top, float prompt_top, unsigned lines, f
     const float avail = prompt_top - SIGN_TEXT_GAP - top, block = (float)lines * lh;
     return block >= avail ? top : top + (avail - block) / 2;
 }
+/* The frame of an animated picture sign: its clips loop from the page's opening. */
+static inline unsigned sign_anim_frame(unsigned sign_frames, unsigned frames) { return frames ? sign_frames % frames : 0; }
 #endif

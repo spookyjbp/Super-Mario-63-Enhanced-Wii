@@ -4,7 +4,7 @@
    GX RGB5A3 tiles per area layer. Pure parsing; GX upload lives in platform code. */
 #include "course_pack.h"
 #define COURSE_ART_MAX_LAYERS 80
-#define COURSE_ART_MAX_TILES 12
+#define COURSE_ART_MAX_TILES 128   /* an animated picture keeps one frame per tile */
 typedef enum { ART_LAYER_FAR, ART_LAYER_BG, ART_LAYER_MID, ART_LAYER_CLOSE, ART_LAYER_BACK, ART_LAYER_FRONT,
                ART_LAYER_PICTURE, ART_LAYER_KIND_COUNT } CourseArtKind;
 typedef struct { unsigned x, y, width, height, size, packed; const unsigned char *data; } CourseArtTile;

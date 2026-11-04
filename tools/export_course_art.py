@@ -29,6 +29,11 @@ import art_repair
 import swf_bitmap_fix
 import controller_signs
 import ui_art
+import sign_anim
+
+
+def sign_animated(labels):
+    return [l for l in labels if l in sign_anim.SPEC]
 
 ZOOM = 1.6
 TILE = 1024
@@ -306,45 +311,41 @@ def export(source, jar, output, areas):
     # Page placement: Stats.Picture (620) places the page sprite at stage (225, 150);
     # the canvas origin comes from the frame's SVG (the same for every frame).
     psvg = ui_art.ffdec(jar, work, pictures_swf, pic[0], [1], work / 'pictures-svg', svg=True)
-    pox, poy = ui_art.svg_origin(psvg / '1.svg')
+    with Image.open(C.sprite_dir(pages, pic[0]) / '1.png') as p1:   # the PNG canvas is padded around filters
+        pox, poy = ui_art.png_origin(psvg / '1.svg', p1.size)
     # The keys removed from the render itself (controller_signs.HIDE), the
     # bitmaps the new pages reuse, and the boxes' ground-pound demo (424).
+    # Animated pages (sign_anim.py): the page without its moving parts, which
+    # play as frames over it; the controller pages are built on that still page.
+    still = work / 'pictures-still.swf'
+    still.write_bytes(ui_art.hide(pictures_swf.read_bytes(), sign_anim.ANIM_HIDE))
+    anim_labels = [l for l in labels if l in sign_anim.SPEC]
+    st = ui_art.ffdec(jar, work, still, pic[0], [sprites[pic[0]]['labels'][l] + 1 for l in anim_labels],
+                      work / 'pictures-still') if anim_labels else None
     keyless = work / 'pictures-keyless.swf'
-    keyless.write_bytes(ui_art.hide(pictures_swf.read_bytes(), controller_signs.HIDE))
+    keyless.write_bytes(ui_art.hide(still.read_bytes(), controller_signs.HIDE))
     kl = ui_art.ffdec(jar, work, keyless, pic[0], [sprites[pic[0]]['labels'][l] + 1 for l in ('controls', 'stomp')],
                       work / 'pictures-keyless')
-    demo_png = ui_art.ffdec(jar, work, keyless, controller_signs.DEMO_SPRITE, controller_signs.DEMO_FRAMES, work / 'demo')
-    demo_svg = ui_art.ffdec(jar, work, keyless, controller_signs.DEMO_SPRITE, controller_signs.DEMO_FRAMES[:1],
-                            work / 'demo-svg', svg=True)
-    dox, doy = ui_art.svg_origin(demo_svg / f'{controller_signs.DEMO_FRAMES[0]}.svg')
     with (work / 'export.log').open('a') as log:
         subprocess.run(cmd[:cmd.index('-selectid')] + ['-selectid', f'{controller_signs.DIVE_BITMAP},{controller_signs.EXPLOSION_BITMAP}',
                                                          '-format', 'image:png', '-export', 'image', str(work / 'picture-bitmaps'),
                                                          str(pictures_swf)], check=True, stdout=log, stderr=log)
     sign_art = {'dive': Image.open(work / 'picture-bitmaps' / f'{controller_signs.DIVE_BITMAP}.png').convert('RGBA'),
                 'explosion': Image.open(work / 'picture-bitmaps' / f'{controller_signs.EXPLOSION_BITMAP}.png').convert('RGBA')}
-    variants = []
+    variants, anims = [], []
     for label in labels:
         im = Image.open(C.sprite_dir(pages, pic[0]) / f'{sprites[pic[0]]["labels"][label] + 1}.png').convert('RGBA')
         bb = im.getchannel('A').getbbox()
         im = im.crop(bb)  # the page itself; (x, y) its stage position
         x, y = 225 + pox + bb[0] / ZOOM, 150 + poy + bb[1] / ZOOM
+        if label in sign_animated(labels):
+            frames = sign_anim.build(work, jar, pictures_swf.read_bytes(), sprites, label, im,
+                                     (pox + bb[0] / ZOOM, poy + bb[1] / ZOOM))
+            anims.append((label + '~', frames, x, y, -(-im.width // 4) * 4, -(-im.height // 4) * 4))
+            im = Image.open(st / f'{sprites[pic[0]]["labels"][label] + 1}.png').convert('RGBA').crop(bb)
         variants.append((label, im, x, y))
         if label in ('controls', 'stomp'):
             sign_art[label] = Image.open(kl / f'{sprites[pic[0]]["labels"][label] + 1}.png').convert('RGBA').crop(bb)
-        if label == 'stomp':
-            # the demo in each box: 424's placements in the page (page px from the frame's canvas)
-            sign_art['demo'] = []
-            boxes = [e for d, e in sorted(sprites[pic[0]]['stage'][sprites[pic[0]]['labels'][label]].items())
-                     if e.get('id') == controller_signs.DEMO_SPRITE]
-            for e, f in zip(boxes, controller_signs.DEMO_FRAMES):
-                m = e['matrix']
-                if abs(m['sx'] - 1) > 1e-3 or abs(m['sy'] - 1) > 1e-3 or m['r0'] or m['r1']:
-                    raise ValueError('Stomp demo placement is scaled; not supported')
-                fr = Image.open(demo_png / f'{f}.png').convert('RGBA')
-                px = (m['tx'] / 20 + dox - pox) * ZOOM - bb[0]
-                py = (m['ty'] / 20 + doy - poy) * ZOOM - bb[1]
-                sign_art['demo'].append((fr,) + controller_signs.snap(sign_art['stomp'], fr, round(px), round(py)))
         if label in controller_signs.PAGES:
             bg = Image.open(work / 'picture-shapes' / f'{controller_signs.BACKGROUND[label]}.png').convert('RGBA')
             for k, kind in enumerate(controller_signs.CONTROLLERS):
@@ -366,6 +367,17 @@ def export(source, jar, output, areas):
         count += 1
         report.append({'area': '*', 'layer': label, 'size': [W, H], 'tiles': len(tiles),
                        'bytes': sum(len(t[4]) for t in tiles), 'raw': sum(t[5] for t in tiles)})
+    for label, frames, ox, oy, W, H in anims:   # one tile per frame, at its place on the page
+        out += C.pack_string('*') + C.pack_string(label) + struct.pack('>ffffII', ox, oy, 0, ZOOM, W, H)
+        out += struct.pack('>I', len(frames))
+        for fx, fy, fim in frames:
+            data = rgb5a3(fim)
+            blob = lz4.block.compress(data, store_size=False)
+            out += struct.pack('>HHHHII', fx, fy, fim.width, fim.height, len(data), len(blob)) + blob
+            out += bytes((-len(out)) % 4)
+        count += 1
+        report.append({'area': '*', 'layer': label, 'size': [W, H], 'tiles': len(frames),
+                       'bytes': 0, 'raw': 0})
     out[12:16] = struct.pack('>I', count)
     out += bytes((-len(out)) % 32)
     output.write_bytes(bytes(out))

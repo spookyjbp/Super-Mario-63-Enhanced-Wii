@@ -63,7 +63,7 @@ $(PLAY): course_play_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 $(SESSION): course_session_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated course_session_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
-$(CART): course_art_test.c $(ROOT)/source/assets/course_art.c $(ROOT)/source/assets/lz4_block.c $(ROOT)/source/game/course_pack.c
+$(CART): course_art_test.c $(ROOT)/include/course_art.h $(ROOT)/source/assets/course_art.c $(ROOT)/source/assets/lz4_block.c $(ROOT)/source/game/course_pack.c
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include course_art_test.c $(ROOT)/source/assets/course_art.c $(ROOT)/source/assets/lz4_block.c $(ROOT)/source/game/course_pack.c -lm -o $@
 $(OBJS): course_objects_test.c $(wildcard $(ROOT)/source/game/*.c) $(ROOT)/source/render/object_select.c $(HEADERS)

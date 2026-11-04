@@ -31,8 +31,11 @@
 #define PICTURE_BYTES (1024u * 1024)
 #define OBJECT_BYTES (5u * 1024 * 1024)
 #define PROMPT_BYTES (128u * 1024)
+#define ANIM_BYTES (256u * 1024)   /* one frame of an animated picture sign */
 static CourseArtPack art;
-static unsigned char *mem2, *picture_mem, *prompt_mem;
+static unsigned char *mem2, *picture_mem, *prompt_mem, *anim_mem;
+static GXTexObj anim_tex;
+static const CourseArtTile *loaded_anim;
 static GXTexObj layer_tex[ART_LAYER_PICTURE][COURSE_ART_MAX_TILES];
 static const CourseArtLayer *layers[ART_LAYER_PICTURE];
 static const CourseArea *loaded_area;
@@ -190,10 +193,11 @@ bool course_render_init(void)
     /* Reserve MEM2 for one area's textures plus a picture page, once. */
     unsigned char *lo = (unsigned char *)(((uintptr_t)SYS_GetArena2Lo() + 31) & ~(uintptr_t)31);
     if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES)) return false;
-    if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES))
+    if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES + ANIM_BYTES))
         return false;
     mem2 = lo; picture_mem = lo + MEM2_RESERVE; prompt_mem = lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES;
-    SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES);
+    anim_mem = prompt_mem + PROMPT_BYTES;
+    SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES + ANIM_BYTES);
     objects_ready = load_objects(lo + MEM2_RESERVE + PICTURE_BYTES, OBJECT_BYTES);
     /* The original font 155 (tools/export_fonts.py): RGBA8 after a 32-byte header. */
     GX_InitTexObj(&font_tex, (void *)(font_atlas_bin + 32), FONT_ATLAS_W, FONT_ATLAS_H, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP,
@@ -432,6 +436,19 @@ void course_render(const CourseSession *s, float t)
         if (load_picture(pic))
             graphics_sprite(&picture_tex, stage_x(pic->ox, width), pic->oy * HUD_K, (float)pic->width, (float)pic->height,
                             0, 0, 1, 1);
+        /* The page's moving parts ("<label>~", tools/sign_anim.py), one frame a source frame. */
+        char akey[32];
+        const int al = snprintf(akey, sizeof akey, "%.*s~", (int)s->sign_text.length, s->sign_text.text);
+        const CourseArtLayer *an = al > 0 && al < (int)sizeof akey ? course_art_picture(&art, akey, (size_t)al) : NULL;
+        if (an && an->tile_count) {
+            const CourseArtTile *T = &an->tiles[sign_anim_frame(s->sign_frames, an->tile_count)];
+            if (T != loaded_anim) {
+                if (upload(T, anim_mem, ANIM_BYTES, &anim_tex)) { GX_InvalidateTexAll(); loaded_anim = T; }
+            }
+            if (T == loaded_anim)
+                graphics_sprite(&anim_tex, stage_x(an->ox, width) + T->x, an->oy * HUD_K + T->y, (float)T->width,
+                                (float)T->height, 0, 0, 1, 1);
+        }
         draw_prompt(s, s->sign_text.text, s->sign_text.length, width, pic);
     }
     const unsigned mf = course_message_frame(s);
