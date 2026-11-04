@@ -72,6 +72,7 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     s->pack = pack; s->view_width = view_width; s->warp_target = -1;
     s->zoom = 1; s->camera_zoom = s->zoom2 = s->zoom2_from = 100; s->talk_zoomed = false;
     course_camera_set_zoom(1);
+    s->last_hurt_frame = ~0u;
     s->game.player.has_fludd = false; s->game.player.nozzles = 0; /* StartChar(..., Fluddpow "") */
     s->progress.hp = 8;                 /* _root.CharHP = 8 */
     hud_init(&s->hud, s->progress.hp);
@@ -269,12 +270,73 @@ void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool s
     }
     s->zoom = (s->zoom2_from + (s->zoom2 - s->zoom2_from) * fminf(1, fmaxf(0, frac))) / 100;
 }
+/* The faint's timeline, from the hurt clip Mario is in (0-based frames):
+   hurt1 1411 60 bgsong.stop(), 67 "Mario - Mamamiamoan", 95 Blackout(),
+   107 LifeLost(); hurt3 1430 24, 30, 58, 70. Otherwise (hurt2 ended, or no
+   hurt clip) attackFrame "Faint": 1703 'nes' plays "Mario-Fall", stops the
+   music and attaches MarioDeathGFX at Mario. */
+static void faint_events(CourseSession *s)
+{
+    Player *p = &s->game.player;
+    if (p->action == ACTION_HURT) {
+        const unsigned f = p->hurt_frame;
+        if (f == s->last_hurt_frame) return;
+        s->last_hurt_frame = f;
+        static const unsigned ev[2][4] = {{59, 66, 94, 106}, {23, 29, 57, 69}};
+        const unsigned *e = ev[p->hurt_kind == 1 ? 0 : 1];
+        if (f == e[0]) sfx_music(-1, -1);
+        if (f == e[1]) sfx_play(SFX_MAMAMIA, 100, 0);
+        if (f == e[2] && !s->blackout) s->blackout = 1;
+        if (f == e[3] && !s->lifelost) s->lifelost = 1;
+    } else if (p->action != ACTION_BONK && !s->death) {
+        s->death = 1;
+        s->death_x = p->x + PLAYER_WIDTH / 2; s->death_y = p->y + player_height(p);
+        sfx_music(-1, -1); sfx_play(SFX_FALL, 100, 0);
+    }
+}
+/* _root.ReviveMario(playingcourse, StartClip x, y): the area again from its
+   start, full health, its music, the StarIn wipe. */
+static void revive(CourseSession *s)
+{
+    Player *p = &s->game.player;
+    s->progress.hp = 8; s->progress.hpcoins = 0;
+    p->fainting = false; p->action = ACTION_NONE; p->hurt_frame = 0; p->blink = 0;
+    s->death = s->blackout = 0; s->last_hurt_frame = ~0u;
+    enter_area(s, s->runtime.area, course_cx(&s->runtime, s->world.spawn_x + PLAYER_WIDTH / 2),
+               course_cy(&s->runtime, s->world.spawn_y + PLAYER_HEIGHT));
+    if (course_string_equals(s->runtime.area->id, "8-E1-1") || course_string_equals(s->runtime.area->id, "8-E1-2-2"))
+        sfx_music(MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT);
+    s->starin = 1;
+}
+/* One source frame of the faint's screen clips. MarioDeathGFX: 48 Blackout(),
+   60 LifeLost(). Blackout: removed on frame 13. LifeLost: 14 "Explosion",
+   59 ReviveMario(). StarIn: 12 frames. */
+static void faint_fx_frame(CourseSession *s)
+{
+    if (s->death) {
+        ++s->death;
+        if (s->death == 48 && !s->blackout) s->blackout = 1;
+        if (s->death >= 60) { s->death = 0; if (!s->lifelost) s->lifelost = 1; }
+    }
+    if (s->blackout && ++s->blackout > 12) s->blackout = 0;   /* frame 13: removeMovieClip */
+    if (s->starin && ++s->starin > 12) s->starin = 0;
+    if (s->lifelost) {
+        ++s->lifelost;
+        if (s->lifelost == 14) sfx_play(SFX_EXPLOSION, 100, 0);
+        if (s->lifelost >= 59) { s->lifelost = 0; revive(s); }
+    }
+}
 void course_session_step(CourseSession *s, GameInput in)
 {
     s->controller = in.controller;
     course_session_zoom_step(s, in.zoom_axis, s->state == SESSION_TALK,
                              s->game.player.source_step, s->game.player.source_phase / 60.0f);
     course_camera_set_zoom(course_session_zoom(s));
+    if (s->death || s->blackout || s->lifelost || s->starin) {
+        s->fx_phase += 32;
+        if (s->fx_phase >= 60) { s->fx_phase -= 60; faint_fx_frame(s); }
+    }
+    if (s->lifelost) return;   /* LifeLost frame 2: _root.RemoveCourse() */
     /* KeyZ(): Z (read/talk/stomp). The port maps it to the pound button. */
     const bool z_pressed = in.pound_pressed; /* already a button-down event */
     if (s->area_title_time > 0) s->area_title_time = fmaxf(0, s->area_title_time - GAME_DT);
@@ -353,16 +415,12 @@ void course_session_step(CourseSession *s, GameInput in)
         break;
     case SESSION_PLAY:
         if (p->stun > 0 || p->ejump) in = (GameInput){.jump_held = in.jump_held}; /* StunTime / EJump: no control */
+        if (p->fainting || s->death) in = (GameInput){0};
+        if (s->death) { p->vx = p->vy = 0; break; }       /* Faint: Mario is hidden while MarioDeathGFX plays */
         game_step(&s->game, &s->world, in, s->view_width);
         if (p->source_step && s->tm_alpha > 0.01f) tm_step(s, false); /* the cloud fades out after the talk */
-        if (s->progress.hp <= 0) {
-            /* Faint: the original plays the faint clip and restarts the course
-               (lives); the port restarts this area's entry with full health. */
-            s->progress.hp = 8; s->progress.hpcoins = 0;
-            enter_area(s, s->runtime.area, course_cx(&s->runtime, s->world.spawn_x + PLAYER_WIDTH / 2),
-                       course_cy(&s->runtime, s->world.spawn_y + PLAYER_HEIGHT));
-            break;
-        }
+        if (s->progress.hp <= 0 && !p->fainting && p->action != ACTION_HURT && p->action != ACTION_BONK) p->fainting = true;
+        if (p->fainting) { faint_events(s); break; }
         try_read_sign(s, in, z_pressed);
         if (s->state == SESSION_PLAY) try_talk(s, z_pressed);
         if (s->state == SESSION_PLAY) check_exits(s, in);

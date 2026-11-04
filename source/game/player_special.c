@@ -49,7 +49,7 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
         if(p->bonk_frame<10) p->vx=0;
         if(p->source_step) {
             const bool any_key=in.horizontal!=0 || in.vertical!=0 || in.jump_held || in.crouch_held || in.nozzle_held;
-            const bool hold=(p->bonk_frame==14 && !(grounded || p->submerged)) || (p->bonk_frame==22 && !any_key);
+            const bool hold=(p->bonk_frame==14 && !(grounded || p->submerged)) || (p->bonk_frame==22 && !any_key && !p->fainting);
             if(!hold) ++p->bonk_frame;
             if(p->bonk_frame==10) {
                 p->vy=-4*ORIGINAL_VELOCITY;
@@ -66,7 +66,28 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
         /* Mario Main "hurt1" (1411): frame 4 adds setYspeed/setXspeed, frame 9
            clears the attack. "hurt3" (1430): frame 4 waits for the ground (or
            water), frame 16 for any key, frame 23 clears the attack. */
-        if(p->source_step) {
+        if(p->source_step && p->fainting) {
+            /* CharHP <= 0. hurt1: frame 4 adds setYspeed - 3 and setXspeed * 0.8 and
+               goes to 'falling' (10); frames 10-54 go to 'land' (55) on the ground or
+               in water (54 waits there); then on to 107. hurt3: frame 4 waits for the
+               ground, frame 16 goes to 'end' (24), then on to 70. Nothing ends them:
+               LifeLost() takes over (course_session.c). */
+            const unsigned f=p->hurt_frame;
+            const bool down=grounded || p->submerged;
+            if(p->hurt_kind==1) {
+                if(f<3) ++p->hurt_frame;
+                if(p->hurt_frame==3) {
+                    p->vx+=p->set_vx*0.8f;p->vy+=p->set_vy-3*ORIGINAL_VELOCITY;
+                    p->grounded=false;p->hurt_frame=9;
+                } else if(f>=9 && f<=53) {
+                    if(down && f>9) p->hurt_frame=54;
+                    else if(f<53) ++p->hurt_frame;
+                } else if(f>=54 && f<106) ++p->hurt_frame;
+            } else {
+                if(!(f==3 && !down) && f<69) ++p->hurt_frame;
+                if(p->hurt_frame==15) p->hurt_frame=23;
+            }
+        } else if(p->source_step) {
             const bool any_key=in.horizontal!=0 || in.vertical!=0 || in.jump_held || in.crouch_held || in.nozzle_held;
             bool hold=false;
             if(p->hurt_kind==3) hold=(p->hurt_frame==3 && !(grounded || p->submerged)) || (p->hurt_frame==15 && !any_key);

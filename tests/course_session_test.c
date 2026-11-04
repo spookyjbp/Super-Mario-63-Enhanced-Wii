@@ -1,5 +1,6 @@
 /* The original tutorial's scripted flow, start to completion boundary. */
 #include "course_session.h"
+#include "course_objects.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -391,6 +392,44 @@ static void test_rocket_once_per_jump(void)
     assert(p->grounded && p->power == 100);
 }
 
+static void test_faint(void)
+{
+    /* hurt1 at 0 HP: frame 4 adds the faint speeds and goes to 'falling' (10),
+       the ground sends it to 'land' (55); 95 Blackout, 107 LifeLost; the lives
+       screen plays 59 frames (the course removed), then ReviveMario: the area's
+       start, 8 HP, the StarIn wipe. */
+    Player *p = tutorial_mario(300);
+    s.progress.hp = 1;
+    course_mario_hit(p, &s.progress, 1, 64, -6, 3, 0, false);
+    assert(s.progress.hp == 0 && p->fainting && p->action == ACTION_HURT && p->hurt_kind == 1);
+    bool fell = false, landed = false, blacked = false, lost = false;
+    for (int i = 0; i < 60 * 12 && !s.starin; ++i) {
+        ticks((GameInput){.jump_pressed = true, .horizontal = 1}, 1);   /* no control while fainting */
+        if (p->action == ACTION_HURT && p->hurt_frame >= 9 && p->hurt_frame < 54) fell = true;
+        if (p->action == ACTION_HURT && p->hurt_frame >= 54) landed = true;
+        if (s.blackout) { blacked = true; assert(p->hurt_frame >= 94 || s.lifelost); }
+        if (s.lifelost) lost = true;
+    }
+    assert(fell && landed && blacked && lost && s.starin);
+    assert(s.progress.hp == 8 && !p->fainting && p->action == ACTION_NONE && !s.lifelost);
+    /* hurt3 at 0 HP: frame 16 goes to 'end' (24), 70 LifeLost */
+    p = tutorial_mario(300);
+    s.progress.hp = 1;
+    p->facing_left = true;
+    course_mario_hit(p, &s.progress, 1, 64, -2, -6, 0, true);   /* knocked the way he faces: hurt3 */
+    assert(p->fainting && p->action == ACTION_HURT && p->hurt_kind == 3);
+    bool end = false;
+    for (int i = 0; i < 60 * 12 && !s.lifelost; ++i) { ticks((GameInput){0}, 1); if (p->hurt_frame >= 23) end = true; }
+    assert(end && s.lifelost);
+    /* 0 HP without a hurt clip: "Faint", MarioDeathGFX for 60 frames, then the lives screen */
+    p = tutorial_mario(300);
+    s.progress.hp = 0;
+    ticks((GameInput){0}, 2);
+    assert(p->fainting && s.death);
+    for (int i = 0; i < 60 * 4 && !s.lifelost; ++i) ticks((GameInput){0}, 1);
+    assert(s.lifelost && !s.death);
+}
+
 static void test_message_box_frames(void)
 {
     /* Stats.Message 253: frames 2-6 open, 6 holds with the text, 7-11 close; the prompt starts on frame 6. */
@@ -417,6 +456,6 @@ int main(void)
     test_opening_and_controls_sign(); test_hints(); test_area_chain_and_completion(); test_hud_power_meter();
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
-    test_message_box_frames(); test_rocket_once_per_jump();
-    puts("14 course session (Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_message_box_frames(); test_rocket_once_per_jump(); test_faint();
+    puts("15 course session (faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }

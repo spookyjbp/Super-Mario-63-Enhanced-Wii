@@ -261,7 +261,7 @@ void course_mario_hit(Player *p, CourseProgress *g, int hp, int blink, float vy,
     if (stun > 0) p->stun = stun;
     /* Sound: none for a shove ("none"), "Mario - Ohhhhh" at 0 HP, the Bob-omb's
        "Mario-Squish", otherwise "Mario - Doh" / "Mario - Uh" (random(2)). */
-    if (hp > 0 && g->hp <= 0) sfx_play(SFX_OHHH, 100, 0);
+    if (hp > 0 && g->hp <= 0) { sfx_play(SFX_OHHH, 100, 0); p->fainting = true; }
     else if (hp > 0) sfx_play(add ? SFX_SQUISH : sfx_coin_flip() ? SFX_DOH : SFX_UH, 100, 0);
 }
 static bool overlap(const float a[4], const float b[4]) { return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]; }

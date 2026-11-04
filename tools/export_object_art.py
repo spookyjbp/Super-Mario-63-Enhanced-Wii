@@ -82,6 +82,13 @@ SPEC = [
     ('HUD_TANK', 160, [0], 1, (0, 0, 1, 1), (6, 32, 35)),      # FLUDD tank without level, gauge, number
     ('HUD_TANK_LEVEL', 149, None, 10, (1.1, 30.5, 0.5, 0.5), ()),  # 'cl', frame = Waterpercent * 5
     ('HUD_POWER_BAR', 153, None, 5, (-17.35, -14.85, 1, 1), ()),   # frame = Power / TotalPower * 100 + 1
+    # The 0 HP faint (not in the player art pack, which is full): Mario Main's
+    # hurt1 (1411) from 'falling' (frame 10) to its end, and hurt3 (1430) from
+    # 'end' (24); placed as in Mario Main (plus Char's -3 px). Faint/'Faint'
+    # (1703 'nes') hides Mario while MarioDeathGFX (1702) plays at his place.
+    ('MARIO_FAINT1', 1411, list(range(9, 107)), 1, (2.0, -17.0, 1, 1), ()),
+    ('MARIO_FAINT3', 1430, list(range(23, 70)), 1, (0.35, -2.65, 1, 1), ()),
+    ('MARIO_DEATH', 1702, None, 1, (0, 0, 1, 1), ()),
     ('HUD_TALK_BOX', 186, [0], 1, (0, 0, 1, 1), (2, 4)),       # 'tm' Toad message cloud (text drawn by the port)
     ('HUD_TALK_Z', 184, None, 1, (143.45, 1, 1.5, 1.5), ()),   # its 'bz' Z prompt
     # Shine Sprite 977/976: only on 8-E1-2-2 frames reached once Star[39] is set,

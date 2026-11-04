@@ -85,6 +85,7 @@ typedef struct {
     unsigned bonk_frame;     /* Mario Main "hurt2" clip (1422) frame, 0-based, during ACTION_BONK */
     bool reading_sign;       /* attackFrame "Sign": the reading pose (Main "Sign", 1487) */
     unsigned hurt_kind, hurt_frame; /* ACTION_HURT: "hurt1" (1411) or "hurt3" (1430), 0-based clip frame */
+    bool fainting;                  /* CharHP <= 0: the hurt clips play their faint frames (to 107 / 70) */
     float set_vx, set_vy;    /* MarioHit setXspeed / setYspeed, added at hurt1 frame 4 (px/s) */
     bool fall_sfx;           /* fallingsfx: once per fall */
     TileType material;

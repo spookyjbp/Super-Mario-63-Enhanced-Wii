@@ -111,6 +111,17 @@ class PictureSigns(unittest.TestCase):
         # the controls page's walking Marios are not in the still page
         self.assertLess(red(LAYERS['controls@0'][90:160, 0:230]), red(LAYERS['controls'][90:160, 0:230]) + 1)
 
+    def test_faint_screens(self):
+        """The faint's screens fit the port's 320 KiB frame slot: the star wipes
+        (Blackout 13 frames, StarIn 12) and the lives screen (59)."""
+        for name, count in (('StarOut~', 13), ('StarIn~', 12), ('LifeLost~', 59)):
+            frames = ANIM[name]
+            self.assertEqual(len(frames), count, name)
+            for x, y, im in frames:
+                self.assertLessEqual(im.shape[0] * im.shape[1] * 2, 320 * 1024, name)
+        # the lives screen shows something (the Mario icon and number, the explosion)
+        self.assertGreater(sum(im.shape[0] * im.shape[1] > 64 for _, _, im in ANIM['LifeLost~']), 40)
+
     def test_talk_prompt_and_message_box(self):
         self.assertIn('Message', LAYERS)
         for k in range(KINDS):

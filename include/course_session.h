@@ -58,6 +58,12 @@ typedef struct {
     /* Nozzle switch banner (port HUD): ticks left, and the FLUDD state it shows
        (0 = none, 1 + Nozzle). The original only hides the tank without FLUDD. */
     unsigned nozzle_banner; unsigned char banner_fludd, last_fludd;
+    /* The 0 HP faint (frame + 1 of each clip, 0 = not playing): MarioDeathGFX
+       (1702, at death_x / death_y, Mario hidden), the Blackout star wipe
+       (7433), the LifeLost screen (7473, the course removed) and the StarIn
+       wipe (7434) after ReviveMario. fx_phase: their own 32 Hz clock. */
+    unsigned death, blackout, lifelost, starin, fx_phase, last_hurt_frame;
+    float death_x, death_y;
 } CourseSession;
 bool course_session_start(CourseSession *s, const CoursePack *pack, const char *area, float cx, float cy, float view_width);
 void course_session_step(CourseSession *s, GameInput input);

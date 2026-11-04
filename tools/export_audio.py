@@ -24,7 +24,7 @@ SOUNDS = [
     'Mario-Step', 'step - Water', 'step-wetwood', 'sound - Splash', 'sound - Water', 'Mario-Fall',
     'Mario - Doh', 'Mario - Uh', 'Mario-Squish', 'Mario - Ohhhhh', 'Goomba-Attention', 'Goomba-Stomped',
     'Explosion', 'fuse-lite', 'fuse-loop', 'flippers', 'boxbreak', 'Nozzle Box Break', 'Fludd Nozzle',
-    'fluddrepeat', 'FluddSwitch', '*rocket-charge', '*rocket-blast',
+    'fluddrepeat', 'FluddSwitch', '*rocket-charge', '*rocket-blast', 'Mario - Mamamiamoan',
     'PrincessPeachesCastle-Intro', 'PrincessPeachesCastle-Repeat',
 ]
 # '*' sounds are not in the original: the 2010 SWF's Rocket nozzle is silent

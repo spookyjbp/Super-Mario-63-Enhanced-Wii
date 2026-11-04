@@ -14,6 +14,7 @@
 #include "font_atlas_bin.h"
 #include "text_layout.h"
 #include "sign_layout.h"
+#include "faint_layout.h"
 #include "ui_layout.h"
 #include "objects_8e1_0_bin.h"
 #if OBJECT_ART_PACKS > 1
@@ -31,7 +32,7 @@
 #define PICTURE_BYTES (1024u * 1024)
 #define OBJECT_BYTES (5u * 1024 * 1024)
 #define PROMPT_BYTES (128u * 1024)
-#define ANIM_BYTES (256u * 1024)   /* one frame of an animated picture sign */
+#define ANIM_BYTES (320u * 1024)   /* one frame of an animated picture sign or of the faint's screens */
 static CourseArtPack art;
 static unsigned char *mem2, *picture_mem, *prompt_mem, *anim_mem;
 static GXTexObj anim_tex;
@@ -335,6 +336,20 @@ static void draw_prompt(const CourseSession *s, const char *page, size_t page_le
                             l->width / HUD_K, l->height / HUD_K, place->x, place->y, l->ox, l->oy, &x, &y);
     graphics_sprite_alpha(&prompt_tex, stage_x(x, width), y * HUD_K, (float)l->width, (float)l->height, 0, 0, 1, 1, a);
 }
+/* One frame of a full-screen clip ("<name>~" layer, tools/faint_art.py) at its stage place. */
+static void draw_fx(const char *name, unsigned frame, float width)
+{
+    const CourseArtLayer *L = course_art_picture(&art, name, strlen(name));
+    if (!L || frame >= L->tile_count) return;
+    const CourseArtTile *T = &L->tiles[frame];
+    if (T != loaded_anim) {
+        if (!upload(T, anim_mem, ANIM_BYTES, &anim_tex)) return;
+        GX_InvalidateTexAll(); loaded_anim = T;
+    }
+    const float k = HUD_K / L->zoom;   /* screen px per image px */
+    graphics_sprite(&anim_tex, stage_x(L->ox, width) + T->x * k, L->oy * HUD_K + T->y * k, T->width * k, T->height * k,
+                    0, 0, 1, 1);
+}
 void course_render(const CourseSession *s, float t)
 {
     const CourseRuntime *c = &s->runtime;
@@ -378,7 +393,18 @@ void course_render(const CourseSession *s, float t)
     const Player *p = &g->player;
     const float px = roundf((p->previous_x + (p->x - p->previous_x) * t - camx) * zoom) / zoom;
     const float py = roundf((p->previous_y + (p->y - p->previous_y) * t - camy) * zoom) / zoom;
-    if (!(p->blink > 0 && (p->blink / 2) % 2)) user_art_draw_player(p, px, py); /* MarioHit blink */
+    /* The 0 HP faint: the hurt clips' later frames come from the object packs
+       (MARIO_FAINT1 from hurt1 frame 10, MARIO_FAINT3 from hurt3 frame 24);
+       during MarioDeathGFX Mario is not drawn (1703 'nes'). */
+    const bool faint1 = p->fainting && p->action == ACTION_HURT && p->hurt_kind == 1 && p->hurt_frame >= 9;
+    const bool faint3 = p->fainting && p->action == ACTION_HURT && p->hurt_kind == 3 && p->hurt_frame >= 23;
+    if (s->death) {
+    } else if (faint1 || faint3) {
+        const ObjectDraw d = {.clip = faint1 ? OBJ_MARIO_FAINT1 : OBJ_MARIO_FAINT3,
+                              .frame = p->hurt_frame - (faint1 ? 9u : 23u), .alpha = 100, .scale = 1,
+                              .flip_x = !p->facing_left};   /* the art faces left (_xscale > 0) */
+        draw_object_frame(&d, px + PLAYER_WIDTH / 2, py + player_height(p));
+    } else if (!(p->blink > 0 && (p->blink / 2) % 2)) user_art_draw_player(p, px, py); /* MarioHit blink */
     /* Water Code volumes: port-made water (tools/make_water_texture.py), drawn
        over Mario like the original's translucent water: a slowly drifting body
        and an animated wave crest along the surface. */
@@ -396,6 +422,10 @@ void course_render(const CourseSession *s, float t)
     }
     draw_layer(ART_LAYER_FRONT, ox, oy, 1);
     draw_objects(s, ox, oy, true);
+    if (s->death) {   /* MarioDeathGFX in FrontGFX, where Mario was */
+        const ObjectDraw d = {.clip = OBJ_MARIO_DEATH, .frame = s->death - 1, .alpha = 100, .scale = 1};
+        draw_object_frame(&d, s->death_x - camx, s->death_y - camy);
+    }
     graphics_set_zoom(1);
     const GXColor white = {255, 255, 255, 255};
     if (s->hint.length) {
@@ -481,6 +511,16 @@ void course_render(const CourseSession *s, float t)
         const float k = fminf(1, s->warp_time / COURSE_WARP_SECONDS);
         graphics_rect(0, 0, width * k, 480, (GXColor){0, 0, 0, 255});
     }
+    /* The faint's screens, over everything (attached to _root): the Blackout and
+       StarIn star wipes, and the LifeLost screen on its flat colour. */
+    if (s->lifelost) {
+        const unsigned f = s->lifelost - 1 < FAINT_LIFELOST_FRAMES ? s->lifelost - 1 : FAINT_LIFELOST_FRAMES - 1;
+        const unsigned char *c = faint_lifelost_bg[f];
+        graphics_rect(0, 0, width, 480, (GXColor){c[0], c[1], c[2], 255});
+        draw_fx("LifeLost~", f, width);
+    }
+    if (s->blackout) draw_fx("StarOut~", s->blackout - 1, width);
+    if (s->starin) draw_fx("StarIn~", s->starin - 1, width);
     if (s->state == SESSION_COMPLETE) {
         graphics_rect(0, 0, width, 480, (GXColor){0, 0, 0, 230});
         draw_cstring(FONT_SIGN, "Tutorial complete!", 20, width - 20, 190, white, ALIGN_CENTRE);

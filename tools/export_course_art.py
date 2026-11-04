@@ -30,6 +30,7 @@ import swf_bitmap_fix
 import controller_signs
 import ui_art
 import sign_anim
+import faint_art
 
 
 def sign_animated(labels):
@@ -355,6 +356,10 @@ def export(source, jar, output, areas):
     # The message box and its controller prompts (ui_art.py); origins in stage px.
     ui_layers, ui_header = ui_art.build(work / 'ui', jar, pictures_swf.read_bytes(), sprites)
     (output.parent / 'ui_layout.h').write_text(ui_header)
+    # The 0 HP faint's screens (faint_art.py): star wipe out / in, the lives screen.
+    faint_layers, faint_header = faint_art.build(work / 'faint', jar, pictures_swf.read_bytes(), sprites)
+    (output.parent / 'faint_layout.h').write_text(faint_header)
+    anims += [(n, fr, ox, oy, W, H, s) for n, fr, ox, oy, W, H, s in faint_layers]
     variants += list(ui_layers)
     count = struct.unpack_from('>I', out, 12)[0]
     for label, im, ox, oy in variants:
@@ -367,8 +372,8 @@ def export(source, jar, output, areas):
         count += 1
         report.append({'area': '*', 'layer': label, 'size': [W, H], 'tiles': len(tiles),
                        'bytes': sum(len(t[4]) for t in tiles), 'raw': sum(t[5] for t in tiles)})
-    for label, frames, ox, oy, W, H in anims:   # one tile per frame, at its place on the page
-        out += C.pack_string('*') + C.pack_string(label) + struct.pack('>ffffII', ox, oy, 0, ZOOM, W, H)
+    for label, frames, ox, oy, W, H, *scale in anims:   # one tile per frame, at its place on the page
+        out += C.pack_string('*') + C.pack_string(label) + struct.pack('>ffffII', ox, oy, 0, scale[0] if scale else ZOOM, W, H)
         out += struct.pack('>I', len(frames))
         for fx, fy, fim in frames:
             data = rgb5a3(fim)

@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static unsigned char blob[6 << 20], out[2 << 20];
+static unsigned char blob[12 << 20], out[2 << 20];
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1_art.bin", "rb"); assert(f);
