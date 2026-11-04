@@ -76,3 +76,12 @@ Tests: `course_objects_test` `test_toad_dialogue_pages`, `controls_test` (held r
 - **Buttons.** All buttons come from `tools/sign_buttons.py`.
 
 The pages are still single frames: animating every picture sign is a later item. Tests: `tests/test_picture_signs.py`.
+
+## Fixes and additions (2026-11-03)
+
+| Item | What the port does now | Tests |
+|---|---|---|
+| Angry Toad face flicker | Toad's head (2498) moves from depth 2 to depth 1 on walk frames 16-20, so a smiling head was baked into those body frames. The head is now stripped by character (`export_object_art.py` `STRIP_CHARS`), and drawn behind the body on those frames as the original does. | `test_object_art.py`, `course_objects_test` |
+| Rocket used more than once per jump | The Rocket water (1340 frames 16-23) holds Power at 0, so the ground refill can no longer re-arm it in the tick after take-off. Hover no longer refills in the air (`Fluddpow !== "H"`). | `course_session_test` `test_rocket_once_per_jump` |
+| Animated picture signs | `tools/sign_anim.py` animates three pages: the controls page's walking Marios (80-frame cycle), the stomp boxes' ground-pound demo (101) and the refill page's water (123). Each plays over the still page, one frame per source frame. Origins now correct for FFDec's PNG padding (`ui_art.png_origin`), so picture pages had been about 11 stage px off. | `test_picture_signs.py` |
+| Faint at 0 HP | hurt1 / hurt3 play their faint frames, with "Mario - Mamamiamoan" and the music stopping. Otherwise "Faint": MarioDeathGFX and "Mario-Fall". Then the Blackout star wipe, the LifeLost screen (5 to 4, as in the tutorial, where no life is taken), and ReviveMario at the area's start with the StarIn wipe (`tools/faint_art.py`, `course_session.c`). | `course_session_test` `test_faint`, `test_picture_signs.py` |
