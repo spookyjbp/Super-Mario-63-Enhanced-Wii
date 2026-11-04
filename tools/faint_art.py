@@ -41,6 +41,27 @@ def _crop4(im, bb):
     return x0, y0, canvas.crop((x0, y0, x1, y1))
 
 
+# Area changes (BackGFX warp scripts): the wipe in ("<dir>transition", its
+# frame 16 sets _root.warpframe, 15 for down) and the reveal in the new area
+# ("<dir>transition2", changecourse's transition).
+WIPES = {'WipeRight~': 7443, 'WipeRight2~': 7440, 'WipeLeft~': 7460, 'WipeLeft2~': 7464,
+         'WipeDown~': 7457, 'WipeDown2~': 7447}
+STAGE_RECT = (-275, -200, 275, 200)   # around the stage centre: wider than 16:9 (533.75 stage px)
+
+
+def _stage_frames(jar, work, swf_path, ident, count, zoom, tag):
+    """Frames cropped to STAGE_RECT around the clip's registration (attached at the stage centre)."""
+    ims, ox, oy = _frames(jar, work, swf_path, ident, count, zoom, tag)
+    x0, y0 = round((STAGE_RECT[0] - ox) * zoom), round((STAGE_RECT[1] - oy) * zoom)
+    W, H = round((STAGE_RECT[2] - STAGE_RECT[0]) * zoom), round((STAGE_RECT[3] - STAGE_RECT[1]) * zoom)
+    out = []
+    for im in ims:
+        c = Image.new('RGBA', (W, H))
+        c.paste(im, (-x0, -y0))
+        out.append(c)
+    return out
+
+
 def build(work, jar, swf_bytes, sprites):
     work.mkdir(parents=True, exist_ok=True)
     plain = work / 'faint.swf'
@@ -57,6 +78,16 @@ def build(work, jar, swf_bytes, sprites):
         W, H = -(-ims[0].width // 4) * 4, -(-ims[0].height // 4) * 4
         layers.append((name, frames, 225 + ox, 150 + oy, W, H, 0.8))
         header.append(f'#define FAINT_{name.strip("~").upper()}_FRAMES {n}')
+    for name, ident in WIPES.items():
+        n = sprites[ident]['frames']
+        ims = _stage_frames(jar, work, plain, ident, n, 0.8, name.strip('~').lower())
+        frames = []
+        for im in ims:
+            bb = im.getchannel('A').getbbox()
+            frames.append((0, 0, Image.new('RGBA', (4, 4))) if bb is None else _crop4(im, bb))
+        layers.append((name, frames, 225 + STAGE_RECT[0], 150 + STAGE_RECT[1], ims[0].width // 4 * 4,
+                       ims[0].height // 4 * 4, 0.8))
+        header.append(f'#define {name.strip("~").upper()}_FRAMES {n}')
     # the lives screen, the field showing 5 and then 4
     n = sprites[LIFELOST]['frames']
     renders = {}

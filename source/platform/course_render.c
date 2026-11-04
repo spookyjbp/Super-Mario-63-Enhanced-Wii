@@ -15,6 +15,7 @@
 #include "text_layout.h"
 #include "sign_layout.h"
 #include "faint_layout.h"
+#include "bg_water_places.h"
 #include "ui_layout.h"
 #include "objects_8e1_0_bin.h"
 #if OBJECT_ART_PACKS > 1
@@ -384,7 +385,21 @@ void course_render(const CourseSession *s, float t)
     for (unsigned i = 0; i < 3; ++i) {
         const float zl = base * (1 + (z - 1) * bgs[i].follow), sx = width / zl / 2, sy = 240.0f / zl;
         graphics_set_zoom(zl);
-        draw_layer(bgs[i].kind, sx - ccx * bgs[i].parallax * COURSE_SCALE, sy - ccy * bgs[i].parallax * COURSE_SCALE, 1);
+        const float ax = sx - ccx * bgs[i].parallax * COURSE_SCALE, ay = sy - ccy * bgs[i].parallax * COURSE_SCALE;
+        /* Dynamic Water (802) sits at depth 1 of its background, under the art */
+        for (unsigned k = 0; k < s->bg_water_count; ++k) {
+            const BgWaterPlace *wp = &bg_waters[s->bg_water_index[k]];
+            if (wp->kind != bgs[i].kind) continue;
+            const BgWave *w = &s->bg_wave[k];
+            const GXColor col = {wp->rgba[0], wp->rgba[1], wp->rgba[2], wp->rgba[3]};
+            const float k2 = wp->scale * COURSE_SCALE, bx = ax + wp->x * COURSE_SCALE, by = ay + wp->y * COURSE_SCALE;
+            for (unsigned j = 0; j + 1 < w->n; ++j) {
+                const float xs[4] = {bx + w->x[j] * k2, bx + w->x[j + 1] * k2, bx + w->x[j + 1] * k2, bx + w->x[j] * k2};
+                const float ys[4] = {by + w->y[j] * k2, by + w->y[j + 1] * k2, by + wp->deep * k2, by + wp->deep * k2};
+                graphics_quad_color(xs, ys, col);
+            }
+        }
+        draw_layer(bgs[i].kind, ax, ay, 1);
     }
     graphics_set_zoom(zoom);
     const float ox = course_wx(c, 0) - camx, oy = course_wy(c, 0) - camy; /* course origin on screen */
@@ -516,9 +531,12 @@ void course_render(const CourseSession *s, float t)
             draw_prompt(s, "Message", 7, width, NULL);
         }
     }
-    if (s->state == SESSION_WARP) { /* righttransition: wipe to black and back */
-        const float k = fminf(1, s->warp_time / COURSE_WARP_SECONDS);
-        graphics_rect(0, 0, width * k, 480, (GXColor){0, 0, 0, 255});
+    {   /* area change wipes: "<dir>transition", then "<dir>transition2" in the new area */
+        static const char *in[3] = {"WipeRight~", "WipeLeft~", "WipeDown~"};
+        static const char *out[3] = {"WipeRight2~", "WipeLeft2~", "WipeDown2~"};
+        const unsigned k = s->wipe < 3 ? s->wipe : 0;
+        if (s->wipe_in) draw_fx(in[k], s->wipe_in - 1 < wipe_warp_frame(k) ? s->wipe_in - 1 : wipe_warp_frame(k) - 1, width);
+        if (s->wipe_out) draw_fx(out[k], s->wipe_out - 1, width);
     }
     /* The faint's screens, over everything (attached to _root): the Blackout and
        StarIn star wipes, and the LifeLost screen on its flat colour. */

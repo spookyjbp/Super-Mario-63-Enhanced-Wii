@@ -31,6 +31,7 @@ import controller_signs
 import ui_art
 import sign_anim
 import faint_art
+import bg_water_art
 
 
 def sign_animated(labels):
@@ -265,7 +266,10 @@ def export(source, jar, output, areas):
                 plan.setdefault(ident, (0, set()))
             layers.append((a, layer, ident, link))
     swf_path = work / 'patched.swf'
-    swf_path.write_bytes(patched(swf, plan, tints, second, sprites))
+    # Dynamic Water (802) draws its waves with ActionScript at runtime (the port
+    # draws them: bg_water_places.h, source/game/bg_water.c); its editor label "Water" (801)
+    # is replaced by the wave clip at depth 1 in the game, so it is hidden here.
+    swf_path.write_bytes(ui_art.hide(patched(swf, plan, tints, second, sprites), {802: {801}}))
     ids = sorted({l[2] for l in layers})
     render(jar, swf_path, work, ids, ZOOM)
     out = bytearray(struct.pack('>8sIIf', b'SM63CAR1', 1, len(layers), ZOOM))
@@ -356,6 +360,7 @@ def export(source, jar, output, areas):
     # The message box and its controller prompts (ui_art.py); origins in stage px.
     ui_layers, ui_header = ui_art.build(work / 'ui', jar, pictures_swf.read_bytes(), sprites)
     (output.parent / 'ui_layout.h').write_text(ui_header)
+    (output.parent / 'bg_water_places.h').write_text(bg_water_art.header(areas, tables, table, sprites, scripts / 'scripts'))
     # The 0 HP faint's screens (faint_art.py): star wipe out / in, the lives screen.
     faint_layers, faint_header = faint_art.build(work / 'faint', jar, pictures_swf.read_bytes(), sprites)
     (output.parent / 'faint_layout.h').write_text(faint_header)

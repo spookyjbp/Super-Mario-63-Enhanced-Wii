@@ -1,18 +1,25 @@
 #include "course_session.h"
+#include "bg_water.h"
+#include "bg_water_places.h"
 #include "sfx.h"
 #include <math.h>
 #include <string.h>
 
 /* `_root.changecourse(transition, area, b, c, d, e)` targets from each area's
    BackGFX frame-3 script: StartChar puts Char at local (d, e). */
-typedef struct { const char *from, *warp, *to; float x, y; } WarpRule;
+/* wipe: the "<dir>transition" attached on touching the warp and the
+   "<dir>transition2" changecourse plays in the new area (WIPE_*). */
+typedef struct { const char *from, *warp, *to; float x, y; unsigned char wipe; } WarpRule;
 static const WarpRule warps[] = {
-    {"8-E1-1", "warp1", "8-E1-1-2", 0, 0},        /* 8-E1-1 Back GFX frame 3 */
-    {"8-E1-1-2", "warp1", "8-E1-1", 1760, -20},   /* 8-E1-1-2 Back GFX frame 3 */
-    {"8-E1-1-2", "warp2", "8-E1-2", 0, 0},
-    {"8-E1-2", "warp1", "8-E1-1-2", 1730, -30},   /* 8-E1-2 Back GFX frame 3 */
-    {"8-E1-2", "warp2", "8-E1-2-2", 0, 0},
-    {"8-E1-2-2", "warp1", "8-E1-2", 1840, -170},  /* 8-E1-2-2 BackGFX frame 3 */
+    {"8-E1-1", "warp1", "8-E1-1-2", 0, 0, WIPE_RIGHT},        /* 8-E1-1 Back GFX frame 3 */
+    {"8-E1-1-2", "warp1", "8-E1-1", 1760, -20, WIPE_LEFT},    /* 8-E1-1-2 Back GFX frame 3 */
+    {"8-E1-1-2", "warp2", "8-E1-2", 0, 0, WIPE_RIGHT},
+    {"8-E1-2", "warp1", "8-E1-1-2", 1730, -30, WIPE_LEFT},    /* 8-E1-2 Back GFX frame 3 */
+    {"8-E1-2", "warp2", "8-E1-2-2", 0, 0, WIPE_RIGHT},
+    {"8-E1-2-2", "warp1", "8-E1-2", 1840, -170, WIPE_LEFT},   /* 8-E1-2-2 BackGFX frame 3 */
+    /* falling off the cloud: downtransition, back to 8-E1-2 above where Mario fell,
+       X = 2000 + (Char._x - CamEdge._x) within 400..1800, Y = -450 */
+    {"8-E1-2-2", "warp3", "8-E1-2", NAN, -450, WIPE_DOWN},
 };
 /* Coded Sign "box" (SWF 986 first shape) and Invisible Door (SWF 2256). */
 static const float sign_box[4] = {-7.5f, -7.7f, 7.5f, 7.3f};
@@ -33,6 +40,13 @@ static void enter_area(CourseSession *s, const CourseArea *a, float cx, float cy
 {
     course_runtime_init(&s->runtime, a);
     s->world = course_world(&s->runtime);
+    /* Dynamic Water in the backgrounds (bg_water.h): makeWave on attach */
+    s->bg_water_count = 0;
+    for (unsigned i = 0; i < BG_WATERS && s->bg_water_count < 4; ++i)
+        if (course_string_equals(a->id, bg_waters[i].area)) {
+            bg_wave_init(&s->bg_wave[s->bg_water_count], bg_waters[i].points, bg_waters[i].length, 63u + i);
+            s->bg_water_index[s->bg_water_count++] = i;
+        }
     /* Falling out respawns at the area's entry (StartX/StartY in StartChar). */
     s->world.spawn_x = course_wx(&s->runtime, cx) - PLAYER_WIDTH / 2;
     s->world.spawn_y = course_wy(&s->runtime, cy) - PLAYER_HEIGHT;
@@ -152,7 +166,9 @@ static void check_exits(CourseSession *s, GameInput in)
                 if (!course_string_equals(a->id, warps[w].from) || !course_string_equals(o->name, warps[w].warp)) continue;
                 course_object_bounds(o, COURSE_BLANK_U0, COURSE_BLANK_V0, COURSE_BLANK_U1, COURSE_BLANK_V1, b);
                 if (inside(b, fx, fy)) {
-                    s->state = SESSION_WARP; s->warp_time = 0; s->warp_target = (int)w;
+                    s->state = SESSION_WARP; s->warp_target = (int)w;
+                    s->wipe = warps[w].wipe; s->wipe_in = 1; s->wipe_out = 0;
+                    s->warp_x = isnan(warps[w].x) ? fminf(1800, fmaxf(400, 2000 + fx)) : warps[w].x;
                     s->game.player.vx = s->game.player.vy = 0;
                 }
             }
@@ -320,6 +336,8 @@ static void faint_fx_frame(CourseSession *s)
     }
     if (s->blackout && ++s->blackout > 12) s->blackout = 0;   /* frame 13: removeMovieClip */
     if (s->starin && ++s->starin > 12) s->starin = 0;
+    if (s->wipe_in) ++s->wipe_in;
+    if (s->wipe_out && ++s->wipe_out > wipe_out_frames(s->wipe)) s->wipe_out = 0;
     if (s->lifelost) {
         ++s->lifelost;
         if (s->lifelost == 14) sfx_play(SFX_EXPLOSION, 100, 0);
@@ -332,11 +350,14 @@ void course_session_step(CourseSession *s, GameInput in)
     course_session_zoom_step(s, in.zoom_axis, s->state == SESSION_TALK,
                              s->game.player.source_step, s->game.player.source_phase / 60.0f);
     course_camera_set_zoom(course_session_zoom(s));
-    if (s->death || s->blackout || s->lifelost || s->starin) {
+    if (s->death || s->blackout || s->lifelost || s->starin || s->wipe_in || s->wipe_out) {
         s->fx_phase += 32;
         if (s->fx_phase >= 60) { s->fx_phase -= 60; faint_fx_frame(s); }
     }
     if (s->lifelost) return;   /* LifeLost frame 2: _root.RemoveCourse() */
+    if (s->game.player.source_step)   /* simWave, each source frame */
+        for (unsigned i = 0; i < s->bg_water_count; ++i)
+            bg_wave_step(&s->bg_wave[i], bg_waters[s->bg_water_index[i]].stiffness, bg_waters[s->bg_water_index[i]].randomwave);
     /* KeyZ(): Z (read/talk/stomp). The port maps it to the pound button. */
     const bool z_pressed = in.pound_pressed; /* already a button-down event */
     if (s->area_title_time > 0) s->area_title_time = fmaxf(0, s->area_title_time - GAME_DT);
@@ -346,13 +367,15 @@ void course_session_step(CourseSession *s, GameInput in)
     case SESSION_COMPLETE:
         return;
     case SESSION_WARP:
-        s->warp_time += GAME_DT;
+        /* the wipe in sets _root.warpframe on its frame 16 (downtransition 15):
+           changecourse, and the new area starts under the wipe out */
         p->vx = p->vy = 0;
-        if (s->warp_time >= COURSE_WARP_SECONDS) {
+        if (s->wipe_in > wipe_warp_frame(s->wipe)) {
             const WarpRule *w = &warps[s->warp_target];
             const CourseArea *next = course_pack_area(s->pack, w->to);
-            if (next) enter_area(s, next, w->x, w->y);
-            s->warp_target = -1;
+            if (next) enter_area(s, next, s->warp_x, w->y);
+            s->warp_target = -1; s->wipe_in = 0; s->wipe_out = 1;
+            s->state = SESSION_PLAY;
         }
         return;
     case SESSION_SIGN: {

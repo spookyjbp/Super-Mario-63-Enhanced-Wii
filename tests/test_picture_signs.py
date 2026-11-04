@@ -114,7 +114,8 @@ class PictureSigns(unittest.TestCase):
     def test_faint_screens(self):
         """The faint's screens fit the port's 320 KiB frame slot: the star wipes
         (Blackout 13 frames, StarIn 12) and the lives screen (59)."""
-        for name, count in (('StarOut~', 13), ('StarIn~', 12), ('LifeLost~', 59)):
+        for name, count in (('StarOut~', 13), ('StarIn~', 12), ('LifeLost~', 59), ('WipeRight~', 17), ('WipeRight2~', 18),
+                            ('WipeLeft~', 17), ('WipeLeft2~', 17), ('WipeDown~', 16), ('WipeDown2~', 17)):
             frames = ANIM[name]
             self.assertEqual(len(frames), count, name)
             for x, y, im in frames:

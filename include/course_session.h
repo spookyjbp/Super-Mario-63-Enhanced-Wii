@@ -4,6 +4,7 @@
    the scripted opening and the completion boundary. Sources and rules are in
    docs/original-tutorial-reference.md and docs/course-session.md. */
 #include "course_world.h"
+#include "bg_water.h"
 #include "course_objects.h"
 #include "hud.h"
 #ifdef __cplusplus
@@ -31,7 +32,10 @@ typedef struct {
     CourseString area_title; float area_title_time;
     /* opening (8-E1-1 Start sign) and warps */
     unsigned opening_wait, opening_count;
-    int warp_target; float warp_time;
+    int warp_target;
+    /* Area change wipes (frame + 1, 0 = none): wipe_in before changecourse,
+       wipe_out (the "transition2") in the new area. */
+    unsigned char wipe; unsigned wipe_in, wipe_out;
     const char *warp_area; float warp_x, warp_y;
     float view_width;
     CourseObjects objects;
@@ -63,6 +67,9 @@ typedef struct {
        (7433), the LifeLost screen (7473, the course removed) and the StarIn
        wipe (7434) after ReviveMario. fx_phase: their own 32 Hz clock. */
     unsigned death, blackout, lifelost, starin, fx_phase, last_hurt_frame;
+    /* Dynamic Water (802) in this area's backgrounds: bg_waters indices and their waves. */
+    unsigned bg_water_count, bg_water_index[4];
+    BgWave bg_wave[4];
     float death_x, death_y;
 } CourseSession;
 bool course_session_start(CourseSession *s, const CoursePack *pack, const char *area, float cx, float cy, float view_width);
@@ -98,7 +105,11 @@ static inline int course_prompt_frame(const CourseSession *s)
     if (s->sign_picture) return (int)s->sign_frames;
     return s->sign_frames >= 5 ? (int)s->sign_frames - 5 : -1;
 }
-#define COURSE_WARP_SECONDS 0.5f
+enum { WIPE_RIGHT, WIPE_LEFT, WIPE_DOWN };
+/* Frame (1-based) of "<dir>transition" that sets _root.warpframe. */
+static inline unsigned wipe_warp_frame(unsigned wipe) { return wipe == WIPE_DOWN ? 15u : 16u; }
+/* Frames shown of "<dir>transition2" (its last frame removes it). */
+static inline unsigned wipe_out_frames(unsigned wipe) { return wipe == WIPE_RIGHT ? 17u : 16u; }
 #ifdef __cplusplus
 }
 #endif

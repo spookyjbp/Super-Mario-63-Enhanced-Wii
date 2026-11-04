@@ -3,6 +3,12 @@
 #define SM63_FAINT_LAYOUT_H
 #define FAINT_STAROUT_FRAMES 13
 #define FAINT_STARIN_FRAMES 12
+#define WIPERIGHT_FRAMES 17
+#define WIPERIGHT2_FRAMES 18
+#define WIPELEFT_FRAMES 17
+#define WIPELEFT2_FRAMES 17
+#define WIPEDOWN_FRAMES 16
+#define WIPEDOWN2_FRAMES 17
 #define FAINT_LIFELOST_FRAMES 59
 /* LifeLost 7473: the flat colour under each frame (RGBA). */
 static const unsigned char faint_lifelost_bg[FAINT_LIFELOST_FRAMES][4] = {

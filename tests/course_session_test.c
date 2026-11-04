@@ -95,7 +95,7 @@ static void warp_through(const char *warp, const char *next)
     course_place_player(&s.runtime, &s.game.player, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2);
     ticks((GameInput){0}, 1);
     assert(s.state == SESSION_WARP);
-    ticks((GameInput){0}, (int)(COURSE_WARP_SECONDS * 60) + 2);
+    for (int i = 0; i < 120 && s.state == SESSION_WARP; ++i) ticks((GameInput){0}, 1);   /* the wipe in: 16 source frames */
     if (!(s.state == SESSION_PLAY && course_string_equals(s.runtime.area->id, next)))
         fprintf(stderr, "warp %s -> %s: state %d area %.*s\n", warp, next, s.state, s.runtime.area->id.length, s.runtime.area->id.text);
     assert(s.state == SESSION_PLAY && course_string_equals(s.runtime.area->id, next));
@@ -430,6 +430,45 @@ static void test_faint(void)
     assert(s.lifelost && !s.death);
 }
 
+static void test_wipes_and_background_water(void)
+{
+    /* righttransition: warpframe on its frame 16, then righttransition2 (17 frames) in the new area */
+    assert(course_session_start(&s, &pack, "8-E1-1", 0, 0, 640));
+    s.state = SESSION_PLAY; s.runtime.platform_frame = 1;
+    const CourseObject *w = named("Blank Movieclip", NULL, "warp1");
+    float b[4];
+    course_object_bounds(w, COURSE_BLANK_U0, COURSE_BLANK_V0, COURSE_BLANK_U1, COURSE_BLANK_V1, b);
+    course_place_player(&s.runtime, &s.game.player, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2);
+    ticks((GameInput){0}, 1);
+    assert(s.state == SESSION_WARP && s.wipe == WIPE_RIGHT && s.wipe_in == 1);
+    unsigned last = 0;
+    while (s.state == SESSION_WARP) { last = s.wipe_in; ticks((GameInput){0}, 1); }
+    assert(last == 16 && s.wipe_out >= 1 && course_string_equals(s.runtime.area->id, "8-E1-1-2"));
+    unsigned shown = 0;
+    while (s.wipe_out) { shown = s.wipe_out; ticks((GameInput){0}, 1); }
+    assert(shown == 17);
+    /* 8-E1-2-2 warp3 (falling off the clouds): downtransition back to 8-E1-2 above where Mario fell */
+    assert(course_session_start(&s, &pack, "8-E1-2-2", 0, 0, 640));
+    s.state = SESSION_PLAY; s.runtime.platform_frame = 1;
+    w = named("Blank Movieclip", NULL, "warp3");
+    assert(w);
+    course_object_bounds(w, COURSE_BLANK_U0, COURSE_BLANK_V0, COURSE_BLANK_U1, COURSE_BLANK_V1, b);
+    course_place_player(&s.runtime, &s.game.player, -400 > b[0] && -400 < b[2] ? -400 : (b[0] + b[2]) / 2, (b[1] + b[3]) / 2);
+    const float fx = course_cx(&s.runtime, s.game.player.x + PLAYER_WIDTH / 2);
+    ticks((GameInput){0}, 1);
+    assert(s.state == SESSION_WARP && s.wipe == WIPE_DOWN);
+    while (s.state == SESSION_WARP) ticks((GameInput){0}, 1);
+    assert(course_string_equals(s.runtime.area->id, "8-E1-2"));
+    assert(fabsf(s.warp_x - fminf(1800, fmaxf(400, 2000 + fx))) < 0.01f);
+    /* 8-E1-2's CloseBackground holds a Dynamic Water: simulated, its ends fixed */
+    assert(s.bg_water_count == 1);
+    const BgWave *wave = &s.bg_wave[0];
+    const float x0 = wave->x[0], xn = wave->x[wave->n - 1];
+    float moved = 0;
+    for (int i = 0; i < 300; ++i) { ticks((GameInput){0}, 1); for (unsigned k = 0; k < wave->n; ++k) moved = fmaxf(moved, fabsf(wave->y[k])); }
+    assert(wave->n == 13 && wave->x[0] == x0 && wave->x[wave->n - 1] == xn && moved > 0.01f && moved < 60);
+}
+
 static void test_message_box_frames(void)
 {
     /* Stats.Message 253: frames 2-6 open, 6 holds with the text, 7-11 close; the prompt starts on frame 6. */
@@ -456,6 +495,6 @@ int main(void)
     test_opening_and_controls_sign(); test_hints(); test_area_chain_and_completion(); test_hud_power_meter();
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
-    test_message_box_frames(); test_rocket_once_per_jump(); test_faint();
-    puts("15 course session (faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_message_box_frames(); test_rocket_once_per_jump(); test_faint(); test_wipes_and_background_water();
+    puts("16 course session (wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }

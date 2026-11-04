@@ -243,6 +243,15 @@ void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4
 }
 void graphics_sprite(GXTexObj *t,float x,float y,float w,float h,float u0,float v0,float u1,float v1)
 { graphics_sprite_rotated(t,x,y,w,h,u0,v0,u1,v1,0); }
+/* An untextured quad, blended when translucent (the background water). */
+void graphics_quad_color(const float xs[4], const float ys[4], GXColor color)
+{
+    if (color.a < 255) GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
+    GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
+    for (unsigned i = 0; i < 4; ++i) { GX_Position3f32(xs[i], ys[i], 0); GX_Color4u8(color.r, color.g, color.b, color.a); }
+    GX_End();
+    if (color.a < 255) GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
+}
 void graphics_triangle(float x0,float y0,float x1,float y1,float x2,float y2,GXColor color)
 {
     GX_Begin(GX_TRIANGLES,GX_VTXFMT0,3);
