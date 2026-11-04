@@ -6,10 +6,10 @@ Continue" prompt (sprite 250), for the port's text signs.
   by the port in font 155) and prompt (250), as one picture layer "Message".
   Frames 2-6 open it and 7-11 close it (a morph of the same box): their
   rectangles go to ui_layout.h and the port scales the box into them.
-* Prompt: 250 fades in after 38 frames and pulses (frames 80-135 loop). The
-  word "Z" is the keyboard key: each controller gets its own version with that
-  word replaced by its read/stomp button (sign_buttons.py), "Prompt@<n>". The
-  per-frame brightness of the original goes to ui_layout.h.
+* Prompt: 250 fades in after 38 frames and pulses (frames 80-135 loop). Each
+  controller gets its own version with the keyboard "Z" replaced by its
+  read/stomp button (prompt_art.py), "Prompt@<n>". The per-frame brightness of
+  the original goes to ui_layout.h.
 * Prompt positions: in the message box and on every picture page (each page of
   619 places 250 itself), stage px.
 """
@@ -21,6 +21,7 @@ from PIL import Image
 import swf_states as S
 import swf_bitmap_fix as F
 import sign_buttons
+import prompt_art
 
 MESSAGE, MESSAGE_TEXT, PROMPT, PAGES = 253, 251, 250, 619
 TALK_Z, TALK_Z_AT, TALK_Z_SCALE = 184, (143.45, 1.0), 1.5   # Stats.tm's 'bz' (in 186): a "Z" key that wobbles
@@ -81,41 +82,6 @@ def svg_origin(path):
     return -t[4], -t[5]
 
 
-def prompt_versions(full):
-    """"Press Z to Continue" (RGBA, zoom 1.6) -> {controller: image}, the Z replaced."""
-    a = np.asarray(full).astype(int)
-    teal = (a[..., 3] > 60) & (a[..., 1] - a[..., 0] > 40)          # the text (teal), not the white glow
-    cols = np.flatnonzero(teal.any(0))
-    words, s = [], cols[0]
-    for p, q in zip(cols, cols[1:]):
-        if q - p > 5:
-            words.append((s, p)); s = q
-    words.append((s, cols[-1]))
-    if len(words) != 4:
-        raise ValueError(f'Expected "Press Z to Continue", found {len(words)} words')
-    (_, press_end), (z0, z1), (to0, _), _ = words
-    rows = np.flatnonzero(teal.any(1))
-    cap = rows[-1] - rows[0] + 1
-    out = {}
-    for kind in sign_buttons.CONTROLLERS:
-        btn = sign_buttons.STYLE[kind]['stomp'](int(cap * 1.5))
-        gap_l, gap_r = z0 - press_end, to0 - z1
-        left = full.crop((0, 0, press_end + gap_l, full.height))
-        right = full.crop((to0 - gap_r, 0, full.width, full.height))
-        width = left.width + btn.width + right.width
-        im = Image.new('RGBA', (width, max(full.height, btn.height)))
-        top = (im.height - full.height) // 2
-        # the glow behind the words, stretched under the button
-        glow = full.crop((press_end + 2, 0, z0 - 1, full.height)).resize((btn.width, full.height), Image.BILINEAR)
-        im.alpha_composite(left, (0, top))
-        im.alpha_composite(glow, (left.width, top))
-        im.alpha_composite(right, (left.width + btn.width, top))
-        im.alpha_composite(btn, (left.width, (im.height - btn.height) // 2))
-        # keep the original's centre: the word "Z" sat at (z0 + z1) / 2
-        out[kind] = (im, left.width + btn.width / 2 - (z0 + z1) / 2, top)
-    return out
-
-
 def build(work, jar, swf, sprites):
     """Returns (layers [(name, image, ox, oy)], ui_layout.h text)."""
     work.mkdir(parents=True, exist_ok=True)
@@ -140,10 +106,13 @@ def build(work, jar, swf, sprites):
     for f in range(1, sprites[PROMPT]['frames'] + 1):
         env.append(int(np.asarray(Image.open(prompt_dir / f'{f}.png').convert('RGBA'))[..., 3].max()))
     peak = max(env)
-    full_prompt = Image.open(prompt_dir / f'{env.index(peak) + 1}.png').convert('RGBA')
+    if env[prompt_art.FRAME - 1] != peak:
+        raise ValueError('The prompt is not at its brightest on frame %d' % prompt_art.FRAME)
+    # the approved redo (prompt_art.py): words and glow apart, the button in the Z's place
+    text, glow = prompt_art.render_layers(ffdec, jar, work, swf)
     for k, kind in enumerate(sign_buttons.CONTROLLERS):
-        im, shift, top = prompt_versions(full_prompt)[kind]
-        layers.append((f'Prompt@{k}', im, pox - shift / ZOOM, poy - top / ZOOM))
+        im, left, top = prompt_art.build(text, glow, kind)
+        layers.append((f'Prompt@{k}', im, pox + left / ZOOM, poy + top / ZOOM))
     # Toad's talk cloud prompt (bz, 184): the key is replaced by the controller's
     # button in the key's two poses, right-aligned with the key, at its centre.
     zpng = ffdec(jar, work, hidden, TALK_Z, [1], work / 'talkz')

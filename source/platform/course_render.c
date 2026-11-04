@@ -13,6 +13,7 @@
 #include "water_tex.h"
 #include "font_atlas_bin.h"
 #include "text_layout.h"
+#include "sign_layout.h"
 #include "ui_layout.h"
 #include "objects_8e1_0_bin.h"
 #if OBJECT_ART_PACKS > 1
@@ -140,6 +141,14 @@ static void hud_number(unsigned value, float x, float y, float width, float scal
     for (int i = 0; i < n; ++i) hud_clip(OBJ_HUD_DIGITS, (unsigned)(buf[i] - '0'), left + i * advance, y, width, scale);
 }
 enum { ALIGN_LEFT, ALIGN_CENTRE, ALIGN_RIGHT };
+/* Lines the text wraps to in [x0, x1] (screen px). */
+static unsigned text_lines(unsigned font, const char *src, size_t len, float wrap_width)
+{
+    static char plain[2048];
+    TextLine lines[32];
+    const unsigned n = text_plain(src, len, plain, sizeof plain);
+    return text_wrap(&font_info[font], plain, n, wrap_width, lines, 32);
+}
 static void draw_cstring(unsigned font, const char *t, float x0, float x1, float y, GXColor c, int align);
 static void draw_hud(const CourseSession *s, float width)
 {
@@ -300,7 +309,8 @@ static bool load_prompt_layer(const CourseArtLayer *l)
 }
 /* The "Press .. to Continue" prompt (250) for the controller in use, placed at
    its page's position, faded as the original's frames. */
-static void draw_prompt(const CourseSession *s, const char *page, size_t page_len, float width)
+static void draw_prompt(const CourseSession *s, const char *page, size_t page_len, float width,
+                        const CourseArtLayer *picture)
 {
     int f = course_prompt_frame(s);
     if (f < 0) return;
@@ -315,8 +325,11 @@ static void draw_prompt(const CourseSession *s, const char *page, size_t page_le
     snprintf(key, sizeof key, "Prompt@%u", (unsigned)s->controller);
     const CourseArtLayer *l = course_art_picture(&art, key, strlen(key));
     if (!load_prompt_layer(l)) return;
-    const float x = stage_x(place->x + l->ox, width), y = (place->y + l->oy) * HUD_K;
-    graphics_sprite_alpha(&prompt_tex, x, y, (float)l->width, (float)l->height, 0, 0, 1, 1, a);
+    float x = place->x + l->ox, y = place->y + l->oy;
+    if (picture)   /* on picture signs: under the page (docs/sign-design) */
+        sign_prompt_picture(picture->ox, picture->oy, picture->width / HUD_K, picture->height / HUD_K,
+                            l->width / HUD_K, l->height / HUD_K, place->x, place->y, l->ox, l->oy, &x, &y);
+    graphics_sprite_alpha(&prompt_tex, stage_x(x, width), y * HUD_K, (float)l->width, (float)l->height, 0, 0, 1, 1, a);
 }
 void course_render(const CourseSession *s, float t)
 {
@@ -419,7 +432,7 @@ void course_render(const CourseSession *s, float t)
         if (load_picture(pic))
             graphics_sprite(&picture_tex, stage_x(pic->ox, width), pic->oy * HUD_K, (float)pic->width, (float)pic->height,
                             0, 0, 1, 1);
-        draw_prompt(s, s->sign_text.text, s->sign_text.length, width);
+        draw_prompt(s, s->sign_text.text, s->sign_text.length, width, pic);
     }
     const unsigned mf = course_message_frame(s);
     if (mf > 1) {
@@ -432,9 +445,19 @@ void course_render(const CourseSession *s, float t)
                             0, 0, 1, 1);
         if (mf == 6) {
             const CourseString m = course_sign_message(s->sign_text, s->controller);
-            draw_text(FONT_SIGN, m.text, m.length, stage_x(MESSAGE_TEXT_X0 + 2, width), stage_x(MESSAGE_TEXT_X1 - 2, width),
-                      (MESSAGE_TEXT_Y0 + 2) * HUD_K, white, ALIGN_CENTRE, ~0u);
-            draw_prompt(s, "Message", 7, width);
+            /* centred up and down between the field's top and the prompt (docs/sign-design) */
+            const float x0 = stage_x(MESSAGE_TEXT_X0 + 2, width), x1 = stage_x(MESSAGE_TEXT_X1 - 2, width);
+            const unsigned lines = text_lines(FONT_SIGN, m.text, m.length, x1 - x0);
+            char key[12];
+            snprintf(key, sizeof key, "Prompt@%u", (unsigned)s->controller);
+            const CourseArtLayer *pl = course_art_picture(&art, key, strlen(key));
+            float prompt_top = SIGN_STAGE_H;
+            for (unsigned i = 0; i < PROMPT_PLACES; ++i)
+                if (!strcmp(prompt_places[i].page, "Message")) prompt_top = prompt_places[i].y + (pl ? pl->oy : 0);
+            const float lh = text_line_height(&font_info[FONT_SIGN], 2 * HUD_K) / HUD_K;
+            const float top = sign_text_top(MESSAGE_TEXT_Y0 + 2, prompt_top, lines, lh);
+            draw_text(FONT_SIGN, m.text, m.length, x0, x1, top * HUD_K, white, ALIGN_CENTRE, ~0u);
+            draw_prompt(s, "Message", 7, width, NULL);
         }
     }
     if (s->state == SESSION_WARP) { /* righttransition: wipe to black and back */

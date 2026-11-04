@@ -72,7 +72,7 @@ $(OBJS): course_objects_test.c $(wildcard $(ROOT)/source/game/*.c) $(ROOT)/sourc
 $(SOUND): sound_test.c $(ROOT)/source/assets/sound_pack.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated sound_test.c $(ROOT)/source/assets/sound_pack.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
-$(TEXT): text_layout_test.c $(ROOT)/source/render/text_layout.c $(ROOT)/include/text_layout.h $(ROOT)/assets/generated/font_metrics.h
+$(TEXT): text_layout_test.c $(ROOT)/source/render/text_layout.c $(ROOT)/include/text_layout.h $(ROOT)/include/sign_layout.h $(ROOT)/assets/generated/font_metrics.h
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated text_layout_test.c $(ROOT)/source/render/text_layout.c -lm -o $@
 clean:

@@ -122,10 +122,10 @@ def gc(label, shape, size, aspect=1.0, seed=1, tilt=0):
 def wii(label, shape, size, aspect=1.0, seed=1, tilt=0, extra=None):
     return button(label,shape,size,GREY_FACE,GREY_RIM,WHITE,seed,tilt,aspect,extra=extra)
 
-def plus_sign(size):
+def plus_sign(size, colour=(60, 60, 60, 255)):
     S = size * SS
     im = Image.new('RGBA', (S, S))
-    marker_draw(ImageDraw.Draw(im), '+', (S * 0.1, S * 0.1, S * 0.9, S * 0.9), (60, 60, 60, 255), 0.22, seed=9)
+    marker_draw(ImageDraw.Draw(im), '+', (S * 0.1, S * 0.1, S * 0.9, S * 0.9), colour, 0.22, seed=9)
     return im.resize((size, size), Image.LANCZOS)
 
 
@@ -149,9 +149,9 @@ def row(parts, gap=4):
     return out
 
 
-def combo(a, b):
-    """Two buttons pressed together: A + B."""
-    return row([a, plus_sign(int(a.height * 0.45)), b])
+def combo(a, b, colour=(60, 60, 60, 255)):
+    """Two buttons pressed together: A + B (a light colour for dark pages)."""
+    return row([a, plus_sign(int(a.height * 0.45), colour), b])
 
 
 def either(a, b):

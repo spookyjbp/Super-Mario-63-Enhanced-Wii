@@ -1,6 +1,8 @@
 /* Text signs (option 1): HTML stripping, word wrap and widths in the original fonts. */
 #include "text_layout.h"
+#include "sign_layout.h"
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -47,8 +49,23 @@ static void test_wrap(void)
     assert(f->glyphs['q' - FONT_FIRST].w > 0);   /* 155 lacks 'q': the fallback glyph */
     assert(text_line_height(f, 3.2f) > f->size);
 }
+static void test_sign_layout(void)
+{
+    /* the prompt goes under a picture page, centred, when it fits ... */
+    float x, y;
+    sign_prompt_picture(100, 60, 300, 180, 200, 25, 222, 163, -100, -10, &x, &y);
+    assert(x == 150 && y == 60 + 180 + SIGN_PROMPT_GAP);
+    /* ... else (a page filling the screen) at the original's place */
+    sign_prompt_picture(50, 20, 350, 260, 200, 25, 225, 260, -100, -10, &x, &y);
+    assert(x == 125 && y == 250);
+    /* message text: centred between the field top and the prompt, or from the top when tall */
+    const float top = sign_text_top(30, 260, 2, 20);
+    assert(top > 30 && fabsf((top - 30) - (260 - SIGN_TEXT_GAP - (top + 40))) < 1e-3f);
+    assert(sign_text_top(30, 260, 20, 20) == 30);
+}
+
 int main(void)
 {
-    test_plain(); test_wrap();
-    puts("2 text layout (HTML, wrap, original fonts) test groups passed"); return 0;
+    test_plain(); test_wrap(); test_sign_layout();
+    puts("3 text layout (HTML, wrap, original fonts, sign layout) test groups passed"); return 0;
 }

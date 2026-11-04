@@ -210,7 +210,10 @@ def start(page, bg, kind, art):
     line(['Kingdom!  The First thing you need'], 64)
     line(['to know is how to move (', fit(c['move'](40), 44, 40), '),'], 100)
     line(['and how to read...'], 138)
-    line(['...signs by pressing', fit(c['stomp'](44), 120, 46), '.  Try'], 258)
+    # the Welcome page is dark: the Wii Remote's "+" in white
+    stomp = (B.combo(B.wii('A', 'circle', 44, seed=4, tilt=-2), B.wii('B', 'trigger', 44, 1.2, seed=6, tilt=3), white)
+             if kind == 'wiimote' else c['stomp'](44))
+    line(['...signs by pressing', fit(stomp, 120, 46), '.  Try'], 258)
     line(['reading that sign over there.'], 302)
     A = Image.new('RGBA', (o.width * 4, o.height * 4))
     a = ImageDraw.Draw(A)
