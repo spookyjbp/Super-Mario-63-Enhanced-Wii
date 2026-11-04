@@ -304,8 +304,8 @@ static void revive(CourseSession *s)
     s->death = s->blackout = 0; s->last_hurt_frame = ~0u;
     enter_area(s, s->runtime.area, course_cx(&s->runtime, s->world.spawn_x + PLAYER_WIDTH / 2),
                course_cy(&s->runtime, s->world.spawn_y + PLAYER_HEIGHT));
-    if (course_string_equals(s->runtime.area->id, "8-E1-1") || course_string_equals(s->runtime.area->id, "8-E1-2-2"))
-        sfx_music(MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT);
+    /* PlayMusicAndIntro(): _root.SongIntro, the song playing before (the castle theme in every tutorial area) */
+    sfx_music(MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT);
     s->starin = 1;
 }
 /* One source frame of the faint's screen clips. MarioDeathGFX: 48 Blackout(),

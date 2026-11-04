@@ -2,7 +2,7 @@
 #ifndef SM63_OBJECT_ART_IDS_H
 #define SM63_OBJECT_ART_IDS_H
 #define OBJECT_ART_ZOOM 1.6f
-#define OBJECT_ART_PACKS 2
+#define OBJECT_ART_PACKS 3
 enum {
     OBJ_COIN_SPIN = 0, /* pack 0 */
     OBJ_COIN_COLLECT = 1, /* pack 0 */
@@ -53,19 +53,25 @@ enum {
     OBJ_HUD_TANK = 46, /* pack 1 */
     OBJ_HUD_TANK_LEVEL = 47, /* pack 1 */
     OBJ_HUD_POWER_BAR = 48, /* pack 1 */
-    OBJ_MARIO_FAINT1 = 49, /* pack 1 */
-    OBJ_MARIO_FAINT3 = 50, /* pack 1 */
-    OBJ_MARIO_DEATH = 51, /* pack 1 */
-    OBJ_HUD_TALK_BOX = 52, /* pack 1 */
-    OBJ_HUD_TALK_Z = 53, /* pack 1 */
-    OBJ_HUD_DIGITS = 54, /* pack 1 */
-    OBJ_CLIP_COUNT = 55
+    OBJ_MARIO_FAINT1_0 = 49, /* pack 1 */
+    OBJ_MARIO_FAINT1_1 = 50, /* pack 1 */
+    OBJ_MARIO_FAINT1_2 = 51, /* pack 2 */
+    OBJ_MARIO_FAINT1_3 = 52, /* pack 2 */
+    OBJ_MARIO_FAINT3_0 = 53, /* pack 2 */
+    OBJ_MARIO_FAINT3_1 = 54, /* pack 2 */
+    OBJ_MARIO_FAINT3_2 = 55, /* pack 2 */
+    OBJ_MARIO_FAINT3_3 = 56, /* pack 2 */
+    OBJ_MARIO_DEATH = 57, /* pack 2 */
+    OBJ_HUD_TALK_BOX = 58, /* pack 2 */
+    OBJ_HUD_TALK_Z = 59, /* pack 2 */
+    OBJ_HUD_DIGITS = 60, /* pack 2 */
+    OBJ_CLIP_COUNT = 61
 };
 /* Toad head (2498) registration per TOAD_IDLE / TOAD_WALK frame, course px from
    the Toad Main Clip origin (the body placement plus the head matrix in it). */
 static const float toad_head_idle[][2] = {{-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}};
 static const float toad_head_walk[][2] = {{0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}};
 static const unsigned char object_art_pack_of[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
 };
 #endif

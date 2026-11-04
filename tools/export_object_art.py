@@ -86,8 +86,10 @@ SPEC = [
     # hurt1 (1411) from 'falling' (frame 10) to its end, and hurt3 (1430) from
     # 'end' (24); placed as in Mario Main (plus Char's -3 px). Faint/'Faint'
     # (1703 'nes') hides Mario while MarioDeathGFX (1702) plays at his place.
-    ('MARIO_FAINT1', 1411, list(range(9, 107)), 1, (2.0, -17.0, 1, 1), ()),
-    ('MARIO_FAINT3', 1430, list(range(23, 70)), 1, (0.35, -2.65, 1, 1), ()),
+    # One clip per FLUDD state (none, Hover, Rocket, Turbo: the port's Nozzle
+    # order), the nested FLUDD sprites set as their Fluddpow scripts would.
+    *[(f'MARIO_FAINT1_{k}', 1411, list(range(9, 107)), 1, (2.0, -17.0, 1, 1), ()) for k in range(4)],
+    *[(f'MARIO_FAINT3_{k}', 1430, list(range(23, 70)), 1, (0.35, -2.65, 1, 1), ()) for k in range(4)],
     ('MARIO_DEATH', 1702, None, 1, (0, 0, 1, 1), ()),
     ('HUD_TALK_BOX', 186, [0], 1, (0, 0, 1, 1), (2, 4)),       # 'tm' Toad message cloud (text drawn by the port)
     ('HUD_TALK_Z', 184, None, 1, (143.45, 1, 1.5, 1.5), ()),   # its 'bz' Z prompt
@@ -215,6 +217,16 @@ def export(source, jar, out_dir):
         subprocess.run(cmd + ['-onerror', 'abort', '-selectid', ','.join(map(str, ids)), '-select',
                               ','.join(f'{i}:1' for i in ids), '-format', 'sprite:svg', '-export', 'sprite',
                               str(work / 'svg'), str(swf_path)], check=True, stdout=log, stderr=log)
+    # The faint clips per FLUDD state (export_movement_clips' Fluddpow choices).
+    import export_movement_clips as M
+    choice = M.fludd_frames(sprites, raw, start, [1411, 1430])
+    for k, v in enumerate(M.VARIANTS):
+        vswf = work / f'objects-fludd{k}.swf'
+        vswf.write_bytes(M.patched_swf(swf_path.read_bytes(), choice, v))
+        with (work / 'export.log').open('a') as log:
+            subprocess.run(cmd + swf_bitmap_fix.FFDEC_RENDER + ['-zoom', str(ZOOM), '-onerror', 'abort', '-selectid',
+                                  '1411,1430', '-export', 'sprite', str(work / f'png-fludd{k}'), str(vswf)],
+                           check=True, stdout=log, stderr=log)
     clips, report = [], []
     for cid, (name, ident, frames, step, place, depths) in enumerate(SPEC):
         tx, ty, sx, sy = place if place else placement(sprites, ident)
@@ -235,7 +247,8 @@ def export(source, jar, out_dir):
         picks = picks[::step]
         out, repaired_px = [], 0
         for k in picks:
-            png = C.sprite_dir(work / 'png', ident) / f'{k + 1}.png'
+            fl = re.match(r'MARIO_FAINT\d_(\d)$', name)
+            png = C.sprite_dir(work / (f'png-fludd{fl.group(1)}' if fl else 'png'), ident) / f'{k + 1}.png'
             # FFDec cracks (e.g. the transparent column inside the sign board): art_repair.py
             fixed, changed = art_repair.repair(np.asarray(Image.open(png).convert('RGBA')))
             repaired_px += changed

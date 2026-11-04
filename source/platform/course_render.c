@@ -30,7 +30,7 @@
 
 #define MEM2_RESERVE (26u * 1024 * 1024)
 #define PICTURE_BYTES (1024u * 1024)
-#define OBJECT_BYTES (5u * 1024 * 1024)
+#define OBJECT_BYTES (13u * 512 * 1024)   /* three packs of up to 2 MiB */
 #define PROMPT_BYTES (128u * 1024)
 #define ANIM_BYTES (320u * 1024)   /* one frame of an animated picture sign or of the faint's screens */
 static CourseArtPack art;
@@ -398,13 +398,22 @@ void course_render(const CourseSession *s, float t)
        during MarioDeathGFX Mario is not drawn (1703 'nes'). */
     const bool faint1 = p->fainting && p->action == ACTION_HURT && p->hurt_kind == 1 && p->hurt_frame >= 9;
     const bool faint3 = p->fainting && p->action == ACTION_HURT && p->hurt_kind == 3 && p->hurt_frame >= 23;
+    /* CharCode blink: charClip.frame._alpha 20 when blink is a multiple of 3, else 70. */
+    const unsigned char alpha = p->blink > 0 ? (p->blink % 3 == 0 ? 51 : 179) : 255;
     if (s->death) {
     } else if (faint1 || faint3) {
-        const ObjectDraw d = {.clip = faint1 ? OBJ_MARIO_FAINT1 : OBJ_MARIO_FAINT3,
-                              .frame = p->hurt_frame - (faint1 ? 9u : 23u), .alpha = 100, .scale = 1,
-                              .flip_x = !p->facing_left};   /* the art faces left (_xscale > 0) */
+        static const int faint_clips[2][4] = {{OBJ_MARIO_FAINT1_0, OBJ_MARIO_FAINT1_1, OBJ_MARIO_FAINT1_2, OBJ_MARIO_FAINT1_3},
+                                              {OBJ_MARIO_FAINT3_0, OBJ_MARIO_FAINT3_1, OBJ_MARIO_FAINT3_2, OBJ_MARIO_FAINT3_3}};
+        const unsigned v = p->has_fludd ? 1u + (unsigned)p->nozzle : 0u;   /* none, Hover, Rocket, Turbo */
+        const ObjectDraw d = {.clip = faint_clips[faint1 ? 0 : 1][v < 4 ? v : 0],
+                              .frame = p->hurt_frame - (faint1 ? 9u : 23u), .alpha = alpha * 100.0f / 255,
+                              .scale = 1, .flip_x = !p->facing_left};   /* the art faces left (_xscale > 0) */
         draw_object_frame(&d, px + PLAYER_WIDTH / 2, py + player_height(p));
-    } else if (!(p->blink > 0 && (p->blink / 2) % 2)) user_art_draw_player(p, px, py); /* MarioHit blink */
+    } else {
+        user_art_set_alpha(alpha);
+        user_art_draw_player(p, px, py);
+        user_art_set_alpha(255);
+    }
     /* Water Code volumes: port-made water (tools/make_water_texture.py), drawn
        over Mario like the original's translucent water: a slowly drifting body
        and an animated wave crest along the surface. */

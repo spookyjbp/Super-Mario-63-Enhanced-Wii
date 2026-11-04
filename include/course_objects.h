@@ -19,7 +19,10 @@ int course_toad_mood(CourseString name);
 unsigned course_toad_head_step(unsigned frame, int mood, unsigned (*rand)(void *ctx, unsigned n), void *ctx);
 static inline unsigned course_toad_mood_label(int mood)
 {
-    static const unsigned label[TOAD_MOODS] = {0, 68, 98, 159, 184, 269, 298, 359};
+    /* 0-based frames of the head's (2498) labels Smile, Talk, Sad, Mad, Shocked,
+       Happy, Confused, Crazy. The frame before each label (Flash 69, 99, 160,
+       185, ...) only runs ChangeFrame(): it is never shown. */
+    static const unsigned label[TOAD_MOODS] = {0, 69, 99, 160, 185, 270, 299, 360};
     return label[mood >= 0 && mood < TOAD_MOODS ? mood : 0];
 }
 enum { GOOMBA_IDLE, GOOMBA_JUMP, GOOMBA_WALKR, GOOMBA_WALKL, GOOMBA_SQUISH, GOOMBA_TUMBLE };

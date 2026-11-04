@@ -473,9 +473,10 @@ unsigned course_toad_head_step(unsigned frame, int mood, unsigned (*rand)(void *
        label frame calls ChangeFrame() = gotoAndPlay(Mood). */
     static const struct { unsigned frame, n; } skips[] = {{1, 35}, {99, 20}, {185, 15}, {253, 15}, {299, 20}, {360, 8}};
     const unsigned start = course_toad_mood_label(mood);
-    const unsigned end = mood + 1 < TOAD_MOODS ? course_toad_mood_label(mood + 1) : 397;
-    if (frame < start || frame >= end) return start;
-    ++frame;
+    /* the segment ends before the next label's ChangeFrame() frame (Crazy: before Sleep's, 397) */
+    const unsigned end = mood + 1 < TOAD_MOODS ? course_toad_mood_label(mood + 1) - 1 : 397;
+    if (frame < start || frame >= end) frame = start;      /* gotoAndPlay(Mood): the label frame's script runs too */
+    else ++frame;
     for (unsigned i = 0; i < sizeof(skips) / sizeof(skips[0]); ++i)
         if (frame == skips[i].frame) frame += rand(ctx, skips[i].n);
     return frame >= end ? start : frame;

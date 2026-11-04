@@ -50,6 +50,9 @@ void user_art_shutdown(void)
     free(storage);storage=NULL;loaded=NULL;
 }
 bool user_art_available(void) {return loaded!=NULL;}
+/* charClip.frame._alpha (CharCode blink): 255 normally. */
+static unsigned char draw_alpha=255;
+void user_art_set_alpha(unsigned char alpha) {draw_alpha=alpha;}
 /* Draws a frame whose offset is in twips from Mario's feet, canonical-left. */
 static void draw(const Player *p,const ArtFrame *f,float x,float y,float degrees,float pivot_x,float pivot_y)
 {
@@ -62,9 +65,17 @@ static void draw(const Player *p,const ArtFrame *f,float x,float y,float degrees
     }
     const float feet_x=x+PLAYER_WIDTH/2,feet_y=y+player_height(p);
     const float v0=(float)f->y/art.height,v1=(float)(f->y+f->height)/art.height;
-    if(degrees==0) {graphics_sprite(&texture,feet_x+left,feet_y+top,w,h,u0,v0,u1,v1);return;}
     const float r=degrees*0.01745329252f,c=cosf(r),s=sinf(r);
     const float cx=left+w/2-px,cy=top+h/2-py;
+    if(draw_alpha<255) { /* blinking: the same quad, translucent */
+        const float mx=feet_x+px+cx*c-cy*s,my=feet_y+py+cx*s+cy*c;
+        const float hx[4]={-w/2,w/2,w/2,-w/2},hy[4]={-h/2,-h/2,h/2,h/2};
+        float xs[4],ys[4];
+        for(unsigned i=0;i<4;++i) {xs[i]=mx+hx[i]*c-hy[i]*s;ys[i]=my+hx[i]*s+hy[i]*c;}
+        graphics_quad_alpha(&texture,xs,ys,u0,v0,u1,v1,draw_alpha);
+        return;
+    }
+    if(degrees==0) {graphics_sprite(&texture,feet_x+left,feet_y+top,w,h,u0,v0,u1,v1);return;}
     graphics_sprite_rotated(&texture,feet_x+px+cx*c-cy*s-w/2,feet_y+py+cx*s+cy*c-h/2,w,h,u0,v0,u1,v1,degrees);
 }
 /* FLUDD spray nested inside the Dive / Frontflip bodies (Wait WaterBlast 1157

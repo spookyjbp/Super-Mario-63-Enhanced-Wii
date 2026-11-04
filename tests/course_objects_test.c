@@ -481,16 +481,20 @@ static void test_toad_reactions(void)
 {
     /* Head moods: each loops inside its own label segment, Skip jumps included. */
     for (int m = 0; m < TOAD_MOODS; ++m) {
-        const unsigned start = course_toad_mood_label(m), end = m + 1 < TOAD_MOODS ? course_toad_mood_label(m + 1) : 397;
+        /* the frame before the next label only runs ChangeFrame(): never shown
+           (showing it was the angry Toad's one-frame "normal face") */
+        const unsigned start = course_toad_mood_label(m), end = m + 1 < TOAD_MOODS ? course_toad_mood_label(m + 1) - 1 : 397;
         unsigned f = start, wraps = 0;
         for (int i = 0; i < 2000; ++i) {
             const unsigned n = course_toad_head_step(f, m, fixed_rand, NULL);
             assert(n >= start && n < end);
-            wraps += n == start; f = n;
+            wraps += n <= f; f = n;
         }
         assert(wraps > 1);                          /* it loops, never sticks */
         assert(course_toad_head_step(5, TOAD_MAD, fixed_rand, NULL) == course_toad_mood_label(TOAD_MAD)); /* ChangeFrame */
     }
+    /* the original's labels (0-based): Mad 160 (Flash 161) to 183; 159 and 184 are ChangeFrame() frames */
+    assert(course_toad_mood_label(TOAD_MAD) == 160 && course_toad_mood_label(TOAD_SHOCKED) == 185);
     const CourseString mad = {"Mad", 3}, odd = {"Sleepy", 6};
     assert(course_toad_mood(mad) == TOAD_MAD && course_toad_mood(odd) == TOAD_SMILE);
     /* 8-E1-2's Toad: Mood Mad, frame walk, _xscale -100 (StartMood / Startframe). */
