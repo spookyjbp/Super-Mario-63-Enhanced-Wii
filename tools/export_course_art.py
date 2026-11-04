@@ -32,6 +32,7 @@ import ui_art
 import sign_anim
 import faint_art
 import bg_water_art
+import water_art
 
 
 def sign_animated(labels):
@@ -375,6 +376,8 @@ def export(source, jar, output, areas):
     ui_layers, ui_header = ui_art.build(work / 'ui', jar, pictures_swf.read_bytes(), sprites)
     (output.parent / 'ui_layout.h').write_text(ui_header)
     (output.parent / 'bg_water_places.h').write_text(bg_water_art.header(areas, tables, table, sprites, scripts / 'scripts'))
+    (output.parent / 'water_places.h').write_text(water_art.build(work, jar, swf_file, swf, areas, table, sprites,
+                                                                  scripts / 'scripts'))
     # The 0 HP faint's screens (faint_art.py): star wipe out / in, the lives screen.
     faint_layers, faint_header = faint_art.build(work / 'faint', jar, pictures_swf.read_bytes(), sprites)
     (output.parent / 'faint_layout.h').write_text(faint_header)

@@ -10,7 +10,7 @@
 #include "art_pack.h"
 #include "object_art_ids.h"
 #include "object_select.h"
-#include "water_tex.h"
+#include "water_places.h"
 #include "font_atlas_bin.h"
 #include "text_layout.h"
 #include "sign_layout.h"
@@ -45,7 +45,7 @@ static GXTexObj picture_tex;
 static ArtPack object_packs[OBJECT_ART_PACKS];
 static GXTexObj object_tex[OBJECT_ART_PACKS];
 static bool objects_ready;
-static GXTexObj water_body, water_surface, font_tex, prompt_tex;
+static GXTexObj water_tex, font_tex, prompt_tex;
 static const CourseArtLayer *loaded_prompt;
 
 /* Decode the three compressed object packs (art pack v3) into MEM2 once. */
@@ -206,12 +206,10 @@ bool course_render_init(void)
                   GX_FALSE);
     GX_InitTexObjLOD(&font_tex, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
     /* Water textures repeat across a volume (GX_REPEAT); data lives in the DOL. */
-    GX_InitTexObj(&water_body, (void *)water_body_tex, WATER_BODY_W, WATER_BODY_H, GX_TF_RGB5A3, GX_REPEAT, GX_REPEAT,
-                  GX_FALSE);
-    GX_InitTexObjLOD(&water_body, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
-    GX_InitTexObj(&water_surface, (void *)water_surface_tex, WATER_SURFACE_W, WATER_SURFACE_H * WATER_SURFACE_FRAMES,
-                  GX_TF_RGB5A3, GX_REPEAT, GX_CLAMP, GX_FALSE);
-    GX_InitTexObjLOD(&water_surface, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
+    /* bitmap 2062 of the water blocks: non-smoothed, repeated */
+    DCFlushRange((void *)water_tile, sizeof(water_tile));
+    GX_InitTexObj(&water_tex, (void *)water_tile, WATER_TILE_W, WATER_TILE_H, GX_TF_RGB5A3, GX_REPEAT, GX_REPEAT, GX_FALSE);
+    GX_InitTexObjLOD(&water_tex, GX_NEAR, GX_NEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
     user_art_set_scale(COURSE_SCALE);
     return true;
 }
@@ -358,6 +356,38 @@ static void draw_fx(const char *name, unsigned frame, float width)
     graphics_sprite(&anim_tex, stage_x(L->ox, width) + T->x * k, L->oy * HUD_K + T->y * k, T->width * k, T->height * k,
                     0, 0, 1, 1);
 }
+/* The level water over Mario (Water is attached above Char, under FrontGFX):
+   each Water Code strip as a polygon from its wave points down to
+   WaterDeepness, filled with its colour, or, where it masks a water block,
+   showing the block: two layers of the repeating bitmap at 30 % that slide
+   diagonally (water_places.h). ox, oy: the course origin on screen. */
+static void draw_level_water(const CourseSession *s, float ox, float oy)
+{
+    for (unsigned k = 0; k < s->water_count; ++k) {
+        const WaterPlace *wp = &water_places[s->water_index[k]];
+        const BgWave *w = &s->water_wave[k];
+        const WaterBlock *blk = wp->block >= 0 ? &water_blocks[(unsigned)wp->block] : 0;
+        for (unsigned j = 0; j + 1 < w->n; ++j) {
+            const float cx[4] = {wp->x + w->x[j], wp->x + w->x[j + 1], wp->x + w->x[j + 1], wp->x + w->x[j]};
+            const float cy[4] = {wp->y + w->y[j], wp->y + w->y[j + 1], wp->y + wp->deep, wp->y + wp->deep};
+            float xs[4], ys[4];
+            for (unsigned i = 0; i < 4; ++i) { xs[i] = ox + cx[i] * COURSE_SCALE; ys[i] = oy + cy[i] * COURSE_SCALE; }
+            if (!blk) {
+                graphics_quad_color(xs, ys, (GXColor){wp->rgba[0], wp->rgba[1], wp->rgba[2], wp->rgba[3]});
+                continue;
+            }
+            for (unsigned l = 0; l < 2; ++l) {
+                const WaterBlockLayer *L = &blk->layers[l];
+                const float *off = L->offs[s->water_frame % WATER_BLOCK_FRAMES];
+                float us[4], vs[4];
+                for (unsigned i = 0; i < 4; ++i)
+                    course_water_block_uv(blk->x, blk->y, off[0], off[1], L->sx, L->origin_x, L->origin_y, L->tile,
+                                          cx[i], cy[i], &us[i], &vs[i]);
+                graphics_quad_uv(&water_tex, xs, ys, us, vs, (unsigned char)(L->alpha * 255 + 0.5f));
+            }
+        }
+    }
+}
 void course_render(const CourseSession *s, float t)
 {
     const CourseRuntime *c = &s->runtime;
@@ -436,21 +466,7 @@ void course_render(const CourseSession *s, float t)
         user_art_draw_player(p, px, py);
         user_art_set_alpha(255);
     }
-    /* Water Code volumes: port-made water (tools/make_water_texture.py), drawn
-       over Mario like the original's translucent water: a slowly drifting body
-       and an animated wave crest along the surface. */
-    const float water_seconds = (float)s->hud.ticks / 60.0f;
-    for (unsigned i = 0; i < c->area->water_count; ++i) {
-        const CourseWater *w = &c->area->water[i];
-        CourseWaterQuad q[2];
-        const unsigned n = course_water_quads(ox + w->x * COURSE_SCALE, oy + w->y * COURSE_SCALE, w->w * COURSE_SCALE,
-                                              w->h * COURSE_SCALE, COURSE_SCALE, water_seconds, q);
-        for (unsigned k = 0; k < n; ++k) {
-            const float xs[4] = {q[k].x0, q[k].x1, q[k].x1, q[k].x0}, ys[4] = {q[k].y0, q[k].y0, q[k].y1, q[k].y1};
-            graphics_quad_alpha(k + 1 == n ? &water_surface : &water_body, xs, ys, q[k].u0, q[k].v0, q[k].u1, q[k].v1,
-                                255);
-        }
-    }
+    draw_level_water(s, ox, oy);
     draw_layer(ART_LAYER_FRONT, ox, oy, 1);
     draw_objects(s, ox, oy, true);
     if (s->death) {   /* MarioDeathGFX in FrontGFX, where Mario was */

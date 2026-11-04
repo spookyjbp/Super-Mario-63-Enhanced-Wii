@@ -12,7 +12,7 @@ Char at (0,0) for `StartChar(area, 0, 0, 0, 0)`.
 
     python export_course.py <checkout> <ffdec.jar> <out.bin> 8-E1-1 8-E1-1-2 ...
 """
-import argparse, hashlib, json, re, struct, subprocess
+import argparse, math, hashlib, json, re, struct, subprocess
 from pathlib import Path
 import xml.etree.ElementTree as ET
 from PIL import Image
@@ -218,7 +218,12 @@ def export(source, jar, output, area_ids):
             for o in objects(a, layer):
                 if o['type'] == 'Water Code':
                     p = o['params']
-                    area['water'].append((o['x'], o['y'], float(p.get('WaterLength', 500)),
+                    # The strip's points (makeWave): from x -50, (WaterLength + 100) / n apart,
+                    # n = polygons at BGquality "MEDIUM" (Math.round(polygons * 0.75)): Mario
+                    # is in the water where its polygon is (Water.hitTest), to the last point.
+                    length = float(p.get('WaterLength', 500))
+                    n = int(math.floor(float(p.get('polygons', 50)) * 0.75 + 0.5))
+                    area['water'].append((o['x'] - 50, o['y'], (n - 1) * (length + 100) / n,
                                           float(p.get('WaterDeepness', 400))))
                 else:
                     area['objects'].append(o)

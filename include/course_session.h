@@ -70,6 +70,10 @@ typedef struct {
     /* Dynamic Water (802) in this area's backgrounds: bg_waters indices and their waves. */
     unsigned bg_water_count, bg_water_index[4];
     BgWave bg_wave[4];
+    /* The level water (Water Code strips, water_places.h): water_places indices,
+       their waves, and the water blocks' frame (133-frame loop, from area entry). */
+    unsigned water_count, water_index[6], water_frame;
+    BgWave water_wave[6];
     float death_x, death_y;
 } CourseSession;
 bool course_session_start(CourseSession *s, const CoursePack *pack, const char *area, float cx, float cy, float view_width);

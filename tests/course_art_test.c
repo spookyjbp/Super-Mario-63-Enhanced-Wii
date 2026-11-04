@@ -1,5 +1,6 @@
 /* Course art pack: every area layer and picture page parses and decodes. */
 #include "course_art.h"
+#include "water_places.h"
 #include "game.h"
 #include "lz4_block.h"
 #include <assert.h>
@@ -83,23 +84,23 @@ int main(void)
         const float cx = z->ox + z->width / 4.0f / 1.6f, cy = z->oy + z->height / 2.0f / 1.6f;
         assert(cx > 60 && cx < 150 && fabsf(cy - 1) < 3);
     }
-    /* Phase 2 item 5: water quads tile one texel per course px, abut, and keep
-       the surface frame's V range half a texel inside its frame. */
-    for (float t = 0; t < 30; t += 0.37f) {
-        CourseWaterQuad q[2];
-        const float scale = 1.375f;
-        assert(course_water_quads(100, 200, 400 * scale, 150 * scale, scale, t, q) == 2);
-        assert(q[0].y0 == q[1].y1 && q[1].y0 < 200 && q[0].y1 == 200 + 150 * scale);   /* body under the strip */
-        assert(fabsf((q[0].u1 - q[0].u0) - 400.0f / 64) < 1e-3f && fabsf((q[1].u1 - q[1].u0) - 400.0f / 64) < 1e-3f);
-        const unsigned f = (unsigned)(t * 8) % 8;
-        assert(q[1].v0 > f / 8.0f && q[1].v1 < (f + 1) / 8.0f);                       /* inside its frame */
-        assert(fabsf(q[0].u0) < 1.01f && fabsf(q[1].u0) < 1.01f);                     /* wrapped: no precision loss */
-    }
-    {
-        CourseWaterQuad q[2];
-        assert(course_water_quads(0, 0, 50, 5 * 1.375f, 1.375f, 0, q) == 1);             /* shallow: surface only */
-        assert(course_water_quads(0, 0, 0, 50, 1.375f, 0, q) == 0);
-    }
+    /* The water blocks: one bitmap repeat is 64 course px; the layer slides
+       64 px diagonally over its 133 frames, so the loop is seamless; the
+       mirrored layer runs its u the other way. */
+    for (unsigned k = 0; k < WATER_BLOCKS; ++k)
+        for (unsigned l = 0; l < 2; ++l) {
+            const WaterBlockLayer *L = &water_blocks[k].layers[l];
+            float u0, v0, u1, v1, u2, v2;
+            assert(L->tile == 64 && L->alpha > 0.29f && L->alpha < 0.31f && (L->sx == 1 || L->sx == -1));
+            course_water_block_uv(water_blocks[k].x, water_blocks[k].y, L->offs[0][0], L->offs[0][1], L->sx, L->origin_x,
+                                  L->origin_y, L->tile, 900, 200, &u0, &v0);
+            course_water_block_uv(water_blocks[k].x, water_blocks[k].y, L->offs[WATER_BLOCK_FRAMES - 1][0],
+                                  L->offs[WATER_BLOCK_FRAMES - 1][1], L->sx, L->origin_x, L->origin_y, L->tile, 900, 200, &u1, &v1);
+            assert(fabsf(fabsf(u1 - u0) - 1) < 0.01f && fabsf(fabsf(v1 - v0) - 1) < 0.01f);
+            course_water_block_uv(water_blocks[k].x, water_blocks[k].y, L->offs[0][0], L->offs[0][1], L->sx, L->origin_x,
+                                  L->origin_y, L->tile, 964, 200, &u2, &v2);
+            assert(fabsf(u2 - u0 - (float)L->sx) < 1e-3f && v2 == v0);
+        }
     pack.layer_count = 0;
     assert(!course_art_parse(blob, 100, &pack));
     printf("course art: %u layers, %u tiles decoded\n", 0u + (unsigned)(sizeof(areas) / sizeof(*areas)), tiles);

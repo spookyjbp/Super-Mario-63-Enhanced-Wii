@@ -14,4 +14,9 @@ typedef struct {
 void bg_wave_init(BgWave *w, unsigned n, float length, unsigned seed);
 /* simWave, one source frame (graphics = true: Mario does not stir it). */
 void bg_wave_step(BgWave *w, float stiffness, float randomwave);
+/* Mario stirring a level water strip (graphics = false), in its simWave between
+   the turbulence and the springs: Char's x relative to the strip (clip px) and
+   his speed (px per source frame). */
+typedef struct { float x, xspeed, yspeed; float length; } BgWaveSplash;
+void bg_wave_step_splash(BgWave *w, float stiffness, float randomwave, const BgWaveSplash *splash);
 #endif

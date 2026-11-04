@@ -487,6 +487,32 @@ static void test_message_box_frames(void)
     m.state = SESSION_PLAY; assert(course_message_frame(&m) == 0 && course_prompt_frame(&m) == -1);
 }
 
+static float wave_peak(const BgWave *w)
+{
+    float m = 0;
+    for (unsigned i = 0; i < w->n; ++i) m = fmaxf(m, fabsf(w->y[i]));
+    return m;
+}
+static void test_level_water_splash(void)
+{
+    /* 8-E1-1's middle pool (Water Code at 448): Mario dropping in faster than
+       5 px a frame stirs the strip (yspeed / 2 at his point); without him it
+       only ripples. */
+    float peak[2];
+    for (int k = 0; k < 2; ++k) {
+        assert(course_session_start(&s, &pack, "8-E1-1", 0, 0, 640));
+        s.state = SESSION_PLAY; s.runtime.platform_frame = 1;
+        assert(s.water_count == 3 && s.water_wave[1].n == 30);
+        for (int i = 0; i < 260; ++i) course_session_step(&s, (GameInput){0});
+        if (k) {
+            course_place_player(&s.runtime, &s.game.player, 640, 120);
+            s.game.player.vy = 9 * 44; s.game.player.grounded = false;
+        }
+        peak[k] = 0;
+        for (int i = 0; i < 60; ++i) { course_session_step(&s, (GameInput){0}); peak[k] = fmaxf(peak[k], wave_peak(&s.water_wave[1])); }
+    }
+    assert(peak[1] > peak[0] + 2);
+}
 static void test_camera_starts_inside_walls(void)
 {
     /* 8-E1-2 entered from the left: Mario at x 0, the left wall (CamEdge
@@ -512,6 +538,6 @@ int main(void)
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
     test_message_box_frames(); test_rocket_once_per_jump(); test_faint(); test_wipes_and_background_water();
-    test_camera_starts_inside_walls();
-    puts("17 course session (camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_camera_starts_inside_walls(); test_level_water_splash();
+    puts("18 course session (level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }

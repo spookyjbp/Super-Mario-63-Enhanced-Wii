@@ -28,12 +28,10 @@ const CourseArtLayer *course_art_controller_picture(const CourseArtPack *pack, C
    tile's right/bottom edge equals the next tile's left/top edge bit for bit. */
 void course_layer_tile_quad(float bx, float by, float px, unsigned x, unsigned y, unsigned w, unsigned h,
                             float xs[4], float ys[4]);
-/* Port-made water (assets/generated/water_tex.h): a water volume (world px, `scale`
-   world px per course px) as two repeating quads at time `seconds`: [0] the body
-   from 11 course px below the surface down, scrolled slowly; [1] the animated
-   surface strip, 16 course px tall with its crest 5 px above the surface. UVs are
-   in texture repeats (GX_REPEAT): one texel per course px, so any width tiles
-   without seams; the surface's V range stays half a texel inside its frame. */
-typedef struct { float x0, y0, x1, y1, u0, v0, u1, v1; } CourseWaterQuad;
-unsigned course_water_quads(float x, float y, float w, float h, float scale, float seconds, CourseWaterQuad out[2]);
+/* A water block layer (water_places.h): the repeating bitmap's coordinates
+   (in repeats) at course point (x, y), the block placed at (block_x, block_y),
+   the layer's shape at (off_x, off_y) mirrored when sx is -1, the pattern's
+   origin in the shape and its tile size (course px). */
+void course_water_block_uv(float block_x, float block_y, float off_x, float off_y, int sx, float origin_x,
+                           float origin_y, float tile, float x, float y, float *u, float *v);
 #endif

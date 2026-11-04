@@ -7,8 +7,8 @@
 typedef struct { const char *area; CourseArtKind kind; float x, y, scale, length, deep; unsigned points;
                  float stiffness, randomwave; unsigned char rgba[4]; } BgWaterPlace;
 static const BgWaterPlace bg_waters[] = {
-    {"8-E1-2", ART_LAYER_CLOSE, 885.00f, -123.95f, 0.5000f, 210.0f, 400.0f, 13u, 0.300f, 1.000f, {40, 128, 215, 128}},
-    {"8-E1-2-2", ART_LAYER_CLOSE, -205.00f, -105.95f, 0.5000f, 210.0f, 400.0f, 13u, 0.300f, 1.000f, {40, 128, 215, 128}},
+    {"8-E1-2", ART_LAYER_CLOSE, 885.00f, -123.95f, 0.5000f, 210.0f, 400.0f, 10u, 0.300f, 1.000f, {40, 128, 215, 128}},
+    {"8-E1-2-2", ART_LAYER_CLOSE, -205.00f, -105.95f, 0.5000f, 210.0f, 400.0f, 10u, 0.300f, 1.000f, {40, 128, 215, 128}},
 };
 #define BG_WATERS (sizeof(bg_waters) / sizeof(bg_waters[0]))
 #endif

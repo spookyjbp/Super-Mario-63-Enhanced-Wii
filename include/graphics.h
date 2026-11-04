@@ -30,6 +30,9 @@ void graphics_quad_alpha(GXTexObj *texture, const float xs[4], const float ys[4]
    alpha * mul[3]; multipliers may exceed 1 (up to 2). */
 void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4],
                           float u0, float v0, float u1, float v1, const float mul[4], const float add[3]);
+/* Quad with its own texture coordinates per corner (repeating textures) and alpha. */
+void graphics_quad_uv(GXTexObj *texture, const float xs[4], const float ys[4], const float us[4], const float vs[4],
+                      unsigned char alpha);
 void graphics_present(void);
 void graphics_shutdown(void);
 

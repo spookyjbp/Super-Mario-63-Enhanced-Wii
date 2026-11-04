@@ -17,13 +17,29 @@ void bg_wave_init(BgWave *w, unsigned n, float length, unsigned seed)
     for (unsigned i = 0; i < n; ++i) w->x[i] = -50 + (float)i * step;
     w->rest = 0.5f * step;
 }
-void bg_wave_step(BgWave *w, float stiffness, float randomwave)
+void bg_wave_step(BgWave *w, float stiffness, float randomwave) { bg_wave_step_splash(w, stiffness, randomwave, 0); }
+void bg_wave_step_splash(BgWave *w, float stiffness, float randomwave, const BgWaveSplash *m)
 {
     const unsigned n = w->n;
     for (unsigned i = 0; i < n; ++i) {   /* random turbulence, kept one frame in ten (turbProb 0.1) */
         w->fy[i] += rnd(w) * (randomwave * 2) - randomwave;
         w->fx[i] = 0;
         if (rnd(w) >= 0.1f) w->fy[i] = 0;
+    }
+    if (m) {
+        /* X = Char._x - _X + xspeed; marioI = Math.round(X / SW * kNbrPts) (the -50
+           start and the +100 are not accounted for, as written). The loop that
+           should stir its neighbours indexes pts[mouseI +/- i], and mouseI is
+           never set: those writes do nothing, only marioI's fx gains
+           xspeed / 10 / i. An index outside the strip writes nothing. */
+        const float X = m->x + m->xspeed;
+        const float k = floorf(X / m->length * (float)n + 0.5f);
+        if (k >= 0 && k < (float)n) {
+            const unsigned i = (unsigned)k;
+            w->fy[i] = m->yspeed > 0 ? m->yspeed / 2 : m->yspeed / 3;
+            w->fx[i] += m->xspeed / 5;
+            w->fx[i] += m->xspeed / 10 + m->xspeed / 20;
+        }
     }
     for (unsigned i = 0; i + 1 < n; ++i) {   /* springs between neighbours; the ends stay put */
         const float dx = w->x[i + 1] - w->x[i], dy = w->y[i + 1] - w->y[i];

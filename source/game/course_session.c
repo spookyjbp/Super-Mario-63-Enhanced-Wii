@@ -1,6 +1,7 @@
 #include "course_session.h"
 #include "bg_water.h"
 #include "bg_water_places.h"
+#include "water_places.h"
 #include "sfx.h"
 #include <math.h>
 #include <string.h>
@@ -36,6 +37,24 @@ bool course_session_object_active(const CourseSession *s, const CourseObject *o)
     const unsigned frame = course_string_equals(o->layer, "BackGFX") ? s->back_frame : 0;
     return frame >= o->frame_start && frame < o->frame_end;
 }
+/* The level water's simWave, one source frame: only within 1000 px (vertically)
+   of Mario; a strip without `graphics = true` is stirred when Mario crosses its
+   surface (within 20 px) faster than 5 px a frame up or down. The water
+   blocks' clips play on. */
+static void level_water_step(CourseSession *s)
+{
+    s->water_frame = (s->water_frame + 1) % WATER_BLOCK_FRAMES;
+    const Player *p = &s->game.player;
+    const float mx = course_cx(&s->runtime, p->x + PLAYER_WIDTH / 2), my = course_cy(&s->runtime, p->y + player_height(p));
+    const float xs = p->vx / 44, ys = p->vy / 44;
+    for (unsigned i = 0; i < s->water_count; ++i) {
+        const WaterPlace *w = &water_places[s->water_index[i]];
+        if (!(fabsf(my - w->y) < 1000)) continue;
+        const BgWaveSplash m = {mx - w->x, xs, ys, w->length};
+        const bool stir = w->splash && fabsf(ys) > 5 && fabsf(my - w->y) < 20;
+        bg_wave_step_splash(&s->water_wave[i], w->stiffness, w->randomwave, stir ? &m : 0);
+    }
+}
 static void enter_area(CourseSession *s, const CourseArea *a, float cx, float cy)
 {
     course_runtime_init(&s->runtime, a);
@@ -46,6 +65,13 @@ static void enter_area(CourseSession *s, const CourseArea *a, float cx, float cy
         if (course_string_equals(a->id, bg_waters[i].area)) {
             bg_wave_init(&s->bg_wave[s->bg_water_count], bg_waters[i].points, bg_waters[i].length, 63u + i);
             s->bg_water_index[s->bg_water_count++] = i;
+        }
+    /* The level water: makeWave when the Water clip is attached */
+    s->water_count = 0; s->water_frame = 0;
+    for (unsigned i = 0; i < WATER_PLACES && s->water_count < 6; ++i)
+        if (course_string_equals(a->id, water_places[i].area)) {
+            bg_wave_init(&s->water_wave[s->water_count], water_places[i].points, water_places[i].length, 163u + i);
+            s->water_index[s->water_count++] = i;
         }
     /* Falling out respawns at the area's entry (StartX/StartY in StartChar). */
     s->world.spawn_x = course_wx(&s->runtime, cx) - PLAYER_WIDTH / 2;
@@ -355,9 +381,11 @@ void course_session_step(CourseSession *s, GameInput in)
         if (s->fx_phase >= 60) { s->fx_phase -= 60; faint_fx_frame(s); }
     }
     if (s->lifelost) return;   /* LifeLost frame 2: _root.RemoveCourse() */
-    if (s->game.player.source_step)   /* simWave, each source frame */
+    if (s->game.player.source_step) {   /* simWave, each source frame */
         for (unsigned i = 0; i < s->bg_water_count; ++i)
             bg_wave_step(&s->bg_wave[i], bg_waters[s->bg_water_index[i]].stiffness, bg_waters[s->bg_water_index[i]].randomwave);
+        level_water_step(s);
+    }
     /* KeyZ(): Z (read/talk/stomp). The port maps it to the pound button. */
     const bool z_pressed = in.pound_pressed; /* already a button-down event */
     if (s->area_title_time > 0) s->area_title_time = fmaxf(0, s->area_title_time - GAME_DT);

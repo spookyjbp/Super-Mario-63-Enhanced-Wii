@@ -241,6 +241,28 @@ void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4
     GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
     GX_SetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
 }
+void graphics_quad_uv(GXTexObj *texture, const float xs[4], const float ys[4], const float us[4], const float vs[4],
+                      unsigned char alpha)
+{
+    GX_SetNumTexGens(1);
+    GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+    GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+    GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+    GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+    GX_SetTevOp(GX_TEVSTAGE0, GX_MODULATE);
+    GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
+    GX_LoadTexObj(texture, GX_TEXMAP0);
+    GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
+    for (unsigned i = 0; i < 4; ++i) {
+        GX_Position3f32(xs[i], ys[i], 0); GX_Color4u8(255, 255, 255, alpha); GX_TexCoord2f32(us[i], vs[i]);
+    }
+    GX_End();
+    GX_SetVtxDesc(GX_VA_TEX0, GX_NONE);
+    GX_SetNumTexGens(0);
+    GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORDNULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+    GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
+}
 void graphics_sprite(GXTexObj *t,float x,float y,float w,float h,float u0,float v0,float u1,float v1)
 { graphics_sprite_rotated(t,x,y,w,h,u0,v0,u1,v1,0); }
 /* An untextured quad, blended when translucent (the background water). */

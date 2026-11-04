@@ -3,6 +3,7 @@
    docs/original-tutorial-reference.md. */
 #include "course_pack.h"
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -64,7 +65,10 @@ static void test_collision_points(void)
     assert(course_area_hit(a,COURSE_ICE,0,1660,10) && !course_area_hit(a,COURSE_ICE,0,1000,10));
     float surface=0;
     assert(course_area_water(a,500,200,&surface) && surface==158.75f && !course_area_water(a,500,100,NULL));
-    assert(a->water[1].w==410 && a->water[1].h==400);
+    /* the strip's polygon: 30 points (polygons 40 at "MEDIUM") from x - 50, 17 px apart,
+       reaching the tunnel under the ground to the right (858..891) */
+    assert(a->water[1].x==398 && fabsf(a->water[1].w-29*17.0f)<0.01f && a->water[1].h==400);
+    assert(course_area_water(a,880,300,NULL));
 }
 static void test_scripted_objects(void)
 {
