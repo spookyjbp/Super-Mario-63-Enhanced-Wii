@@ -34,7 +34,7 @@ bool course_art_parse(const unsigned char *d,size_t n,CourseArtPack *pack)
             CourseArtTile *T=&L->tiles[t];
             T->x=u16(&r);T->y=u16(&r);T->width=u16(&r);T->height=u16(&r);T->size=u32(&r);T->packed=u32(&r);
             if(!r.ok || !T->width || !T->height || T->width>1024 || T->height>1024 || T->width%4 || T->height%4 ||
-               T->x+T->width>L->width || T->y+T->height>L->height || T->size!=T->width*T->height*2 || !need(&r,T->packed))
+               T->x+T->width>L->width || T->y+T->height>L->height || (T->size!=T->width*T->height*2 && T->size!=T->width*T->height*4) || !need(&r,T->packed))
                 return false;
             T->data=r.p;r.p+=T->packed;
             while((size_t)(r.p-r.base)%4) {if(!need(&r,1)) return false;++r.p;}

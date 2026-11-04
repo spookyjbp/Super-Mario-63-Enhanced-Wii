@@ -21,7 +21,10 @@ the Flash Player does not draw:
 * colour seams: 1 px lines between two agreeing sides, either at least
   COLOUR_RUN px long (real art lines here are <= 52) or cutting across
   differently coloured art (sides changing by more than CROSS along the line,
-  where adjoining pieces leak the colour behind them); filled from both sides.
+  where adjoining pieces leak the colour behind them); filled from both sides;
+* faint seams: 1 px lines only FAINT_DIFF off a smooth gradient, across
+  FAINT_SHARE of the whole layer (CastleColoredFarBG rows 172 and 283, where
+  the sky's gradient pieces meet: a pale line across the sky).
 Most stray edge rows are prevented at the source (swf_bitmap_fix.py).
 
 `bleed` gives fully transparent texels the colour of their visible neighbours
@@ -37,6 +40,9 @@ MAX_GAP = 1.9     # px of missing coverage in a crack
 COLOUR_DIFF = 24  # a colour line differs from its sides by more than this
 SIDE_DIFF = 16    # ...while its two sides agree within this
 CROSS = 64        # a shorter colour line is a seam when its sides change by more than this
+FAINT_DIFF = 6    # a faint line differs by more than this...
+FAINT_SIDE = 4    # ...from sides agreeing within this (a smooth gradient)...
+FAINT_SHARE = 0.9  # ...across this share of the layer's width: a shape seam
 
 
 def _runs(mask, length, keep=None):
@@ -71,6 +77,9 @@ def _pass(a):
         seg = P[y, s:e, :3]
         return float((seg.max(0) - seg.min(0)).max()) > CROSS
     mask = _runs(colour, COLOUR_RUN) | _runs(colour, RUN, crosses)
+    faint = both & (np.abs(P[..., :3] - Q[..., :3]).max(-1) <= FAINT_SIDE) & \
+        (np.abs(r[..., :3] - (P[..., :3] + Q[..., :3]) / 2).max(-1) > FAINT_DIFF)
+    mask |= faint & (faint.mean(1) >= FAINT_SHARE)[:, None]
     if not mask.any():
         return 0
     ys, xs = np.nonzero(mask)

@@ -178,6 +178,20 @@ def rgb5a3(image):
     return tiles.tobytes()
 
 
+def rgba8(image):
+    """GX RGBA8 4x4 tiles: per tile 16 AR pairs, then 16 GB pairs. Used for the
+    far background, whose smooth sky gradient bands in RGB5A3's 5 bits."""
+    a = np.asarray(image.convert('RGBA'), dtype=np.uint8)
+    h, w = a.shape[:2]
+    t = a.reshape(h // 4, 4, w // 4, 4, 4).transpose(0, 2, 1, 3, 4).reshape(h // 4, w // 4, 16, 4)
+    ar = np.stack([t[..., 3], t[..., 0]], -1).reshape(h // 4, w // 4, 32)
+    gb = np.stack([t[..., 1], t[..., 2]], -1).reshape(h // 4, w // 4, 32)
+    return np.concatenate([ar, gb], -1).tobytes()
+
+
+TRUE_COLOUR = {'FarBackground'}   # layers stored as RGBA8 (tile size w * h * 4)
+
+
 def render(jar, swf_path, work, ids, zoom):
     cmd = ['java', '-Xmx3g', '-Djava.awt.headless=true', f'-Duser.home={work.resolve()}/ffdec-home', '-jar',
            str(jar.resolve())]
@@ -209,7 +223,7 @@ def clean(image, repair=True):
     return Image.fromarray(art_repair.bleed(a))
 
 
-def encode_layer(image, repair=True):
+def encode_layer(image, repair=True, true_colour=False):
     """Pad to multiples of 4, cut into <=1024 tiles, drop empty tiles."""
     image = clean(image, repair)
     w, h = image.size
@@ -221,7 +235,7 @@ def encode_layer(image, repair=True):
             part = canvas.crop((tx, ty, min(W, tx + TILE), min(H, ty + TILE)))
             if part.getchannel('A').getbbox() is None:
                 continue
-            data = rgb5a3(part)
+            data = rgba8(part) if true_colour else rgb5a3(part)
             tiles.append((tx, ty, part.width, part.height, lz4.block.compress(data, store_size=False), len(data)))
     return W, H, tiles
 
@@ -277,7 +291,7 @@ def export(source, jar, output, areas):
     for a, layer, ident, link in layers:
         im = Image.open(C.sprite_dir(work / 'png', ident) / '1.png').convert('RGBA')
         ox, oy = origin(work, ident)
-        W, H, tiles = encode_layer(im)
+        W, H, tiles = encode_layer(im, true_colour=layer in TRUE_COLOUR)
         out += C.pack_string(a) + C.pack_string(layer) + struct.pack('>ffffII', ox, oy, PARALLAX[layer], ZOOM, W, H)
         out += struct.pack('>I', len(tiles))
         for tx, ty, tw, th, blob, size in tiles:

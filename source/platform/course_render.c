@@ -219,7 +219,8 @@ static bool upload(const CourseArtTile *t, unsigned char *dst, size_t cap, GXTex
 {
     if (t->size > cap || lz4_block_decode(t->data, t->packed, dst, t->size) != (long)t->size) return false;
     DCFlushRange(dst, t->size);
-    GX_InitTexObj(tex, dst, t->width, t->height, GX_TF_RGB5A3, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    GX_InitTexObj(tex, dst, t->width, t->height, t->size == t->width * t->height * 4 ? GX_TF_RGBA8 : GX_TF_RGB5A3,
+                  GX_CLAMP, GX_CLAMP, GX_FALSE);
     GX_InitTexObjLOD(tex, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
     return true;
 }

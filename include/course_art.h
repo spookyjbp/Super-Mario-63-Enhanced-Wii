@@ -1,7 +1,8 @@
 #ifndef SM63_COURSE_ART_H
 #define SM63_COURSE_ART_H
 /* Course artwork pack (tools/export_course_art.py, "SM63CAR1" v1): LZ4-compressed
-   GX RGB5A3 tiles per area layer. Pure parsing; GX upload lives in platform code. */
+   GX RGB5A3 tiles per area layer (RGBA8 when a tile's size is width * height * 4:
+   the far background's sky gradient). Pure parsing; GX upload lives in platform code. */
 #include "course_pack.h"
 #define COURSE_ART_MAX_LAYERS 80
 #define COURSE_ART_MAX_TILES 128   /* an animated picture keeps one frame per tile */

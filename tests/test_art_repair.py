@@ -31,6 +31,13 @@ def rgb5a3(raw, w, h):
     return np.dstack([r, g, b, a]).astype(np.uint8)
 
 
+def rgba8(raw, w, h):
+    t = np.frombuffer(raw, np.uint8).reshape(h // 4, w // 4, 2, 16, 2)
+    ar, gb = t[:, :, 0], t[:, :, 1]
+    px = np.stack([ar[..., 1], gb[..., 0], gb[..., 1], ar[..., 0]], -1)   # R G B A
+    return px.reshape(h // 4, w // 4, 4, 4, 4).transpose(0, 2, 1, 3, 4).reshape(h, w, 4)
+
+
 def course_layers():
     d = (GEN / 'course_8e1_art.bin').read_bytes()
     _, _, n, _ = struct.unpack_from('>8sIIf', d)
@@ -56,7 +63,7 @@ def course_layers():
             raw = lz4.block.decompress(d[q:q + packed], uncompressed_size=size)
             q += packed
             q += (-q) % 4
-            image[ty:ty + th, tx:tx + tw] = rgb5a3(raw, tw, th)
+            image[ty:ty + th, tx:tx + tw] = rgba8(raw, tw, th) if size == tw * th * 4 else rgb5a3(raw, tw, th)
         yield area, layer, image
 
 
@@ -190,6 +197,30 @@ class GeneratedArtTests(unittest.TestCase):
             with self.subTest(area=area, layer=layer):
                 self.assertEqual(full_width_lines(image), [])
                 self.assertEqual(cracks(image), 0)
+
+    def test_far_sky_fades_smoothly(self):
+        """The far background's sky is stored at 8 bits per channel (RGB5A3's
+        5 bits showed bands 8 levels apart) and has no faint seam across it
+        (rows 172 and 283, pale lines where its gradient pieces meet)."""
+        for area, layer, image in course_layers():
+            if layer != 'FarBackground':
+                continue
+            sky = image[:160, :, :3].astype(int)
+            self.assertLessEqual(np.abs(np.diff(sky, axis=0)).max(), 2, area)
+            self.assertGreater(len({tuple(c) for c in sky[:, 360]}), 100, area)
+            f = image.astype(int)
+            up, row, dn = f[:-2, :, :3], f[1:-1, :, :3], f[2:, :, :3]
+            faint = (np.abs(up - dn).max(-1) <= R.FAINT_SIDE) & (np.abs(row - (up + dn) / 2).max(-1) > R.FAINT_DIFF)
+            self.assertEqual(list(np.flatnonzero(faint.mean(1) >= R.FAINT_SHARE)), [], area)
+
+    def test_faint_seam_is_removed(self):
+        a = np.zeros((60, 300, 4), np.uint8)
+        a[..., 3] = 255
+        a[..., 0] = np.arange(60)[:, None] + 150        # smooth gradient
+        a[..., 1], a[..., 2] = 195, 248
+        a[30, :, :3] = (a[30, :, :3].astype(int) + (15, 13, 0)).astype(np.uint8)   # CastleColoredFarBG row 172
+        b, _ = R.repair(a)
+        self.assertTrue((np.abs(b[30].astype(int) - a[29]) <= 1).all())
 
     def test_sign_board_is_solid(self):
         header = (GEN / 'object_art_ids.h').read_text()
