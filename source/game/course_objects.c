@@ -601,9 +601,21 @@ static void step_goomba(CourseObjects *o, LiveObject *l, CourseRuntime *c, Playe
     if (overlap(body, mbody) && !(M.dive && fabsf(mxs) > 0.3f) && !l->tumble)
         course_mario_hit(p, g, 1, 90, -5, mx > l->x ? 7 : -7, 7, false);
     if (overlap(head, mfeet) && !p->grounded && p->vy > 0) {
-        p->vy = 0; l->hurt = true; l->tumblerot = 0; l->bounce = true;
+        /* Goombas stacked in one place are stomped on successive ticks (the
+           first holds Mario with yspeed 0, gravity makes it positive again,
+           and a hit from the next one's body ends the EJump);
+           each squish's frame 9 would add its boost, launching Mario 2-3 jumps
+           high. Only the Goomba that started the hold bounces him; the others
+           are squished in place (bounce false: no hold, no boost). */
+        bool held = false;
+        for (unsigned i = 0; i < o->count; ++i) {
+            const LiveObject *q = &o->live[i];
+            held |= q != l && q->alive && q->kind == LIVE_GOOMBA && q->frame_label == GOOMBA_SQUISH && q->bounce && q->count <= 9;
+        }
+        p->vy = 0; l->hurt = true; l->tumblerot = 0; l->bounce = !held;
         sfx_at(SFX_GOOMBA_STOMPED, l->x, l->y, cam_cx, cam_cy, 15);
-        p->ejump = true; p->action = ACTION_NONE; p->spin_time = 0;
+        if (!held) { p->ejump = true; p->action = ACTION_NONE; p->spin_time = 0; }
+        else p->vy = 0;
         l->p3 = jump_key ? 1 : 0; /* landtime 1 when Up is held on contact */
     }
     float b;

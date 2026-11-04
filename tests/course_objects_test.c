@@ -175,6 +175,25 @@ static void test_goomba_hurts_and_stomps(void)
     }
     assert(s.progress.coins == coins + 1);
 }
+static void test_stacked_goombas_bounce_once(void)
+{
+    /* Two Goombas in one place: both are squished, Mario bounces once
+       (yspeed -8 without Jump), not once per Goomba. */
+    play_area("8-E1-1");
+    LiveObject *gm = first(LIVE_GOOMBA);
+    course_place_player(&s.runtime, &s.game.player, 1150, -60);
+    settle_goomba(gm);
+    gm->seeing = true;
+    s.objects.live[s.objects.count] = *gm;
+    LiveObject *twin = &s.objects.live[s.objects.count++];
+    twin->index = COURSE_MAX_PICKUPS;   /* no shared coin slot */
+    course_place_player(&s.runtime, &s.game.player, gm->x, gm->y - 40);
+    s.game.player.vy = 200; s.game.player.grounded = false;
+    float lowest = 0;
+    for (int i = 0; i < 80; ++i) { ticks((GameInput){0}, 1); lowest = fminf(lowest, s.game.player.vy); }
+    assert(gm->frame_label == GOOMBA_SQUISH && twin->frame_label == GOOMBA_SQUISH);
+    assert(lowest < -6.5f * 44 && lowest > -8.5f * 44);
+}
 static void test_cheep_cheep(void)
 {
     play_area("8-E1-1");
@@ -535,7 +554,7 @@ int main(void)
     const size_t n = fread(blob, 1, sizeof(blob), f); fclose(f);
     assert(course_pack_parse(blob, n, &pack));
     test_coins_heal_and_persist(); test_toad_dialogue_pages(); test_toad_reactions(); test_hurt_animations(); test_falling_log(); test_birds_and_butterflies_move();
-    test_goomba_hurts_and_stomps();
+    test_goomba_hurts_and_stomps(); test_stacked_goombas_bounce_once();
     test_cheep_cheep();
     test_bob_omb();
     test_koopa();
@@ -543,5 +562,5 @@ int main(void)
     test_breakable_box();
     test_platforms_and_camera_boxes();
     test_cheep_animation();
-    puts("14 course object (hurt clips/Toad reactions/coins/Toad/log/birds/Goomba/Cheep/Bob-omb/Koopa/FLUDD/boxes/platforms/Cheep animation) test groups passed"); return 0;
+    puts("15 course object (stacked Goombas/hurt clips/Toad reactions/coins/Toad/log/birds/Goomba/Cheep/Bob-omb/Koopa/FLUDD/boxes/platforms/Cheep animation) test groups passed"); return 0;
 }
