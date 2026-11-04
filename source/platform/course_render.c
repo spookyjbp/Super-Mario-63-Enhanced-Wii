@@ -326,15 +326,21 @@ static void draw_prompt(const CourseSession *s, const char *page, size_t page_le
     const PromptPlace *place = NULL;
     for (unsigned i = 0; i < PROMPT_PLACES; ++i)
         if (strlen(prompt_places[i].page) == page_len && !memcmp(prompt_places[i].page, page, page_len)) place = &prompt_places[i];
-    if (!place) return;
+    /* Every picture sign shows it (user request), also the pages whose original
+       has none (stomp, hover, zoom, refill): under the page. */
+    if (!place && !picture) return;
     char key[12];
     snprintf(key, sizeof key, "Prompt@%u", (unsigned)s->controller);
     const CourseArtLayer *l = course_art_picture(&art, key, strlen(key));
     if (!load_prompt_layer(l)) return;
-    float x = place->x + l->ox, y = place->y + l->oy;
-    if (picture)   /* on picture signs: under the page (docs/sign-design) */
+    float x = 0, y = 0;
+    if (picture) {   /* on picture signs: under the page (docs/sign-design) */
+        float rx, ry;
+        sign_prompt_fallback(picture->ox, picture->width / HUD_K, l->width / HUD_K, l->height / HUD_K, l->ox, l->oy, &rx, &ry);
+        if (place) { rx = place->x; ry = place->y; }
         sign_prompt_picture(picture->ox, picture->oy, picture->width / HUD_K, picture->height / HUD_K,
-                            l->width / HUD_K, l->height / HUD_K, place->x, place->y, l->ox, l->oy, &x, &y);
+                            l->width / HUD_K, l->height / HUD_K, rx, ry, l->ox, l->oy, &x, &y);
+    } else { x = place->x + l->ox; y = place->y + l->oy; }
     graphics_sprite_alpha(&prompt_tex, stage_x(x, width), y * HUD_K, (float)l->width, (float)l->height, 0, 0, 1, 1, a);
 }
 /* One frame of a full-screen clip ("<name>~" layer, tools/faint_art.py) at its stage place. */

@@ -62,6 +62,11 @@ static void test_sign_layout(void)
     const float top = sign_text_top(30, 260, 2, 20);
     assert(top > 30 && fabsf((top - 30) - (260 - SIGN_TEXT_GAP - (top + 40))) < 1e-3f);
     assert(sign_text_top(30, 260, 20, 20) == 30);
+    /* a page without its own prompt that fills the screen: centred on it at the bottom edge */
+    float rx, ry;
+    sign_prompt_fallback(50, 350, 200, 25, -100, -10, &rx, &ry);
+    sign_prompt_picture(50, 20, 350, 270, 200, 25, rx, ry, -100, -10, &x, &y);
+    assert(x == 125 && y + 25 == SIGN_STAGE_H - 2);
 }
 
 int main(void)

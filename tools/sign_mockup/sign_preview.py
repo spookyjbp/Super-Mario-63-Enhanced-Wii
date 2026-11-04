@@ -46,12 +46,13 @@ def picture(L, backdrop, label, k):
     pr, ox, oy = L[f'Prompt@{k}']
     scr = backdrop.copy()
     scr.alpha_composite(page, (round(sx(pox)), round(poy * K)))
-    if label in PLACES:
-        rx, ry = PLACES[label]
-        top = poy + page.height / K + PROMPT_GAP
-        if top + pr.height / K <= 298: x, y = pox + page.width / K / 2 - pr.width / K / 2, top
-        else: x, y = rx + ox, ry + oy
-        scr.alpha_composite(pr, (round(sx(x)), round(y * K)))
+    # every picture sign (sign_layout.h): under the page, else the original's place
+    # (or, without one, centred at the screen's bottom edge)
+    rx, ry = PLACES.get(label, (pox + page.width / K / 2 - pr.width / K / 2 - ox, 300 - 2 - pr.height / K - oy))
+    top = poy + page.height / K + PROMPT_GAP
+    if top + pr.height / K <= 298: x, y = pox + page.width / K / 2 - pr.width / K / 2, top
+    else: x, y = rx + ox, ry + oy
+    scr.alpha_composite(pr, (round(sx(x)), round(y * K)))
     return scr
 
 

@@ -20,6 +20,14 @@ static inline void sign_prompt_picture(float x0, float y0, float w, float h, flo
     if (top + ph <= SIGN_STAGE_H - 2) { *x = x0 + w / 2 - pw / 2; *y = top; }
     else { *x = reg_x + ox; *y = reg_y + oy; }
 }
+/* A page with no prompt of its own in the original that also leaves no room
+   under it: the registration that puts the prompt centred on the page at the
+   screen's bottom edge (for sign_prompt_picture's fallback). */
+static inline void sign_prompt_fallback(float x0, float w, float pw, float ph, float ox, float oy, float *reg_x, float *reg_y)
+{
+    *reg_x = x0 + w / 2 - pw / 2 - ox;
+    *reg_y = SIGN_STAGE_H - 2 - ph - oy;
+}
 /* The first line's top for a message of `lines` lines (line height lh): centred
    between the text field's top (top) and SIGN_TEXT_GAP above the prompt
    (prompt_top); text too tall for that starts at the field's top, as the
