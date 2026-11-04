@@ -2,7 +2,7 @@ CC ?= cc
 CFLAGS := -std=c11 -O2 -Wall -Wextra -Werror -pedantic
 ROOT := ..
 SOURCES := physics_test.c $(wildcard $(ROOT)/source/game/*.c)
-HEADERS := $(wildcard $(ROOT)/include/*.h) $(ROOT)/assets/generated/movement_level.h
+HEADERS := $(wildcard $(ROOT)/include/*.h) $(wildcard $(ROOT)/assets/generated/*.h)
 OUTPUT := $(ROOT)/build/host/physics_tests
 ORIENTATION := $(ROOT)/build/host/orientation_tests
 RENDER := $(ROOT)/build/host/render_tests

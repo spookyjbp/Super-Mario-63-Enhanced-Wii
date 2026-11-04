@@ -460,13 +460,13 @@ static void test_wipes_and_background_water(void)
     while (s.state == SESSION_WARP) ticks((GameInput){0}, 1);
     assert(course_string_equals(s.runtime.area->id, "8-E1-2"));
     assert(fabsf(s.warp_x - fminf(1800, fmaxf(400, 2000 + fx))) < 0.01f);
-    /* 8-E1-2's CloseBackground holds a Dynamic Water: simulated, its ends fixed */
+    /* 8-E1-2's CloseBackground holds a Dynamic Water (polygons 13, 10 at "MEDIUM"): simulated, its ends fixed */
     assert(s.bg_water_count == 1);
     const BgWave *wave = &s.bg_wave[0];
     const float x0 = wave->x[0], xn = wave->x[wave->n - 1];
     float moved = 0;
     for (int i = 0; i < 300; ++i) { ticks((GameInput){0}, 1); for (unsigned k = 0; k < wave->n; ++k) moved = fmaxf(moved, fabsf(wave->y[k])); }
-    assert(wave->n == 13 && wave->x[0] == x0 && wave->x[wave->n - 1] == xn && moved > 0.01f && moved < 60);
+    assert(wave->n == 10 && wave->x[0] == x0 && wave->x[wave->n - 1] == xn && moved > 0.01f && moved < 60);
 }
 
 static void test_message_box_frames(void)
