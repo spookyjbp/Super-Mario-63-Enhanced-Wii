@@ -487,6 +487,22 @@ static void test_message_box_frames(void)
     m.state = SESSION_PLAY; assert(course_message_frame(&m) == 0 && course_prompt_frame(&m) == -1);
 }
 
+static void test_camera_starts_inside_walls(void)
+{
+    /* 8-E1-2 entered from the left: Mario at x 0, the left wall (CamEdge
+       -240..-40) closer than the screen's edge. The camera starts at the
+       wall's inside, as the original settles once Mario moves, not showing
+       the empty background past the area. */
+    for (int w = 0; w < 2; ++w) {
+        assert(course_session_start(&s, &pack, "8-E1-2", 0, 0, w ? 854 : 640));
+        assert(s.game.camera.cx > 100);   /* was 0: the view reached 400 px past the wall */
+        const float start = s.game.camera.cx;
+        for (int i = 0; i < 12; ++i) course_session_step(&s, (GameInput){.horizontal = -1});   /* before the warp back */
+        assert(s.state == SESSION_PLAY);
+        assert(fabsf(s.game.camera.cx - start) <= 2);   /* already where the wall holds it */
+    }
+}
+
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
@@ -496,5 +512,6 @@ int main(void)
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
     test_message_box_frames(); test_rocket_once_per_jump(); test_faint(); test_wipes_and_background_water();
-    puts("16 course session (wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_camera_starts_inside_walls();
+    puts("17 course session (camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }

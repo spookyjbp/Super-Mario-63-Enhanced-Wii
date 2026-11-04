@@ -140,6 +140,36 @@ static void edge_push(const CourseRuntime *c, Camera *cam, float hw)
     while (n < 50 && course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx - hw + n, cam->cy)) ++n;
     cam->cx += n;
 }
+/* Distance from the camera centre to the first CamEdge pixel along (dx, dy), up
+   to `reach` (reach when there is none). */
+static float edge_distance(const CourseArea *a, float cx, float cy, int dx, int dy, float reach)
+{
+    for (int d = 1; d < reach; ++d)
+        if (course_area_hit(a, COURSE_CAMEDGE, 0, cx + dx * d, cy + dy * d)) return d;
+    return reach;
+}
+/* On entering an area the original places the camera on Mario and only its
+   edge midpoints are pushed out of CamEdge. A wall thinner than the space
+   between the screen edge and the camera centre (8-E1-2's left wall, at x 0)
+   is then not touched until Mario moves, when the camera slides to the wall's
+   inside. With the wide screen the view shows far past such a wall (the
+   empty background beyond the area), so the camera starts where the original
+   settles: each screen edge on the inner face of a wall between it and the
+   centre (centred between two walls closer than the screen). */
+static void settle(const CourseRuntime *c, Camera *cam, float hw)
+{
+    const CourseArea *a = c->area;
+    const float hh = half_height();
+    if (course_area_hit(a, COURSE_CAMEDGE, 0, cam->cx, cam->cy)) return;
+    const float l = edge_distance(a, cam->cx, cam->cy, -1, 0, hw), r = edge_distance(a, cam->cx, cam->cy, 1, 0, hw);
+    if (l < hw && r < hw) cam->cx += (r - l) / 2;
+    else if (l < hw) cam->cx += hw - l;
+    else if (r < hw) cam->cx -= hw - r;
+    const float u = edge_distance(a, cam->cx, cam->cy, 0, -1, hh), d = edge_distance(a, cam->cx, cam->cy, 0, 1, hh);
+    if (u < hh && d < hh) cam->cy += (d - u) / 2;
+    else if (u < hh) cam->cy += hh - u;
+    else if (d < hh) cam->cy -= hh - d;
+}
 static void publish(Camera *cam, const CourseRuntime *c, float view_width, bool moved, float frac)
 {
     const float zoom = course_view_zoom();
@@ -159,6 +189,7 @@ void course_camera_init(Camera *cam, const Player *p, const World *w, float view
     cam->cx = course_cx(c, p->x + PLAYER_WIDTH / 2);
     cam->cy = course_cy(c, p->y + player_height(p)) - 50;
     cam->ychange = 50;
+    settle(c, cam, half_width(view_width));
     for (int i = 0; i < 4; ++i) edge_push(c, cam, half_width(view_width));
     publish(cam, c, view_width, true, 1);
     cam->from_x = cam->to_x; cam->from_y = cam->to_y;
