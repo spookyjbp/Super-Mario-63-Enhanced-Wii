@@ -457,7 +457,7 @@ static void test_cheep_animation(void)
         if (ch->frame_label == CHEEP_TURN) { ++stuck; assert(stuck <= 4); }
         else { if (stuck) ++turns; stuck = 0; }
         ObjectDraw d[OBJECT_DRAW_MAX];
-        assert(object_select(ch, d) == 1);
+        assert(object_select(ch, CONTROLLER_GAMECUBE, d) == 1);
         if (ch->frame_label == CHEEP_SWIM) {
             assert(d[0].clip == OBJ_CHEEP_SWIM && d[0].frame < 19);
             same = d[0].frame == last_frame ? same + 1 : 0;
@@ -468,7 +468,7 @@ static void test_cheep_animation(void)
     assert(turns >= 2);
     ch->facing_left = false; ch->rotation = 30; ch->frame_label = CHEEP_CHASE;
     ObjectDraw d[OBJECT_DRAW_MAX];
-    object_select(ch, d);
+    object_select(ch, CONTROLLER_GAMECUBE, d);
     assert(d[0].flip_x && d[0].rotation == 30);
 }
 /* Phase 2 item 1: MarioHit picks hurt1 / hurt2 / hurt3 as the original, the
@@ -532,17 +532,32 @@ static void test_toad_reactions(void)
     assert(course_toad_mood_label(TOAD_MAD) == 160 && course_toad_mood_label(TOAD_SHOCKED) == 185);
     const CourseString mad = {"Mad", 3}, odd = {"Sleepy", 6};
     assert(course_toad_mood(mad) == TOAD_MAD && course_toad_mood(odd) == TOAD_SMILE);
+    {   /* a sign's read prompt shows the controller's button too */
+        play_area("8-E1-1");
+        LiveObject sg = *first(LIVE_SIGN); sg.alpha = 100;
+        ObjectDraw sd[OBJECT_DRAW_MAX];
+        const int want[CONTROLLER_KINDS] = {OBJ_SIGN_Z_0, OBJ_SIGN_Z_1, OBJ_SIGN_Z_2};
+        for (unsigned c = 0; c < CONTROLLER_KINDS; ++c)
+            assert(object_select(&sg, c, sd) == 2 && sd[0].clip == OBJ_SIGN && sd[1].clip == want[c]);
+    }
     /* 8-E1-2's Toad: Mood Mad, frame walk, _xscale -100 (StartMood / Startframe). */
     play_area("8-E1-2");
     LiveObject *t = first(LIVE_TOAD);
     assert(t && t->state == TOAD_MAD && t->p0 == 1 && t->facing_left);
     ObjectDraw d[OBJECT_DRAW_MAX];
-    assert(object_select(t, d) >= 2 && d[0].clip == OBJ_TOAD_WALK && d[1].clip == OBJ_TOAD_HEAD && d[0].flip_x);
+    assert(object_select(t, CONTROLLER_GAMECUBE, d) >= 2 && d[0].clip == OBJ_TOAD_WALK && d[1].clip == OBJ_TOAD_HEAD && d[0].flip_x);
     {   /* walk frames 16-20: the head sits at depth 1, behind the body */
         LiveObject w = *t; w.timer = 17;
-        assert(object_select(&w, d) >= 2 && d[0].clip == OBJ_TOAD_HEAD && d[1].clip == OBJ_TOAD_WALK);
+        assert(object_select(&w, CONTROLLER_GAMECUBE, d) >= 2 && d[0].clip == OBJ_TOAD_HEAD && d[1].clip == OBJ_TOAD_WALK);
         w.timer = 14;
-        assert(object_select(&w, d) >= 2 && d[0].clip == OBJ_TOAD_WALK && d[1].clip == OBJ_TOAD_HEAD);
+        assert(object_select(&w, CONTROLLER_GAMECUBE, d) >= 2 && d[0].clip == OBJ_TOAD_WALK && d[1].clip == OBJ_TOAD_HEAD);
+    }
+    {   /* the talk prompt (bz) shows the controller's button: one clip per controller */
+        LiveObject w = *t; w.alpha = 100;
+        const int want[CONTROLLER_KINDS] = {OBJ_TOAD_BZ_0, OBJ_TOAD_BZ_1, OBJ_TOAD_BZ_2};
+        for (unsigned c = 0; c < CONTROLLER_KINDS; ++c)
+            assert(object_select(&w, c, d) == 3 && d[2].clip == want[c] && d[2].frame < 17);
+        assert(object_select(&w, 99, d) == 3 && d[2].clip == OBJ_TOAD_BZ_0);
     }
     /* Talking: both face each other, the head takes each page's mood, and the
        start mood comes back when the conversation ends. */
@@ -562,7 +577,7 @@ static void test_toad_reactions(void)
     const int before = t->timer;
     ticks((GameInput){0}, 8);
     assert(t->timer != before && t->state == TOAD_SMILE);
-    assert(object_select(t, d) >= 2 && d[0].clip == OBJ_TOAD_IDLE);
+    assert(object_select(t, CONTROLLER_GAMECUBE, d) >= 2 && d[0].clip == OBJ_TOAD_IDLE);
 }
 int main(void)
 {

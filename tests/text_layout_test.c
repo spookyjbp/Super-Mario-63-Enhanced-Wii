@@ -26,7 +26,27 @@ static void test_hint_font(void)
     /* The hints use font 187 (regular Arial) at 11 x 1.6, narrower than the bold talk font */
     const FontInfo *h = &font_info[FONT_HINT], *t = &font_info[FONT_TALK];
     assert(h->size == 18 && t->size == 24);
-    assert(h->glyphs['m' - FONT_FIRST].advance < t->glyphs['m' - FONT_FIRST].advance * 18 / 24);
+    const FontInfo *sg = &font_info[FONT_SIGN];
+    assert(h->glyphs['m' - FONT_FIRST].advance < sg->glyphs['m' - FONT_FIRST].advance * 18 / 27);
+}
+static void test_talk_font(void)
+{
+    /* field 185: letterSpacing -1 (x 1.6 off every advance against the sign's
+       bold 155 at the same scale); the Bevel + Glow glyphs share its layout */
+    const FontInfo *t = &font_info[FONT_TALK], *sg = &font_info[FONT_SIGN];
+    const float m24 = sg->glyphs['m' - FONT_FIRST].advance * 24 / 27;
+    assert(fabsf(t->glyphs['m' - FONT_FIRST].advance - (m24 - 1.6f)) < 0.6f);
+    for (unsigned k = FONT_TALK_FX; k <= FONT_TALK_FILL; ++k) {
+        const FontInfo *f = &font_info[k];
+        assert(f->ascent == t->ascent && f->descent == t->descent);
+        for (unsigned c = FONT_FIRST; c <= FONT_LAST; ++c)
+            assert(f->glyphs[c - FONT_FIRST].advance == t->glyphs[c - FONT_FIRST].advance);
+        /* the baked glyph is bigger than the plain one: the outline around it */
+        assert(f->glyphs['a' - FONT_FIRST].w > t->glyphs['a' - FONT_FIRST].w);
+    }
+    /* Flash lays out with DefineFont3's ascent / descent (0.905 / 0.212 em):
+       field 185's lines are 30 px apart at 1.6 (24 px + leading 2 x 1.6) */
+    assert(fabsf(text_line_height(t, 2 * 1.6f) - 30.0f) < 0.1f);
 }
 static void test_wrap(void)
 {
@@ -78,6 +98,6 @@ static void test_sign_layout(void)
 
 int main(void)
 {
-    test_plain(); test_wrap(); test_hint_font(); test_sign_layout();
-    puts("3 text layout (HTML, wrap, original fonts, sign layout) test groups passed"); return 0;
+    test_plain(); test_wrap(); test_hint_font(); test_talk_font(); test_sign_layout();
+    puts("4 text layout (HTML, wrap, original fonts, talk font, sign layout) test groups passed"); return 0;
 }

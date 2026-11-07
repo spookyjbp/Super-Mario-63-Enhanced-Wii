@@ -80,6 +80,24 @@ class ObjectArtTests(unittest.TestCase):
         clip, pack = table['MARIO_IDLE']
         self.assertGreater(min(oy / 20 for *_, ox, oy, d, f in frames(pack, clip)), -36)
 
+    def test_prompts_per_controller(self):
+        """The read prompt over signs (981) and Toad's 'bz' (2505) show the
+        controller's button in place of the keyboard Z: one clip per controller
+        (GameCube, Classic, Wii Remote) with ids in that order, the original's
+        frame count, and the legs / tail where the original has them."""
+        table, zoom = ids()
+        for name in ('SIGN_Z', 'TOAD_BZ'):
+            base = frames(*reversed(table[name]))
+            ids_k = [table[f'{name}_{k}'][0] for k in range(3)]
+            self.assertEqual(ids_k, [ids_k[0], ids_k[0] + 1, ids_k[0] + 2], name)
+            for k in range(3):
+                clip, pack = table[f'{name}_{k}']
+                fr = frames(pack, clip)
+                self.assertEqual(len(fr), len(base), f'{name}_{k}')
+                for a, b in zip(base, fr):
+                    self.assertAlmostEqual(a[5] / 20 + a[3] / zoom, b[5] / 20 + b[3] / zoom, delta=2.5,
+                                           msg=f'{name}_{k}: bottom moved')
+
     def test_sign_post_ends_at_origin(self):
         table, zoom = ids()
         clip, pack = table['SIGN']

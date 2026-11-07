@@ -9,6 +9,7 @@ typedef struct {
     int clip; unsigned frame; float alpha, dx, dy, scale, rotation, pivot_y;
     bool flip_x, flip_y, cxform; float cx_mul[3], cx_add[3];
 } ObjectDraw;
-/* Returns the number of layers to draw, back to front. */
-unsigned object_select(const LiveObject *l, ObjectDraw out[OBJECT_DRAW_MAX]);
+/* Returns the number of layers to draw, back to front. `controller`
+   (CONTROLLER_*) picks the button drawn in the sign and Toad talk prompts. */
+unsigned object_select(const LiveObject *l, unsigned controller, ObjectDraw out[OBJECT_DRAW_MAX]);
 #endif

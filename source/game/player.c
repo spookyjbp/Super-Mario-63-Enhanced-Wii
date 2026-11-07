@@ -141,7 +141,10 @@ void player_step(Player *p, const World *world, GameInput input)
         const float gravity = input.jump_held && p->vy < 0 ? 1050 : 1600;
         p->vy = fminf(800, p->vy + gravity * GAME_DT);
     }
-    if(p->grounded) p->power=100;
+    /* CharCode: Power = TotalPower whenever air == false, which the original also
+       sets while Mario rises through a BPlatform. After a Rocket blast the port
+       waits for a real landing (not moving up) instead: one blast per landing. */
+    if(p->grounded && (!p->rocket_spent || p->vy>=0)) {p->power=100;p->rocket_spent=false;}
     if(p->material==TILE_PUDDLE) p->water=fminf(100,p->water+80*GAME_DT);
     player_spin_update(p,input);
     player_fludd_step(p,input);

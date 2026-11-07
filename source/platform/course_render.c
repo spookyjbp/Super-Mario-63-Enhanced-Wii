@@ -129,7 +129,7 @@ static void draw_objects(const CourseSession *s, float ox, float oy, bool front)
         const LiveObject *l = &s->objects.live[i];
         if (!l->alive || course_string_equals(l->src->layer, "FrontGFX") != front) continue;
         ObjectDraw d[OBJECT_DRAW_MAX];
-        const unsigned n = object_select(l, d);
+        const unsigned n = object_select(l, s->controller, d);
         for (unsigned k = 0; k < n; ++k) draw_object_frame(&d[k], ox + l->x * COURSE_SCALE, oy + l->y * COURSE_SCALE);
     }
 }
@@ -552,10 +552,14 @@ void course_render(const CourseSession *s, float t)
         size_t n = 0;
         if (shortp) { page[n++] = ' '; page[n++] = '\n'; page[n++] = ' '; }
         for (size_t i = 0; i < s->toad_text.length && n < sizeof page; ++i) page[n++] = s->toad_text.text[i];
-        /* field 185's filters: a Bevel (white / black, blur 5, strength 1: faint) and
-           the black Glow outline (blur 2, strength 10) */
-        draw_text_glow(FONT_TALK, page, n, x0, x1, ty, (GXColor){255, 255, 179, (unsigned char)(255 * ca)}, ALIGN_LEFT,
-                       s->toad_chars + (shortp ? 3u : 0u));
+        /* field 185's filters (a Bevel: white / black, blur 5, distance 5, inner;
+           a black Glow: blur 2, strength 10) on its light yellow text, baked per
+           glyph from FFDec's render (export_fonts.py): the whole look first, then
+           the bevelled fill alone so no outline covers a neighbour's letter. */
+        const GXColor tint = {255, 255, 255, (unsigned char)(255 * ca)};
+        const unsigned shown = s->toad_chars + (shortp ? 3u : 0u);
+        draw_text(FONT_TALK_FX, page, n, x0, x1, ty, tint, ALIGN_LEFT, shown);
+        draw_text(FONT_TALK_FILL, page, n, x0, x1, ty, tint, ALIGN_LEFT, shown);
         (void)lh;
         const unsigned char za = (unsigned char)(255 * ca * s->tm_bz / 100);
         char key[12];

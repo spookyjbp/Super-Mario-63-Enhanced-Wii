@@ -333,7 +333,7 @@ void player_fludd_step(Player *p,GameInput in)
             if(f==15) p->power=1;
             if(f==16) {
                 sfx_play(SFX_ROCKET_BLAST,85,0);
-                p->water-=5;p->power=0;
+                p->water-=5;p->power=0;p->rocket_spent=true;
                 ys=fminf(-25+fmaxf(ys/3,0),ys);
                 p->grounded=false;p->jump_cut=true;
             }

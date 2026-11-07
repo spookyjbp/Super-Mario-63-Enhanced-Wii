@@ -7,7 +7,13 @@ static ObjectDraw base(const LiveObject *l, int clip, unsigned frame)
     return (ObjectDraw){.clip = clip, .frame = frame, .alpha = 100, .scale = 1,
                         .flip_x = l->src->a < 0, .flip_y = l->src->d < 0};
 }
-unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
+/* The read / talk prompts with the keyboard Z replaced by the controller's
+   button (tools/export_object_art.py PROMPT_KEYS), clips in CONTROLLER_* order. */
+static int prompt(int first, unsigned controller)
+{
+    return first + (int)(controller < CONTROLLER_KINDS ? controller : CONTROLLER_GAMECUBE);
+}
+unsigned object_select(const LiveObject *l, unsigned controller, ObjectDraw o[OBJECT_DRAW_MAX])
 {
     const unsigned f = l->frame;
     switch (l->kind) {
@@ -21,7 +27,7 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
     case LIVE_SIGN:
         o[0] = base(l, OBJ_SIGN, 0);
         if (l->alpha < 1) return 1;
-        o[1] = base(l, OBJ_SIGN_Z, f % 49); o[1].alpha = l->alpha;
+        o[1] = base(l, prompt(OBJ_SIGN_Z_0, controller), f % 49); o[1].alpha = l->alpha;
         return 2;
     case LIVE_TOAD: {
         /* body (idle 2501 sampled 1/4, or walk 2516), its 'head' (2498) at the
@@ -37,7 +43,7 @@ unsigned object_select(const LiveObject *l, ObjectDraw o[OBJECT_DRAW_MAX])
         /* walk frames 16-20 place the head at depth 1, behind the body (depth 5) */
         if (walk && body >= 15) { const ObjectDraw head = o[1]; o[1] = o[0]; o[0] = head; }
         if (l->alpha < 1) return 2;
-        o[2] = base(l, OBJ_TOAD_BZ, (f / 3) % 17); o[2].alpha = l->alpha;
+        o[2] = base(l, prompt(OBJ_TOAD_BZ_0, controller), (f / 3) % 17); o[2].alpha = l->alpha;
         return 3;
     }
     case LIVE_BUTTERFLY: /* clip._y = sin(wave)*5; _xscale = +/-scale */

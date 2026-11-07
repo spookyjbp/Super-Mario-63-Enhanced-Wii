@@ -399,6 +399,36 @@ static void test_rocket_once_per_jump(void)
         if (left && p->grounded) break;
     }
     assert(left && blasts == 1);
+    {   /* Port rule: rising through a one-way platform (BPlatforms) after a blast
+           does not refill Power (the original's air = false did); landing does. */
+        const CourseRuntime *c = &s.runtime;
+        float bx = -1, by = -1;
+        for (float cy = -1500; cy < 2500 && bx < 0; cy += 1)
+            for (float cx = -1500; cx < 6000 && bx < 0; cx += 4)
+                if (course_bsolid(c, cx, cy) && !course_bsolid(c, cx, cy - 1) && !course_solid(c, cx, cy)) {
+                    float bottom = cy;   /* through its thickness */
+                    while (bottom < cy + 80 && course_bsolid(c, cx, bottom + 1)) bottom += 1;
+                    bool clear = bottom < cy + 80 && bottom >= cy + 16;   /* thick enough to touch; room below */
+                    for (float k = bottom - cy + 1; k <= bottom - cy + 50 && clear; ++k)
+                        for (float dx = -10; dx <= 10 && clear; dx += 5)
+                            clear = !course_solid(c, cx + dx, cy + k) && !course_bsolid(c, cx + dx, cy + k) &&
+                                    !course_solid(c, cx + dx, cy - k + bottom - cy - 80);
+                    if (clear) bx = cx, by = bottom;
+                }
+        assert(bx >= 0);
+        course_place_player(c, p, bx, by + 45);
+        p->grounded = false; p->vx = 0; p->vy = -18 * 44; p->power = 0; p->rocket_spent = true; p->rocket_frame = 1;
+        bool touched = false;
+        for (int i = 0; i < 40 && p->vy < 0; ++i) {
+            ticks((GameInput){0}, 1);
+            if (p->grounded && p->vy < 0) touched = true;
+            assert(p->power < 100);            /* still rising: no refill */
+        }
+        assert(touched);
+        for (int i = 0; i < 400 && !(p->grounded && p->vy >= 0); ++i) ticks((GameInput){0}, 1);
+        ticks((GameInput){0}, 2);
+        assert(p->grounded && p->power == 100 && !p->rocket_spent);
+    }
     /* Hover: no refill in the air (Fluddpow == "H"); full again on the ground. */
     p->nozzle = NOZZLE_HOVER;
     course_place_player(&s.runtime, p, 300, 60); p->vx = p->vy = 0; p->grounded = false; p->power = 30;

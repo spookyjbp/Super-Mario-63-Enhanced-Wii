@@ -218,6 +218,85 @@ def digits(jar, swf_path, work, cid):
     return {'id': cid, 'name': 'HUD_DIGITS', 'loop': False, 'frames': frames}
 
 
+# The talk / read prompts over signs (981: keycap 979 / 980 on two legs, 978) and
+# Toad ('bz' 2505: keycap 2504 holding 2503, on a tail 2502): the keyboard "Z"
+# is replaced by the controller's read button (sign_buttons 'stomp': GameCube
+# Z, Classic "L or R", Wii Remote "A + B"), turned like the key in each pose.
+PROMPT_KEYS = {'SIGN_Z': (981, {981: {979, 980}}), 'TOAD_BZ': (2505, {2504: {2503}})}
+
+
+def key_angle(mask):
+    """The keycap's tilt (degrees, PIL's sense): the rotation that makes its box smallest."""
+    im = Image.fromarray((mask * 255).astype(np.uint8))
+    best = None
+    for a10 in range(-200, 201, 5):
+        bb = im.rotate(-a10 / 10, Image.NEAREST, expand=True).getbbox()
+        area = (bb[2] - bb[0]) * (bb[3] - bb[1])
+        if best is None or area < best[0]:
+            best = (area, a10 / 10, bb)
+    return best[1], min(best[2][2] - best[2][0], best[2][3] - best[2][1])
+
+
+def unscaled(frame):
+    """The frame's picture before export() resampled it for a scaled placement."""
+    p = Path(frame['file'])
+    return p.parent.parent / 'repaired' / p.name if p.parent.name == 'scaled' else p
+
+
+def prompt_variants(work, name, out_frames, keyless_dir, pad=56):
+    """Frames [(file, offset)] per controller: the frame without its key, the
+    button in the key's place (its centre, tilt and size)."""
+    import sign_buttons
+    variants = []
+    # the keyless canvas is smaller (FFDec fits it to the clip's bounds): find
+    # where it sits in the full one, where everything left over lines up
+    o0 = np.asarray(Image.open(unscaled(out_frames[0])).convert('RGBA'))[..., 3].astype(int)
+    first = Path(out_frames[0]['file']).stem.rsplit('_', 1)[1]
+    b0 = np.asarray(Image.open(keyless_dir / f'{int(first) + 1}.png').convert('RGBA'))[..., 3].astype(int)
+    if b0.shape[0] > o0.shape[0] or b0.shape[1] > o0.shape[1]:
+        raise ValueError(f'{name}: keyless frame larger than the clip')
+    best = None
+    for dy in range(o0.shape[0] - b0.shape[0] + 1):
+        for dx in range(o0.shape[1] - b0.shape[1] + 1):
+            e = np.abs(o0[dy:dy + b0.shape[0], dx:dx + b0.shape[1]] - b0).sum()
+            if best is None or e < best[0]:
+                best = (e, dx, dy)
+    _, sdx, sdy = best
+    for k, kind in enumerate(sign_buttons.CONTROLLERS):
+        frames = []
+        for n, f in enumerate(out_frames):
+            orig = Image.open(unscaled(f)).convert('RGBA')
+            ratio = Image.open(f['file']).width / orig.width
+            src = Path(f['file']).stem.rsplit('_', 1)[1]
+            bare = Image.open(keyless_dir / f'{int(src) + 1}.png').convert('RGBA')
+            full = Image.new('RGBA', orig.size)
+            full.alpha_composite(bare, (sdx, sdy))
+            bare = full
+            c = Image.new('RGBA', (orig.width + 2 * pad, orig.height + 2 * pad))
+            c.alpha_composite(bare, (pad, pad))
+            a, b = np.asarray(orig)[..., 3].astype(int), np.asarray(bare)[..., 3].astype(int)
+            key = (a - b) > 60
+            if key.sum() > 30:
+                ys, xs = np.nonzero(key)
+                cx, cy = (xs.min() + xs.max() + 1) / 2, (ys.min() + ys.max() + 1) / 2
+                angle, side = key_angle(key)
+                btn = sign_buttons.STYLE[kind]['stomp'](max(8, int(side * 0.92)))
+                if btn.width > side * 2.4:
+                    btn = btn.resize((int(side * 2.4), max(1, int(btn.height * side * 2.4 / btn.width))), Image.LANCZOS)
+                btn = btn.rotate(angle, Image.BICUBIC, expand=True)
+                c.alpha_composite(btn, (int(round(pad + cx - btn.width / 2)), int(round(pad + cy - btn.height / 2))))
+            if abs(ratio - 1) > 0.01:   # the clip is placed scaled (export(): resample once)
+                c = c.resize((max(1, round(c.width * ratio)), max(1, round(c.height * ratio))), Image.LANCZOS)
+            path = work / 'prompts' / f'{name}_{k}_{n}.png'
+            path.parent.mkdir(exist_ok=True)
+            c.save(path)
+            frames.append(dict(f, file=str(path.resolve()),
+                               offset_twips=[f['offset_twips'][0] - round(pad * ratio / ZOOM * 20),
+                                             f['offset_twips'][1] - round(pad * ratio / ZOOM * 20)]))
+        variants.append(frames)
+    return variants
+
+
 def export(source, jar, out_dir):
     swf_file = source / 'Publish/Super_Mario_63_2010.swf'
     swf = swf_file.read_bytes()
@@ -292,6 +371,20 @@ def export(source, jar, out_dir):
         clips.append({'id': cid, 'name': name, 'loop': frames is None, 'frames': out})
         report.append({'name': name, 'sprite': ident, 'frames': len(out), 'placement': [tx, ty],
                        'repaired_px': repaired_px})
+    # the prompts per controller (PROMPT_KEYS): the clips rendered without their keys
+    import ui_art
+    for name, (ident, hide) in PROMPT_KEYS.items():
+        kswf = work / f'objects-nokey-{name}.swf'
+        kswf.write_bytes(ui_art.hide(swf_path.read_bytes(), hide))
+        with (work / 'export.log').open('a') as log:
+            subprocess.run(cmd + swf_bitmap_fix.FFDEC_RENDER + ['-zoom', str(ZOOM), '-onerror', 'abort', '-selectid',
+                                  str(ident), '-export', 'sprite', str(work / f'png-nokey-{name}'), str(kswf)],
+                           check=True, stdout=log, stderr=log)
+        base = next(c for c in clips if c['name'] == name)
+        for k, frames in enumerate(prompt_variants(work, name, base['frames'],
+                                                   C.sprite_dir(work / f'png-nokey-{name}', ident))):
+            clips.append({'id': len(clips), 'name': f'{name}_{k}', 'loop': base['loop'], 'frames': frames})
+            report.append({'name': f'{name}_{k}', 'sprite': ident, 'frames': len(frames)})
     clips.append(digits(jar, swf_path, work, len(clips)))
     report.append({'name': 'HUD_DIGITS', 'font': 187})
     # Split into packs that each fit one 1024x1024 texture.
