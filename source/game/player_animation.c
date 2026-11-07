@@ -154,4 +154,7 @@ void player_animation_step(Player *p,GameInput in)
         const float speed=fmaxf(-15,fminf(15,drag((target-rotation)/10,0.1f,1.15f)));
         p->dive_rotation=rotation+speed;
     } else {p->dive_rotation=0;p->dive_target=0;}
+    /* _root.DiveRot = the dive clip's _rotation: the eased angle in the air, on
+       the ground groundrot * _xscale / 100 * 0.9. */
+    if(p->action==ACTION_DIVE) p->dive_rot=p->grounded ? p->ground_angle*(p->facing_left ? 1 : -1)*0.9f : p->dive_rotation;
 }

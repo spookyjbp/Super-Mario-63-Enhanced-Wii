@@ -129,11 +129,14 @@ bool user_art_draw_player(const Player *p,float x,float y)
     if(!f) return false;
     const ArtFrame *back=art_pack_frame_index(&art,ART_BACK_EFFECT+clip,a.effect_index);
     const ArtFrame *front=art_pack_frame_index(&art,ART_FRONT_EFFECT+clip,a.effect_index);
-    if(back) draw(p,back,x,y,0,0,0);
+    /* Char's own _rotation (the FLUDD tilt) turns the whole clip about the feet;
+       draw() mirrors its angle for the canonical-left art, so pass it mirrored. */
+    const float tilt=a.rotation==0 ? (p->facing_left ? p->char_rotation : -p->char_rotation) : 0;
+    if(back) draw(p,back,x,y,tilt,0,0);
     draw_spray(p,&a,x,y,true);
-    draw(p,f,x,y,a.rotation,(float)a.pivot_x,(float)a.pivot_y);
+    draw(p,f,x,y,a.rotation!=0 ? a.rotation : tilt,a.rotation!=0 ? (float)a.pivot_x : 0,a.rotation!=0 ? (float)a.pivot_y : 0);
     draw_spray(p,&a,x,y,false);
-    if(front) draw(p,front,x,y,0,0,0);
+    if(front) draw(p,front,x,y,tilt,0,0);
     return true;
 }
 bool user_art_fludd_available(const Player *p)

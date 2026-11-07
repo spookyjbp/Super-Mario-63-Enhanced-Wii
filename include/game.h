@@ -100,6 +100,12 @@ typedef struct {
     /* attackFrame "Drown" (1692): 0-based frame (88 calls LifeLost()). */
     bool drowning; unsigned drown_frame;
     bool splashed;                  /* a Med-Splash was attached at Mario (the session shows it) */
+    /* FLUDD state kept as the original keeps it: the Rocket WaterBlast clip's
+       frame (chargeframe, 1..23), _root.DiveRot (the dive clip's _rotation),
+       Char's own _rotation (the Hover / Rocket / Turbo tilt, +/-30), and the
+       water tests the Turbo's surface run uses (at feet + 5 and at the feet). */
+    unsigned rocket_frame; float dive_rot, char_rotation;
+    bool water_below, water_at_feet, water_running;
     float set_vx, set_vy;    /* MarioHit setXspeed / setYspeed, added at hurt1 frame 4 (px/s) */
     bool fall_sfx;           /* fallingsfx: once per fall */
     TileType material;
@@ -133,6 +139,9 @@ void player_step(Player *player, const World *world, GameInput input);
 float player_height(const Player *player);
 bool player_special_step(Player *player, const World *world, GameInput input, bool was_grounded);
 void player_fludd_step(Player *player, GameInput input);
+/* Hover spraying now (CharCode's conditions): player_step leaves the frame's
+   gravity to player_fludd_step, which applies it exactly. */
+bool player_hover_active(const Player *player, GameInput input);
 /* Next FLUDD state: None -> Hover -> Rocket -> Turbo -> None, skipping nozzles
    not collected. False (nothing happens) before any nozzle is collected. */
 bool player_change_fludd(Player *player);

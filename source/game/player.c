@@ -74,7 +74,8 @@ void player_step(Player *p, const World *world, GameInput input)
         else if (p->vx * axis < 0) acceleration = was_grounded ? 2400 : 1200;
         if(was_grounded && p->material==TILE_ICE) acceleration/=5;
         else if(was_grounded && p->material==TILE_PUDDLE) acceleration/=2.2f;
-        p->vx = approach(p->vx, target, acceleration * GAME_DT);
+        /* Hovering in the air: CharCode's own air control runs instead (player_fludd_step). */
+        if (!(player_hover_active(p, input) && !was_grounded && !p->submerged)) p->vx = approach(p->vx, target, acceleration * GAME_DT);
         if (axis != 0 && p->action!=ACTION_BACKFLIP && p->action!=ACTION_ROLL) p->facing_left = axis < 0;
 
         if (p->jump_buffer > 0 && p->coyote > 0) {
@@ -95,7 +96,7 @@ void player_step(Player *p, const World *world, GameInput input)
             p->grounded = false;
             p->coyote = p->jump_buffer = 0;
             p->chain_window = p->jump_stage < 3 ? 9.0f / 32 : 0; /* doublejumpcount = 9 (0 after the flip) */
-            p->jump_cut = p->jump_stage == 3; /* the frontflip is an attack: no short hop */
+            p->jump_cut = p->jump_stage == 3 && !p->has_fludd; /* the frontflip is an attack: no short hop (with FLUDD it ends at once) */
         }
         if (input.pound_pressed && !p->grounded) {
             p->pounding = true;
@@ -132,7 +133,7 @@ void player_step(Player *p, const World *world, GameInput input)
             p->vx = vx * 44; p->vy = vy * 44;
             if (p->pound_frame < 26) ++p->pound_frame; /* stop() at frame 26 */
         }
-    } else if (!p->submerged && p->spin_time==0) { /* CharCode gravity also runs during hurt2 */
+    } else if (!p->submerged && p->spin_time==0 && !player_hover_active(p,input)) { /* CharCode gravity also runs during hurt2 */
         if (!input.jump_held && p->vy < 0 && !p->jump_cut && p->action!=ACTION_BONK && p->action!=ACTION_HURT) {
             p->vy *= 0.45f;
             p->jump_cut = true;

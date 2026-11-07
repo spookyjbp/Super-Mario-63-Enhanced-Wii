@@ -573,6 +573,7 @@ static void step_goomba(CourseObjects *o, LiveObject *l, CourseRuntime *c, Playe
             if (f == 4 || f == 6 || f == 8) if (jump_key && l->p3 != 1) { l->p3 = 2; if (l->bounce) p->ejump_landtime = 2; } /* landtime 2 */
             if (f == 8) p->y -= 5 * COURSE_SCALE;
         }
+        if (f == 8) sfx_play(SFX_GOOMBA_DIE, 100, 0);   /* Squish frame 8: "Goomba-Die" */
         if (l->bounce && f == 9) {
             const float boost = !p->ejump ? 9 : l->p3 == 1 ? 10 : l->p3 == 2 ? 12 : 8;
             p->vy -= boost * 44; p->ejump = false; p->grounded = false;

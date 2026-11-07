@@ -20,6 +20,9 @@ bool player_swim_step(Player *p,const World *w,GameInput in)
     const bool wet=world_water_at(w,p->x+PLAYER_WIDTH/2,feet-h/4,&surface);
     const bool entered=wet&&!p->submerged;
     p->submerged=wet;
+    /* Turbo surface run: Water.hitTest at the feet + 5 and at the feet */
+    p->water_below=world_water_at(w,p->x+PLAYER_WIDTH/2,feet+5*1.375f,NULL);
+    p->water_at_feet=world_water_at(w,p->x+PLAYER_WIDTH/2,feet,NULL);
     /* Up swims; the jump button does nothing in water (port control choice). */
     const bool up=in.vertical<-0.5f;
     const bool down=in.crouch_held || in.vertical>0.5f;

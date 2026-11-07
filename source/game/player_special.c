@@ -195,42 +195,149 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
     if(player_height(p)<PLAYER_HEIGHT && player_stand_clear(p,w)) resize(p,PLAYER_HEIGHT);
     return false;
 }
+/* _root.groundFriction(v, subtract, divide) in original units. */
+static float gf(float v,float subtract,float divide) { return copysignf(fmaxf(0,fabsf(v)-subtract)/divide,v); }
+/* CharCode's "attack == false" for the FLUDD code (and Controll). */
+static bool fludd_free(const Player *p)
+{
+    return p->action==ACTION_NONE && !p->pounding && p->spin_time==0 && p->landing_time<=0 && !p->ejump &&
+           !p->sleeping && !p->drowning && !p->reading_sign && p->stun<=0;
+}
+bool player_hover_active(const Player *p,GameInput in)
+{
+    return p->has_fludd && p->nozzle==NOZZLE_HOVER && in.nozzle_held && p->power>0 && p->water>0 && fludd_free(p);
+}
+/* The FLUDD, one 32 Hz frame at a time as CharCode and its clips run it
+   (frame_4 CharCode; Rocket WaterBlast; HDive 1200 / Hfrontflip 1216 DiveRot):
+   WaterAmount is p->water (TotalWater 10000 = 100), Power 0..100.
+   * Hover (KeySPACE, Power > 0, WaterAmount > 0, no attack): after the frame's
+     gravity (applied here exactly while hovering in the air), yspeed *= 0.8;
+     yspeed -= (Hoverspeed * 10 - yspeed) / 10 * (Power / 175 + 0.75);
+     WaterAmount -= 7; Power -= 1.5; xspeed = groundFriction(xspeed, 0.05, 1.03).
+     In the air Right / Left also add -min((xspeed - 5) / 20, 0) and tilt Mario
+     5 degrees a frame. During a dive: yspeed *= 0.98, xspeed *= 0.97 and a
+     push of Hoverspeed along DiveRot (half sideways in the air).
+   * Rocket (Power >= 100): the charge clip's frames 1-9 run forward while held
+     and back when not; from 10 it runs on (yspeed *= 0.97), 15 sets Power 1,
+     16 blasts (WaterAmount -= 500, yspeed = min(-25 + max(yspeed / 3, 0),
+     yspeed)) and 16-23 push yspeed -= 25 / 50 (and 25 / 45 in water), Right /
+     Left xspeed += / -= 0.7 with the tilt.
+   * Turbo (Power >= 100): xspeed -= (xspeed -/+ 75) / 30 on the ground (not
+     ice), 37.5 otherwise; WaterAmount -= 5; in water yspeed -= gravity / 3 and
+     Up / Down steer by gravity / 1.5 (10 degrees a frame); at the surface it
+     runs on the water. In a dive: WaterAmount -= 10 and a half push along
+     DiveRot - 90.
+   * Not spraying and not Hover: Power += 1 a frame (CharCode's end). */
 void player_fludd_step(Player *p,GameInput in)
 {
-    if(!p->has_fludd) {p->jet_active=false;p->rocket_charge=p->rocket_boost=0;return;}
-    if(!in.nozzle_held || p->water<=0 || p->action==ACTION_BONK || p->action==ACTION_HURT || p->pounding || p->spin_time>0) {
-        p->rocket_charge=fmaxf(0,p->rocket_charge-GAME_DT);
-        /* CharCode: if(!KeySPACE() && Fluddpow !== "H") Power += 1 a frame. The
-           Hover nozzle only refills on the ground (Power = TotalPower) or in water. */
-        if(!in.nozzle_held && p->rocket_boost<=0 && p->nozzle!=NOZZLE_HOVER) p->power=fminf(100,p->power+32*GAME_DT);
-    } else if(p->nozzle==NOZZLE_HOVER && p->power>0) {
-        float v=p->vy/44;
-        v*=powf(0.8f,32*GAME_DT);
-        v-=((9.2f-v)/10)*(p->power/175+0.75f)*(32*GAME_DT);
-        p->vy=v*44;p->vx*=powf(1.03f,-32*GAME_DT);
-        p->water=fmaxf(0,p->water-2.24f*GAME_DT);
-        p->power=fmaxf(0,p->power-48*GAME_DT);p->jet_active=true;
-    } else if(p->nozzle==NOZZLE_ROCKET && p->power>=100 && p->water>=5 && p->rocket_boost<=0) {
-        if(p->rocket_charge==0) sfx_play(SFX_ROCKET_CHARGE,70,0); /* port-made: the original Rocket is silent */
-        p->rocket_charge+=GAME_DT;p->jet_active=true;
-        if(p->rocket_charge>=15.0f/32 && p->water>=5) {
-            sfx_play(SFX_ROCKET_BLAST,85,0);
-            p->water-=5;p->power=0;p->rocket_charge=0;p->rocket_boost=8.0f/32;
-            p->vy=fminf(-25*44+fmaxf(p->vy/3,0),p->vy);
-            p->grounded=false;p->jump_cut=true;
+    const bool right=in.horizontal>0.5f,left=in.horizontal<-0.5f;
+    const bool up=in.vertical<-0.5f || in.jump_held,down=in.vertical>0.5f || in.crouch_held;
+    if(!p->has_fludd) {p->jet_active=false;p->rocket_charge=p->rocket_boost=0;p->rocket_frame=1;return;}
+    const bool space=in.nozzle_held;
+    const bool free=fludd_free(p);
+    const bool diving=p->action==ACTION_DIVE;
+    bool jet=false;
+    if(p->nozzle==NOZZLE_HOVER && space && p->power>0 && p->water>0 && (free || diving)) jet=true;
+    if(p->nozzle==NOZZLE_TURBO && space && p->power>=100 && p->water>0 && (free || diving)) jet=true;
+    if(p->nozzle==NOZZLE_ROCKET && p->rocket_frame>1) jet=true;
+    if(p->nozzle==NOZZLE_ROCKET && space && p->power>=100 && p->water>0) jet=true;
+    if(p->action==ACTION_BONK || p->action==ACTION_HURT) jet=false;
+    p->jet_active=jet;
+    if(!p->source_step) {p->vx=fmaxf(-1400,fminf(1400,p->vx));return;}
+    float xs=p->vx/ORIGINAL_VELOCITY,ys=p->vy/ORIGINAL_VELOCITY;
+    p->water_running=false;
+    const float facing=p->facing_left ? 1 : -1;   /* _xscale / 100 */
+    const float deg=0.01745329252f;
+    if(p->nozzle==NOZZLE_HOVER && space && p->power>0 && p->water>0) {
+        if(free) {
+            if(!p->grounded && !p->submerged) {   /* the frame's gravity, exactly (player_step left it out) */
+                ys+=1;
+                if(ys>0) ys=gf(ys,0.2f,1.05f);
+                ys=gf(ys,0,1.001f); xs=gf(xs,0,1.001f);
+                if(in.jump_held) ys-=0.1f;   /* KeyUP: yspeed -= risespeed */
+                if(down) ys+=0.1f;           /* KeyDOWN: yspeed += risespeed */
+                /* KeyRIGHT / KeyLEFT: xspeed -= min((xspeed - airwalkspeed) / (airmaxWalkspeed / 3), 0),
+                   and with the Hover spraying again over airmaxWalkspeed, tilting 5 degrees */
+                if(right) {xs-=fminf((xs-5)/(20.0f/3),0);xs-=fminf((xs-5)/20,0);p->char_rotation+=5;}
+                if(left) {xs-=fmaxf((xs+5)/(20.0f/3),0);xs-=fmaxf((xs+5)/20,0);p->char_rotation-=5;}
+            }
+            ys*=0.8f;
+            ys-=(0.92f*10-ys)/10*(p->power/175+0.75f);
+            p->water-=0.07f;p->power-=1.5f;
+            xs=gf(xs,0.05f,1.03f);
+            p->jump_cut=true;   /* the hover is not a jump to cut */
+            p->grounded=false;
+        } else if(diving) {
+            const float r=p->dive_rot*deg;
+            p->water-=0.07f;p->power-=1.5f;
+            ys*=0.98f;xs*=0.97f;
+            if(!p->grounded) {ys-=sinf(r)*0.92f;xs-=facing*cosf(r)*0.92f/2;}
+            else xs-=facing*cosf(r)*0.92f;
         }
-    } else if(p->nozzle==NOZZLE_TURBO && p->power>=100) {
-        const float target=(p->facing_left ? -1 : 1)*(p->grounded && !p->submerged ? 75 : 37.5f)*44;
-        p->vx+=(target-p->vx)*(1-powf(29.0f/30,32*GAME_DT));
-        p->water=fmaxf(0,p->water-1.6f*GAME_DT);p->jet_active=true;
-        if(p->submerged) p->vy+=in.vertical*938.67f*GAME_DT;
     }
-    if(p->rocket_boost>0) {
-        p->rocket_boost=fmaxf(0,p->rocket_boost-GAME_DT);
-        p->vy-=(p->submerged ? 1486 : 704)*GAME_DT;p->jet_active=true;
-        /* Rocket water frames 16-23 (1340): onEnterFrame keeps Power = 0, so the ground
-           refill cannot re-arm the Rocket while Mario is still leaving the ground. */
-        p->power=0;
+    if(p->nozzle==NOZZLE_TURBO && space && p->power>=100 && p->water>0) {
+        if(free) {
+            p->water-=0.05f;
+            const float speed=p->grounded && p->material!=TILE_ICE ? 75 : 37.5f;
+            xs-=(xs+facing*speed)/30;
+            if(p->submerged) {
+                ys-=1.0f/3;
+                if(up) {p->char_rotation-=facing*10;ys-=1/1.5f;}
+                if(down) {p->char_rotation+=facing*10;ys+=1/1.5f;}
+            } else if(p->water_below) {   /* running on the water */
+                if(p->water_at_feet) {ys-=1.0f/5;p->y-=1.375f;}
+                p->water=fminf(100,p->water+0.5f);
+                ys=fminf(0,ys);
+                if(!right && !left) xs=gf(xs,0.1f,1.05f);
+                xs-=(xs+facing*37.5f)/30;
+                p->water_running=true;
+                if(up) ys=fminf(ys,-10/1.5f);
+            }
+        } else if(diving) {
+            const float r=(p->dive_rot-90)*deg;
+            p->water-=0.1f;
+            ys-=sinf(r)/2;
+            xs-=facing*cosf(r)/2;
+        }
     }
-    p->vx=fmaxf(-1400,fminf(1400,p->vx));
+    if(!space && p->nozzle!=NOZZLE_HOVER) p->power+=1;
+    /* Rocket WaterBlast (24 frames; chargeframe kept between uses). The clip is
+       only in Mario Main's Rocket frames: an attack pauses it; a hit or a wall
+       bonk (rocket_boost cleared) ends the blast. */
+    if(p->nozzle==NOZZLE_ROCKET && (free || p->submerged)) {
+        const bool blast=space && p->power>=100 && p->water>0;
+        unsigned f=p->rocket_frame ? p->rocket_frame : 1;
+        if(f>=16 && p->rocket_boost==0) f=1;
+        if(f<10) {
+            if(blast) {if(f==1) sfx_play(SFX_ROCKET_CHARGE,70,0);++f;}   /* port-made sound: the original is silent */
+            else if(f>1) --f;
+            if(f==10) ys*=0.97f;
+        } else if(f<16) {
+            ++f; ys*=0.97f;
+            if(f==15) p->power=1;
+            if(f==16) {
+                sfx_play(SFX_ROCKET_BLAST,85,0);
+                p->water-=5;p->power=0;
+                ys=fminf(-25+fmaxf(ys/3,0),ys);
+                p->grounded=false;p->jump_cut=true;
+            }
+        } else {
+            p->power=0;
+            ys-=25.0f/50;
+            if(p->submerged) ys-=25.0f/45;
+            if(right) {xs+=0.7f;p->char_rotation+=5;}
+            if(left) {xs-=0.7f;p->char_rotation-=5;}
+            if(++f>=24) f=1;
+        }
+        p->rocket_frame=f;
+        p->rocket_charge=f>1 && f<16 ? (f-1)/32.0f : 0;
+        p->rocket_boost=f>=16 ? (24-f)/32.0f : 0;
+    } else if(p->nozzle!=NOZZLE_ROCKET) {p->rocket_frame=1;p->rocket_charge=p->rocket_boost=0;}
+    /* CharCode end: in the air _rotation = groundFriction(_rotation, 3, 1.3),
+       kept within +/-30; on the ground CharRotationCode (the port draws no slope tilt). */
+    p->char_rotation=p->grounded ? 0 : fmaxf(-30,fminf(30,gf(p->char_rotation,3,1.3f)));
+    p->water=fmaxf(0,fminf(100,p->water));
+    p->power=fmaxf(0,fminf(100,p->power));
+    p->vx=fmaxf(-1400,fminf(1400,xs*ORIGINAL_VELOCITY));
+    p->vy=ys*ORIGINAL_VELOCITY;
 }

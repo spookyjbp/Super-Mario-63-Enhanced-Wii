@@ -472,6 +472,48 @@ static void test_drowning(void)
     ticks((GameInput){0}, 60);   /* 32 frames: 3 heals */
     assert(s.progress.water_hp == 8);
 }
+static float gf(float v, float sub, float div) { return copysignf(fmaxf(0, fabsf(v) - sub) / div, v); }
+static void test_fludd_exact(void)
+{
+    /* Hover in the air, frame by frame as CharCode: gravity (+1, the fall drag,
+       /1.001), then yspeed *= 0.8; yspeed -= (9.2 - yspeed) / 10 * (Power / 175 +
+       0.75); Power -= 1.5; WaterAmount -= 7 (of 10000); xspeed groundFriction(0.05, 1.03). */
+    Player *p = tutorial_mario(300);
+    p->has_fludd = true; p->nozzle = NOZZLE_HOVER; p->nozzles = 7; p->water = 100; p->power = 100;
+    course_place_player(&s.runtime, p, 300, -250);
+    p->vy = 4 * 44; p->vx = 6 * 44; p->grounded = false;
+    float ys = 4, xs = 6, power = 100, water = 100;
+    unsigned frames = 0;
+    for (int i = 0; i < 60 && frames < 20; ++i) {
+        ticks((GameInput){.nozzle_held = true}, 1);
+        if (!p->source_step) continue;
+        ++frames;
+        ys += 1; if (ys > 0) ys = gf(ys, 0.2f, 1.05f);
+        ys = gf(ys, 0, 1.001f); xs = gf(xs, 0, 1.001f);
+        ys *= 0.8f; ys -= (9.2f - ys) / 10 * (power / 175 + 0.75f);
+        power -= 1.5f; water -= 0.07f; xs = gf(xs, 0.05f, 1.03f);
+        assert(fabsf(p->vy / 44 - ys) < 1e-3f && fabsf(p->vx / 44 - xs) < 1e-3f);
+        assert(fabsf(p->power - power) < 1e-3f && fabsf(p->water - water) < 1e-3f);
+    }
+    assert(frames == 20 && p->vy < 0);   /* rising */
+    /* Holding Right while hovering tilts Mario (+5, then groundFriction(3, 1.3): ~6.7 degrees) */
+    for (int i = 0; i < 30; ++i) ticks((GameInput){.nozzle_held = true, .horizontal = 1}, 1);
+    assert(p->char_rotation > 5 && p->char_rotation < 8);
+    /* Rocket: frames 1-9 charge while held and run back when let go; from 10 it
+       goes on by itself (yspeed *= 0.97); 16 blasts: yspeed = min(-25 + max(yspeed / 3, 0), yspeed) */
+    p = tutorial_mario(300);
+    p->has_fludd = true; p->nozzle = NOZZLE_ROCKET; p->power = 100; p->water = 100;
+    unsigned held = 0;
+    while (held < 5) { ticks((GameInput){.nozzle_held = true}, 1); held += p->source_step; }
+    assert(p->rocket_frame == 6);
+    unsigned back = 0;
+    while (back < 2) { ticks((GameInput){0}, 1); back += p->source_step; }
+    assert(p->rocket_frame == 4);
+    while (p->rocket_frame < 10) ticks((GameInput){.nozzle_held = true}, 1);
+    unsigned more = 0;
+    while (p->rocket_frame != 16) { ticks((GameInput){0}, 1); more += p->source_step; }   /* let go: it still fires */
+    assert(more == 6 && p->vy <= -24 * 44 && p->power == 0 && fabsf(p->water - 95) < 0.01f);
+}
 static void test_faint(void)
 {
     /* hurt1 at 0 HP: frame 4 adds the faint speeds and goes to 'falling' (10),
@@ -618,6 +660,6 @@ int main(void)
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
     test_message_box_frames(); test_rocket_once_per_jump(); test_faint(); test_wipes_and_background_water();
-    test_camera_starts_inside_walls(); test_level_water_splash(); test_idle_and_sleep(); test_drowning();
-    puts("20 course session (idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_camera_starts_inside_walls(); test_level_water_splash(); test_idle_and_sleep(); test_drowning(); test_fludd_exact();
+    puts("21 course session (FLUDD frame by frame, idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }
