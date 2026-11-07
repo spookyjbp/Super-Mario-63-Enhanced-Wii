@@ -51,7 +51,7 @@ static void test_opening_and_controls_sign(void)
 {
     assert(course_session_start(&s, &pack, "8-E1-1", 0, 0, 640));
     assert(s.state == SESSION_OPENING && !s.game.player.has_fludd && s.runtime.platform_frame == 0);
-    assert(s.area_title.length && s.area_title_time > 0);
+    assert(s.area_title.length && s.area_text > 0);
     for (int i = 0; i < 60 * 8 && s.state == SESSION_OPENING; ++i) course_session_step(&s, (GameInput){.horizontal = -1});
     /* Walked in by script (input ignored), then the Start picture opens. */
     assert(s.state == SESSION_SIGN && s.sign_picture && course_string_equals(s.sign_text, "Start"));

@@ -123,6 +123,28 @@ class PictureSigns(unittest.TestCase):
         # the lives screen shows something (the Mario icon and number, the explosion)
         self.assertGreater(sum(im.shape[0] * im.shape[1] > 64 for _, _, im in ANIM['LifeLost~']), 40)
 
+    def test_area_text(self):
+        """AreaTextClip (area_text_art.py): the bar and "Mushroom Kingdom (Tutorial)"
+        blur in over 7514 frames 2-11, hold, and blur out over 85-94; each
+        distinct frame is one tile that fits the 320 KiB frame slot; the hold is
+        one tile with the bar fully shown (frame 45's colour matrix: a see-through
+        dark green, ~57 % alpha)."""
+        import re
+        frames = ANIM['AreaText~']
+        head = (ROOT / 'assets' / 'generated' / 'area_text_layout.h').read_text()
+        table = [int(v) for v in re.search(r'\{\n    ([\d, ]+)', head).group(1).split(', ')]
+        self.assertEqual(len(table), 94)
+        self.assertEqual(len(set(table[11:84])), 1)                    # frames 12-84: the hold
+        self.assertEqual(max(table) + 1, len(frames))
+        for x, y, im in frames:
+            self.assertLessEqual(im.shape[0] * im.shape[1] * 2, 320 * 1024)
+        hold = frames[table[40]][2]
+        rgb = hold[..., :3].astype(int)
+        bar = (abs(hold[..., 3].astype(int) - 145) < 20) & (rgb[..., 1] > rgb[..., 0] + 40) & (rgb[..., 1] > rgb[..., 2] + 40)
+        self.assertGreater(bar.sum(), 15000)
+        white = (hold[..., 3] > 240) & (rgb.min(-1) > 230)
+        self.assertGreater(white.sum(), 600)                           # the text
+
     def test_talk_prompt_and_message_box(self):
         self.assertIn('Message', LAYERS)
         for k in range(KINDS):

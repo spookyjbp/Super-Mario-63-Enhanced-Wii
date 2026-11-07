@@ -15,6 +15,7 @@
 #include "text_layout.h"
 #include "sign_layout.h"
 #include "faint_layout.h"
+#include "area_text_layout.h"
 #include "bg_water_places.h"
 #include "ui_layout.h"
 #include "objects_8e1_0_bin.h"
@@ -540,8 +541,8 @@ void course_render(const CourseSession *s, float t)
                                   (float)z->height, pose * 0.5f, 0, pose * 0.5f + 0.5f, 1, za);
         }
     }
-    if (s->area_title_time > 0)
-        draw_text(FONT_SIGN, s->area_title.text, s->area_title.length, 40, width - 40, 50, white, ALIGN_CENTRE, ~0u);
+    if (s->area_text)   /* AreaTextClip (area_text_art.py): the bar and text as the original draws them */
+        draw_fx("AreaText~", area_text_tile[course_area_text_frame(s->area_text) - 1], width);
     if (s->state == SESSION_SIGN && s->sign_picture && s->sign_phase == 1) {
         /* Stats.Picture: the page (one texel per screen pixel) at its stage position. */
         const CourseArtLayer *pic = course_art_controller_picture(&art, s->sign_text, s->controller);

@@ -33,6 +33,7 @@ import sign_anim
 import faint_art
 import bg_water_art
 import water_art
+import area_text_art
 
 
 def sign_animated(labels):
@@ -382,6 +383,10 @@ def export(source, jar, output, areas):
     faint_layers, faint_header = faint_art.build(work / 'faint', jar, pictures_swf.read_bytes(), sprites)
     (output.parent / 'faint_layout.h').write_text(faint_header)
     anims += [(n, fr, ox, oy, W, H, s) for n, fr, ox, oy, W, H, s in faint_layers]
+    # The area name (AreaTextClip, area_text_art.py).
+    area_layers, area_header = area_text_art.build(work / 'areatext', jar, swf)
+    (output.parent / 'area_text_layout.h').write_text(area_header)
+    anims += area_layers
     variants += list(ui_layers)
     count = struct.unpack_from('>I', out, 12)[0]
     for label, im, ox, oy in variants:

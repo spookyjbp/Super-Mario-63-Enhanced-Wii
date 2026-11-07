@@ -95,7 +95,8 @@ static void enter_area(CourseSession *s, const CourseArea *a, float cx, float cy
     /* 8-E1-1 Ground: barrier frame while TotalStars == 0 and Char is left of the start sign. */
     s->runtime.platform_frame = 1;
     if (course_string_equals(a->id, "8-E1-1")) {
-        s->area_title = (CourseString){"Mushroom Kingdom\n(Tutorial)", 27}; s->area_title_time = 45.0f / 32 * 2;
+        /* 8-E1-1BackGFX frame 3: AreaTextClipF("Mushroom Kingdom\r<i>(Tutorial)</i>", 45) */
+        s->area_title = (CourseString){"Mushroom Kingdom\n(Tutorial)", 27}; s->area_text = 1;
         for (unsigned i = 0; i < a->object_count; ++i)
             if (param(&a->objects[i], "signmessage", "Start") && s->total_stars == 0 && cx < a->objects[i].x + 5) {
                 s->runtime.platform_frame = 0;
@@ -457,7 +458,7 @@ void course_session_step(CourseSession *s, GameInput in)
     }
     /* KeyZ(): Z (read/talk/stomp). The port maps it to the pound button. */
     const bool z_pressed = in.pound_pressed; /* already a button-down event */
-    if (s->area_title_time > 0) s->area_title_time = fmaxf(0, s->area_title_time - GAME_DT);
+    if (s->area_text && s->game.player.source_step && ++s->area_text > COURSE_AREA_TEXT_LAST) s->area_text = 0;
     Player *p = &s->game.player;
     const Camera camera_before = s->game.camera;
     switch (s->state) {

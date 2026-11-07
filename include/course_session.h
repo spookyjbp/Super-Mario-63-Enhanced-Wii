@@ -12,6 +12,10 @@ extern "C" {
 #endif
 typedef enum { SESSION_PLAY, SESSION_OPENING, SESSION_SIGN, SESSION_TALK, SESSION_WARP, SESSION_COMPLETE } SessionState;
 enum { COURSE_FX_BUBBLE, COURSE_FX_SPLASH };   /* CourseSession fx kinds */
+/* AreaTextClip's last frame (9 waiting + 7514 frames 2-94); 95 removes it. */
+#define COURSE_AREA_TEXT_LAST 102u
+/* 7514's frame (1-based) for area_text t (>= 1). */
+static inline unsigned course_area_text_frame(unsigned t) { return t <= 9 ? 1u : t - 8u; }
 typedef struct {
     const CoursePack *pack;
     CourseRuntime runtime;
@@ -30,7 +34,9 @@ typedef struct {
     float camera_target_x, camera_target_y; bool camera_override;
     /* hints and titles */
     CourseString hint;
-    CourseString area_title; float area_title_time;
+    /* AreaTextClip (the area name): 0 none, else source frames since attached
+       (frame 1 is held 9 frames, then 7514 frames 2-94: area_text_layout.h). */
+    CourseString area_title; unsigned area_text;
     /* opening (8-E1-1 Start sign) and warps */
     unsigned opening_wait, opening_count;
     int warp_target;
