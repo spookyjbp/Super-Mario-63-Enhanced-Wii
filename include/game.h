@@ -108,6 +108,7 @@ typedef struct {
     bool water_below, water_at_feet, water_running;
     float set_vx, set_vy;    /* MarioHit setXspeed / setYspeed, added at hurt1 frame 4 (px/s) */
     bool fall_sfx;           /* fallingsfx: once per fall */
+    float fall_ys;           /* the original's yspeed while falling (the "Mario-Fall" rule runs on it) */
     TileType material;
     PlayerAction action;
     Nozzle nozzle;

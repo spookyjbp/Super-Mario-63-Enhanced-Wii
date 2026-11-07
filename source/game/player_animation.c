@@ -87,16 +87,38 @@ void player_animation_step(Player *p,GameInput in)
                        (p->action==ACTION_NONE || p->action==ACTION_DIVE));
     if(!p->source_step) return;
     sfx_step_tick(p->material==TILE_PUDDLE);
-    /* CharCode: falling with fallingyspeed >= 15 builds hurtfallcount (Hover drains
-       it); at 5 "Mario-Fall" plays once; landing clears fallingsfx. */
-    if(p->grounded||p->submerged) {p->fall_sfx=false;if(p->hurtfall>0) --p->hurtfall;}
-    else if(p->vy>0 && p->action==ACTION_NONE && !p->pounding && p->vy/V>7) {
-        if(in.nozzle_held && p->has_fludd && p->nozzle==NOZZLE_HOVER && p->power>0 && p->water>0)
-            p->hurtfall=p->hurtfall>0 ? p->hurtfall-1 : 0;
-        if(drag(p->vy/V,0.2f,1.05f)>=15 && p->vy/V>15 && !p->fall_sfx) {
-            if(++p->hurtfall>7) p->hurtfall=7;
-            if(p->hurtfall>=5) {p->fall_sfx=true;sfx_play(SFX_FALL,100,0);}
-        }
+    /* "Mario-Fall" as CharCode (frame_4 lines 96-165, 292, 675, 1063), once a
+       32 Hz frame. In the air (out of water): yspeed += gravity; fallingyspeed =
+       groundFriction(yspeed, 0.2, 1.05); falling (yspeed > 0) with no attack and
+       yspeed > 7: the Hover spraying takes 1 off hurtfallcount, and a frame with
+       fallingyspeed >= 15 and yspeed > 15 adds 1 (to 7) until it plays the sound
+       once at 5; the fall drag then applies. Rising takes 1 off; so do every
+       frame in water and on the ground, where fallingsfx clears. The port's
+       own fall speed differs from the original's, so the rule runs on the
+       original's yspeed from the top of the jump (fall_ys: gravity 1 and the
+       drags; the port's speed while rising or hovering). */
+    if(p->grounded) {p->fall_sfx=false;p->fall_ys=0;if(p->hurtfall>0) --p->hurtfall;}
+    else if(p->submerged) {p->fall_ys=p->vy/V;if(p->hurtfall>0) --p->hurtfall;}
+    else {
+        const bool hover=player_hover_active(p,in);
+        const bool free=p->action==ACTION_NONE && !p->pounding && p->spin_time==0 && !p->ejump;
+        /* rising or hovering: the port's speed (gravity included); falling: the
+           original's, from the last frame's (at the top: the last rising speed) */
+        const bool own=p->vy<=0 || hover;
+        float ys=own ? p->vy/V : p->fall_ys+1;
+        const float falling=drag(ys,0.2f,1.05f);
+        if(ys>0) {
+            if(free && ys>7) {
+                if(in.nozzle_held && p->has_fludd && p->nozzle==NOZZLE_HOVER && p->power>0 && p->water>0)
+                    p->hurtfall=p->hurtfall>0 ? p->hurtfall-1 : 0;
+                if(falling>=15 && ys>15 && !p->fall_sfx) {
+                    if(++p->hurtfall>7) p->hurtfall=7;
+                    if(p->hurtfall>=5) {p->fall_sfx=true;sfx_play(SFX_FALL,100,0);}
+                }
+            }
+            ys=drag(ys,0.2f,1.05f);
+        } else if(p->hurtfall>0) --p->hurtfall;
+        p->fall_ys=hover ? p->vy/V : ys>0 ? drag(ys,0,1.001f) : fminf(0,ys);
     }
     const float xspeed=p->vx/V;
     if(p->sleeping) sleep_step(p);

@@ -1,5 +1,6 @@
 /* The original tutorial's scripted flow, start to completion boundary. */
 #include "course_session.h"
+#include "sfx.h"
 #include "course_objects.h"
 #include <assert.h>
 #include <math.h>
@@ -527,6 +528,47 @@ static void test_fludd_exact(void)
     assert(fabsf(q.vy / 44 - (-12 * 0.98f - sinf(r) * 0.92f)) < 1e-3f);
     assert(fabsf(q.vx / 44 - (-10 * 0.97f - cosf(r) * 0.46f)) < 1e-3f);
 }
+static bool heard(SfxId id)
+{
+    SfxEvent ev[SFX_QUEUE];
+    const unsigned n = sfx_drain(ev);
+    bool hit = false;
+    for (unsigned i = 0; i < n; ++i) hit |= ev[i].id == id;
+    return hit;
+}
+static void test_fall_sound(void)
+{
+    /* "Mario-Fall" as CharCode: from rest, yspeed (gravity 1, fall drag 0.2 /
+       1.05, then / 1.001) reaches the frames with fallingyspeed >= 15 and
+       yspeed > 15; the fifth plays it, once. Reference: the original frames. */
+    float ys = 0; unsigned count = 0, want = 0;
+    for (unsigned f = 1; f < 200 && !want; ++f) {
+        ys += 1;
+        const float falling = gf(ys, 0.2f, 1.05f);
+        if (ys > 7 && falling >= 15 && ys > 15 && ++count >= 5) want = f;
+        ys = gf(gf(ys, 0.2f, 1.05f), 0, 1.001f);
+    }
+    assert(want > 20);
+    Player *p = tutorial_mario(300);
+    p->has_fludd = false;
+    course_place_player(&s.runtime, p, 300, -2500);
+    p->vy = 0; p->grounded = false;
+    heard(SFX_FALL);
+    unsigned frames = 0, at = 0, plays = 0;
+    for (int i = 0; i < 60 * 4 && !p->grounded; ++i) {
+        ticks((GameInput){0}, 1);
+        frames += p->source_step;
+        if (heard(SFX_FALL)) { ++plays; if (!at) at = frames; }
+    }
+    assert(at == want && plays == 1);
+    /* a jump's fall is too short: no sound */
+    p = tutorial_mario(300);
+    heard(SFX_FALL);
+    ticks((GameInput){.jump_pressed = true, .jump_held = true}, 1);
+    bool any = false;
+    for (int i = 0; i < 120; ++i) { ticks((GameInput){.jump_held = true}, 1); any |= heard(SFX_FALL); }
+    assert(!any);
+}
 static void test_faint(void)
 {
     /* hurt1 at 0 HP: frame 4 adds the faint speeds and goes to 'falling' (10),
@@ -673,6 +715,6 @@ int main(void)
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
     test_message_box_frames(); test_rocket_once_per_jump(); test_faint(); test_wipes_and_background_water();
-    test_camera_starts_inside_walls(); test_level_water_splash(); test_idle_and_sleep(); test_drowning(); test_fludd_exact();
-    puts("21 course session (FLUDD frame by frame, idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_camera_starts_inside_walls(); test_level_water_splash(); test_idle_and_sleep(); test_drowning(); test_fludd_exact(); test_fall_sound();
+    puts("22 course session (fall sound, FLUDD frame by frame, idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }
