@@ -21,6 +21,13 @@ static void test_plain(void)
     assert(!strcmp(out, "Inside the Castle:\nMain Hall"));
     assert(text_plain("abcdef", 6, out, 4) == 3 && !strcmp(out, "abc"));   /* capacity respected */
 }
+static void test_hint_font(void)
+{
+    /* The hints use font 187 (regular Arial) at 11 x 1.6, narrower than the bold talk font */
+    const FontInfo *h = &font_info[FONT_HINT], *t = &font_info[FONT_TALK];
+    assert(h->size == 18 && t->size == 24);
+    assert(h->glyphs['m' - FONT_FIRST].advance < t->glyphs['m' - FONT_FIRST].advance * 18 / 24);
+}
 static void test_wrap(void)
 {
     const FontInfo *f = &font_info[FONT_SIGN];
@@ -71,6 +78,6 @@ static void test_sign_layout(void)
 
 int main(void)
 {
-    test_plain(); test_wrap(); test_sign_layout();
+    test_plain(); test_wrap(); test_hint_font(); test_sign_layout();
     puts("3 text layout (HTML, wrap, original fonts, sign layout) test groups passed"); return 0;
 }

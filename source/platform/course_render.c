@@ -512,8 +512,16 @@ void course_render(const CourseSession *s, float t)
     graphics_set_zoom(1);
     const GXColor white = {255, 255, 255, 255};
     if (s->hint.length) {
-        graphics_rect(20, 420, width - 40, 40, (GXColor){0, 0, 0, 150});
-        draw_text(FONT_TALK, s->hint.text, s->hint.length, 30, width - 30, 424, white, ALIGN_LEFT, ~0u);
+        /* Stats '_root.TextHint' (621 at (6, 40.5), field from -2 to 363.85 with 2 px
+           gutters): Arial 11 (font 187), white, left aligned, no box; a black Glow
+           filter (blur 2, strength 10) outlines it. Left-anchored like the HUD. */
+        const float x0 = hud_x(6, width), x1 = x0 + (363.85f - 2) * HUD_K, y = 40.5f * HUD_K;
+        const float r = 1.25f * HUD_K;
+        static const float ring[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {0.7f, 0.7f}, {-0.7f, 0.7f}, {0.7f, -0.7f}, {-0.7f, -0.7f}};
+        for (unsigned i = 0; i < 8; ++i)
+            draw_text(FONT_HINT, s->hint.text, s->hint.length, x0 + ring[i][0] * r, x1 + ring[i][0] * r, y + ring[i][1] * r,
+                      (GXColor){0, 0, 0, 255}, ALIGN_LEFT, ~0u);
+        draw_text(FONT_HINT, s->hint.text, s->hint.length, x0, x1, y, white, ALIGN_LEFT, ~0u);
     }
     draw_hud(s, width);
     if (s->tm_alpha > 2 && s->toad_text.length) {
@@ -525,11 +533,20 @@ void course_render(const CourseSession *s, float t)
         const float ca = s->tm_alpha / 100;
         const ObjectDraw cloud = {.clip = OBJ_HUD_TALK_BOX, .alpha = s->tm_alpha, .scale = HUD_K / COURSE_SCALE};
         draw_object_frame(&cloud, hud_x(246, width), 259 * HUD_K);
-        const float x0 = hud_x(246, width) + (-143.45f + 2) * HUD_K, x1 = hud_x(246, width) + (-143.45f + 288.9f - 2) * HUD_K;
+        /* field 185 at (-143.45, -28.9), bounds x -2..288.9, y -2..59.85, 2 px gutters */
+        const float x0 = hud_x(246, width) + (-143.45f - 2 + 2) * HUD_K, x1 = hud_x(246, width) + (-143.45f + 288.9f - 2) * HUD_K;
         const float lh = text_line_height(&font_info[FONT_TALK], 2 * HUD_K);
-        const float ty = (259 - 28.9f + 2) * HUD_K + (s->toad_text.length < 40 ? lh : 0);
-        draw_text(FONT_TALK, s->toad_text.text, s->toad_text.length, x0, x1, ty,
-                  (GXColor){255, 255, 179, (unsigned char)(255 * ca)}, ALIGN_LEFT, s->toad_chars);
+        const float ty = (259 - 28.9f - 2 + 2) * HUD_K;
+        /* txt2: a page under 40 characters starts with " \r " (a blank line, then
+           the text after a space) */
+        static char page[1024];
+        const bool shortp = s->toad_text.length < 40;
+        size_t n = 0;
+        if (shortp) { page[n++] = ' '; page[n++] = '\n'; page[n++] = ' '; }
+        for (size_t i = 0; i < s->toad_text.length && n < sizeof page; ++i) page[n++] = s->toad_text.text[i];
+        draw_text(FONT_TALK, page, n, x0, x1, ty, (GXColor){255, 255, 179, (unsigned char)(255 * ca)}, ALIGN_LEFT,
+                  s->toad_chars + (shortp ? 3u : 0u));
+        (void)lh;
         const unsigned char za = (unsigned char)(255 * ca * s->tm_bz / 100);
         char key[12];
         snprintf(key, sizeof key, "TalkZ@%u", (unsigned)s->controller);

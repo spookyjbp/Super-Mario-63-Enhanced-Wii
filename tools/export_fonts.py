@@ -3,7 +3,8 @@
 
 The bold Arial embedded in the 2010 SWF as font 155 (exported with FFDec), used
 by the sign message box (Stats.Message 'mtext', size 17) and Toad's talk cloud
-(Stats.tm 'txt2', size 15). Each size is rasterised at the screen size the port draws it (Flash size x 1.6, the
+(Stats.tm 'txt2', size 15), and the regular Arial 187 of the hints (Stats
+'_root.TextHint', size 11; missing characters from Liberation Sans Regular). Each size is rasterised at the screen size the port draws it (Flash size x 1.6, the
 stage scale on the 480-line screen). Characters an embedded subset lacks (font
 155 has no 'q') come from Liberation Sans Bold, which has Arial's metrics.
 
@@ -21,8 +22,11 @@ SCALE = 1.6
 FONTS = [  # (name, SWF font id, Flash size)
     ('FONT_SIGN', 155, 17),   # Stats.Message 'mtext' (251): sign messages, centred white
     ('FONT_TALK', 155, 15),   # Stats.tm 'txt2' (185): Toad's talk cloud, left aligned, light yellow
+    ('FONT_HINT', 187, 11),   # Stats '_root.TextHint' (621): the hints, regular Arial, white with a black glow
 ]
 FALLBACK = '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'
+FALLBACK_REGULAR = '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'
+REGULAR = {187}   # fonts that are not bold
 FIRST, LAST = 32, 126
 ATLAS_W = 512
 
@@ -49,7 +53,8 @@ def build(source, jar, out_dir, work):
     for fi, (name, ident, size) in enumerate(FONTS):
         path = str(next(work.glob(f'{ident}_*.ttf')))
         px = size * SCALE
-        main, fallback = ImageFont.truetype(path, round(px)), ImageFont.truetype(FALLBACK, round(px))
+        main = ImageFont.truetype(path, round(px))
+        fallback = ImageFont.truetype(FALLBACK_REGULAR if ident in REGULAR else FALLBACK, round(px))
         have = glyph_set(path)
         from fontTools.ttLib import TTFont
         t = TTFont(path)
