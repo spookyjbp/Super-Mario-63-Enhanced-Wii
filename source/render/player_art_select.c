@@ -46,9 +46,8 @@ ArtPick player_art_select(const Player *p)
     } else if(p->action==ACTION_ROLL) {
         a.state=ART_DIVEFLIP;a.timed=true;a.seconds=p->action_time;
     } else if(!p->grounded) {
-        /* CharCode: `attackFrame == "frontflip" && attack && !Fluddpow == ""` ends
-           the flip a frame later when FLUDD is worn (!"H" == "" is true). */
-        if(p->jump_stage==3 && p->jump_time<(p->has_fludd ? 1.0f : 30.0f)/32) {
+        /* The flip plays with FLUDD too (Mario Main's H/R/T frontflip clips). */
+        if(p->jump_stage==3 && p->jump_time<30.0f/32) {
             a.state=ART_FRONTFLIP;a.timed=true;a.seconds=p->jump_time;
         } else a.state=vy>2 ? ART_FALL : ART_RISE; /* CharCode frame 3/4 */
     } else if(p->normal_land_time>0) {

@@ -83,9 +83,8 @@ static void test_selection_rules(void)
     p.run_count=6;p.run_frame=10;a=player_art_select(&p);assert(a.state==ART_RUN && a.index==16);
     p=(Player){.has_fludd=true,.vy=3*44.0f};assert(player_art_select(&p).state==ART_FALL);
     p.vy=2*44.0f;assert(player_art_select(&p).state==ART_RISE);
-    p.jump_stage=3;p.jump_time=0.5f;a=player_art_select(&p);assert(a.state==ART_RISE);   /* with FLUDD the flip ends at once */
-    p.jump_time=0.5f/32;a=player_art_select(&p);assert(a.state==ART_FRONTFLIP && a.timed);
-    p.has_fludd=false;p.jump_time=0.5f;a=player_art_select(&p);assert(a.state==ART_FRONTFLIP && a.timed);
+    p.jump_stage=3;p.jump_time=0.5f;a=player_art_select(&p);assert(a.state==ART_FRONTFLIP && a.timed);   /* with FLUDD too */
+    p.has_fludd=false;a=player_art_select(&p);assert(a.state==ART_FRONTFLIP && a.timed);
     p=(Player){.has_fludd=true,.spin_time=1,.spin_frame=12,.spin_speed=11};assert(player_art_select(&p).index==12);
     p.spin_speed=9;assert(player_art_select(&p).index==52);
     p=(Player){.has_fludd=true,.pounding=true,.pound_frame=20};a=player_art_select(&p);assert(a.state==ART_GROUND && a.index==20);

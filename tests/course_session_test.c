@@ -513,6 +513,19 @@ static void test_fludd_exact(void)
     unsigned more = 0;
     while (p->rocket_frame != 16) { ticks((GameInput){0}, 1); more += p->source_step; }   /* let go: it still fires */
     assert(more == 6 && p->vy <= -24 * 44 && p->power == 0 && fabsf(p->water - 95) < 0.01f);
+    /* Triple jump with FLUDD: the flip plays (Hfrontflip, an attack), and the
+       Hover pushes along DiveRot = the flip's frame rotation + 90 (frame 4:
+       -87.2 + 90) instead of hovering: yspeed *= 0.98; yspeed -= sin(DiveRot) * 0.92;
+       xspeed *= 0.97; xspeed -= cos(DiveRot) * 0.46 (facing left). */
+    Player q = {0};
+    q.has_fludd = true; q.nozzle = NOZZLE_HOVER; q.power = 100; q.water = 100; q.facing_left = true;
+    q.jump_stage = 3; q.jump_time = 3.5f / 32; q.vx = -10 * 44; q.vy = -12 * 44; q.source_step = true;
+    assert(!player_hover_active(&q, (GameInput){.nozzle_held = true}));
+    player_fludd_step(&q, (GameInput){.nozzle_held = true});
+    const float r = 2.8f * 0.01745329252f;
+    assert(fabsf(q.dive_rot - 2.8f) < 1e-3f);
+    assert(fabsf(q.vy / 44 - (-12 * 0.98f - sinf(r) * 0.92f)) < 1e-3f);
+    assert(fabsf(q.vx / 44 - (-10 * 0.97f - cosf(r) * 0.46f)) < 1e-3f);
 }
 static void test_faint(void)
 {

@@ -157,7 +157,9 @@ def placement(sprites, ident):
 # Toad's head moves from depth 2 to depth 1 on walk frames 16-20, so a depth
 # rule left a smiling head baked into those body frames (the "normal face for
 # a frame" flicker on the walking, angry Toad).
-STRIP_CHARS = {2516: {2498}, 2501: {2498}}
+# Characters removed from a sprite: Toad's head from his bodies; Wing Code (1003, the
+# Wing Cap wings, frame 2 = none without the cap) from the Idle Animation.
+STRIP_CHARS = {2516: {2498}, 2501: {2498}, 1050: {1003}}
 
 
 def strip_blanks(raw, start, strip_depths, strip_chars=STRIP_CHARS):

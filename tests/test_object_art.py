@@ -72,6 +72,14 @@ class ObjectArtTests(unittest.TestCase):
             self.assertAlmostEqual(oy / 20 + h / zoom, 0, delta=4, msg=name)   # feet on the floor
             self.assertAlmostEqual(ox / 20 + w / zoom / 2, 0, delta=6, msg=name)
 
+    def test_idle_has_no_wings(self):
+        """Idle Animation places Wing Code (1003), whose frame 1 is the Wing Cap's
+        wings (frame 2, none, without the cap): they must not be in the frames.
+        With them the tops reach 41.6 px above the feet; Mario alone ~35."""
+        table, zoom = ids()
+        clip, pack = table['MARIO_IDLE']
+        self.assertGreater(min(oy / 20 for *_, ox, oy, d, f in frames(pack, clip)), -36)
+
     def test_sign_post_ends_at_origin(self):
         table, zoom = ids()
         clip, pack = table['SIGN']

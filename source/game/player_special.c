@@ -197,10 +197,15 @@ bool player_special_step(Player *p,const World *w,GameInput in,bool grounded)
 }
 /* _root.groundFriction(v, subtract, divide) in original units. */
 static float gf(float v,float subtract,float divide) { return copysignf(fmaxf(0,fabsf(v)-subtract)/divide,v); }
+/* The FLUDD frontflip (Hfrontflip 1216 / R / T, 27 frames, frame 27 ends the
+   attack): its "frame" child's rotation per frame; DiveRot = that + 90. */
+static const float flip_rotation[27] = {0,-30.1f,-59.4f,-87.2f,-113.8f,-139.4f,-163.7f,173.2f,151.2f,130.3f,110.6f,92,75,
+                                        58.7f,43.8f,30,21.9f,19.3f,17,14.5f,12.1f,9.6f,7.3f,4.8f,2.3f,0,0};
+static bool flipping(const Player *p) { return p->jump_stage==3 && p->jump_time<27.0f/32 && !p->grounded; }
 /* CharCode's "attack == false" for the FLUDD code (and Controll). */
 static bool fludd_free(const Player *p)
 {
-    return p->action==ACTION_NONE && !p->pounding && p->spin_time==0 && p->landing_time<=0 && !p->ejump &&
+    return !flipping(p) && p->action==ACTION_NONE && !p->pounding && p->spin_time==0 && p->landing_time<=0 && !p->ejump &&
            !p->sleeping && !p->drowning && !p->reading_sign && p->stun<=0;
 }
 bool player_hover_active(const Player *p,GameInput in)
@@ -235,7 +240,12 @@ void player_fludd_step(Player *p,GameInput in)
     if(!p->has_fludd) {p->jet_active=false;p->rocket_charge=p->rocket_boost=0;p->rocket_frame=1;return;}
     const bool space=in.nozzle_held;
     const bool free=fludd_free(p);
-    const bool diving=p->action==ACTION_DIVE;
+    /* attackFrame "Dive" or "frontflip": the FLUDD pushes along DiveRot */
+    const bool diving=p->action==ACTION_DIVE || flipping(p);
+    if(flipping(p)) {
+        unsigned f=(unsigned)(p->jump_time*32);
+        p->dive_rot=flip_rotation[f<27 ? f : 26]+90;
+    }
     bool jet=false;
     if(p->nozzle==NOZZLE_HOVER && space && p->power>0 && p->water>0 && (free || diving)) jet=true;
     if(p->nozzle==NOZZLE_TURBO && space && p->power>=100 && p->water>0 && (free || diving)) jet=true;

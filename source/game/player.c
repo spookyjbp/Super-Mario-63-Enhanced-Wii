@@ -96,7 +96,7 @@ void player_step(Player *p, const World *world, GameInput input)
             p->grounded = false;
             p->coyote = p->jump_buffer = 0;
             p->chain_window = p->jump_stage < 3 ? 9.0f / 32 : 0; /* doublejumpcount = 9 (0 after the flip) */
-            p->jump_cut = p->jump_stage == 3 && !p->has_fludd; /* the frontflip is an attack: no short hop (with FLUDD it ends at once) */
+            p->jump_cut = p->jump_stage == 3; /* the frontflip is an attack: no short hop */
         }
         if (input.pound_pressed && !p->grounded) {
             p->pounding = true;
