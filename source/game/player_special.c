@@ -237,7 +237,7 @@ void player_fludd_step(Player *p,GameInput in)
 {
     const bool right=in.horizontal>0.5f,left=in.horizontal<-0.5f;
     const bool up=in.vertical<-0.5f || in.jump_held,down=in.vertical>0.5f || in.crouch_held;
-    if(!p->has_fludd) {p->jet_active=false;p->rocket_charge=p->rocket_boost=0;p->rocket_frame=1;return;}
+    if(!p->has_fludd) {p->jet_active=false;p->rocket_charge=p->rocket_boost=0;p->rocket_frame=1;p->char_rotation=p->tilt_draw=0;return;}
     const bool space=in.nozzle_held;
     const bool free=fludd_free(p);
     /* attackFrame "Dive" or "frontflip": the FLUDD pushes along DiveRot */
@@ -253,6 +253,9 @@ void player_fludd_step(Player *p,GameInput in)
     if(p->nozzle==NOZZLE_ROCKET && space && p->power>=100 && p->water>0) jet=true;
     if(p->action==ACTION_BONK || p->action==ACTION_HURT) jet=false;
     p->jet_active=jet;
+    /* the tilt as drawn: eased toward Char's _rotation every 60 Hz tick (it
+       changes in 32 Hz steps of 5 degrees) */
+    p->tilt_draw+=(p->char_rotation-p->tilt_draw)*0.5f;
     if(!p->source_step) {p->vx=fmaxf(-1400,fminf(1400,p->vx));return;}
     float xs=p->vx/ORIGINAL_VELOCITY,ys=p->vy/ORIGINAL_VELOCITY;
     p->water_running=false;
@@ -310,7 +313,10 @@ void player_fludd_step(Player *p,GameInput in)
             xs-=facing*cosf(r)/2;
         }
     }
-    if(!space && p->nozzle!=NOZZLE_HOVER) p->power+=1;
+    /* CharCode adds 1 Power a frame in the air when not spraying (not Hover);
+       the Rocket gets one blast per jump (user decision): its Power only
+       refills on the ground or in water. */
+    if(!space && p->nozzle!=NOZZLE_HOVER && p->nozzle!=NOZZLE_ROCKET) p->power+=1;
     /* Rocket WaterBlast (24 frames; chargeframe kept between uses). The clip is
        only in Mario Main's Rocket frames: an attack pauses it; a hit or a wall
        bonk (rocket_boost cleared) ends the blast. */

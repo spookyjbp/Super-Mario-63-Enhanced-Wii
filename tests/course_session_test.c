@@ -514,6 +514,15 @@ static void test_fludd_exact(void)
     unsigned more = 0;
     while (p->rocket_frame != 16) { ticks((GameInput){0}, 1); more += p->source_step; }   /* let go: it still fires */
     assert(more == 6 && p->vy <= -24 * 44 && p->power == 0 && fabsf(p->water - 95) < 0.01f);
+    /* one blast per jump: Power stays 0 in the air, refills on landing */
+    while (p->rocket_frame != 1) ticks((GameInput){0}, 1);
+    for (int i = 0; i < 60 && !p->grounded; ++i) {
+        ticks((GameInput){.nozzle_held = (i / 4) % 2 == 0}, 1);
+        assert(p->power < 100 && (p->rocket_frame < 10 || p->rocket_frame == 1) && p->rocket_boost == 0);
+    }
+    while (!p->grounded) ticks((GameInput){0}, 1);
+    ticks((GameInput){0}, 2);
+    assert(p->power == 100);
     /* Triple jump with FLUDD: the flip plays (Hfrontflip, an attack), and the
        Hover pushes along DiveRot = the flip's frame rotation + 90 (frame 4:
        -87.2 + 90) instead of hovering: yspeed *= 0.98; yspeed -= sin(DiveRot) * 0.92;

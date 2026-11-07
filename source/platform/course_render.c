@@ -305,6 +305,19 @@ static void draw_text(unsigned font, const char *src, size_t len, float x0, floa
         }
     }
 }
+/* A text field with the black Glow filter the original puts on its HUD text
+   (blur 2, strength 10: a solid dark outline about 2 stage px wide), then the
+   text. */
+static void draw_text_glow(unsigned font, const char *src, size_t len, float x0, float x1, float y, GXColor colour,
+                           int align, unsigned max_chars)
+{
+    static const float ring[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {0.7f, 0.7f}, {-0.7f, 0.7f}, {0.7f, -0.7f}, {-0.7f, -0.7f}};
+    const float r = 1.25f * HUD_K;
+    for (unsigned i = 0; i < 8; ++i)
+        draw_text(font, src, len, x0 + ring[i][0] * r, x1 + ring[i][0] * r, y + ring[i][1] * r,
+                  (GXColor){0, 0, 0, colour.a}, align, max_chars);
+    draw_text(font, src, len, x0, x1, y, colour, align, max_chars);
+}
 static void draw_cstring(unsigned font, const char *t, float x0, float x1, float y, GXColor c, int align)
 { draw_text(font, t, strlen(t), x0, x1, y, c, align, ~0u); }
 /* A picture-slot layer (picture page or message box), one texture at a time. */
@@ -516,12 +529,7 @@ void course_render(const CourseSession *s, float t)
            gutters): Arial 11 (font 187), white, left aligned, no box; a black Glow
            filter (blur 2, strength 10) outlines it. Left-anchored like the HUD. */
         const float x0 = hud_x(6, width), x1 = x0 + (363.85f - 2) * HUD_K, y = 40.5f * HUD_K;
-        const float r = 1.25f * HUD_K;
-        static const float ring[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {0.7f, 0.7f}, {-0.7f, 0.7f}, {0.7f, -0.7f}, {-0.7f, -0.7f}};
-        for (unsigned i = 0; i < 8; ++i)
-            draw_text(FONT_HINT, s->hint.text, s->hint.length, x0 + ring[i][0] * r, x1 + ring[i][0] * r, y + ring[i][1] * r,
-                      (GXColor){0, 0, 0, 255}, ALIGN_LEFT, ~0u);
-        draw_text(FONT_HINT, s->hint.text, s->hint.length, x0, x1, y, white, ALIGN_LEFT, ~0u);
+        draw_text_glow(FONT_HINT, s->hint.text, s->hint.length, x0, x1, y, white, ALIGN_LEFT, ~0u);
     }
     draw_hud(s, width);
     if (s->tm_alpha > 2 && s->toad_text.length) {
@@ -544,8 +552,10 @@ void course_render(const CourseSession *s, float t)
         size_t n = 0;
         if (shortp) { page[n++] = ' '; page[n++] = '\n'; page[n++] = ' '; }
         for (size_t i = 0; i < s->toad_text.length && n < sizeof page; ++i) page[n++] = s->toad_text.text[i];
-        draw_text(FONT_TALK, page, n, x0, x1, ty, (GXColor){255, 255, 179, (unsigned char)(255 * ca)}, ALIGN_LEFT,
-                  s->toad_chars + (shortp ? 3u : 0u));
+        /* field 185's filters: a Bevel (white / black, blur 5, strength 1: faint) and
+           the black Glow outline (blur 2, strength 10) */
+        draw_text_glow(FONT_TALK, page, n, x0, x1, ty, (GXColor){255, 255, 179, (unsigned char)(255 * ca)}, ALIGN_LEFT,
+                       s->toad_chars + (shortp ? 3u : 0u));
         (void)lh;
         const unsigned char za = (unsigned char)(255 * ca * s->tm_bz / 100);
         char key[12];

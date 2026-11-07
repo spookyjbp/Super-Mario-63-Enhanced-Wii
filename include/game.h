@@ -104,7 +104,7 @@ typedef struct {
        frame (chargeframe, 1..23), _root.DiveRot (the dive clip's _rotation),
        Char's own _rotation (the Hover / Rocket / Turbo tilt, +/-30), and the
        water tests the Turbo's surface run uses (at feet + 5 and at the feet). */
-    unsigned rocket_frame; float dive_rot, char_rotation;
+    unsigned rocket_frame; float dive_rot, char_rotation, tilt_draw;
     bool water_below, water_at_feet, water_running;
     float set_vx, set_vy;    /* MarioHit setXspeed / setYspeed, added at hurt1 frame 4 (px/s) */
     bool fall_sfx;           /* fallingsfx: once per fall */
