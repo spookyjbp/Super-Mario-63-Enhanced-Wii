@@ -86,6 +86,20 @@ typedef struct {
     bool reading_sign;       /* attackFrame "Sign": the reading pose (Main "Sign", 1487) */
     unsigned hurt_kind, hurt_frame; /* ACTION_HURT: "hurt1" (1411) or "hurt3" (1430), 0-based clip frame */
     bool fainting;                  /* CharHP <= 0: the hurt clips play their faint frames (to 107 / 70) */
+    /* Mario (None) Walk.xml `count` (still frames; NaN when the clip starts
+       standing still: undefined++), the child it shows from 92 (Idle: Idle
+       Animation 1050, Idle2: Tired Animation 1067 at CharHP <= 3; 0 none) and
+       that child's 0-based frame and loop count. */
+    float walk_count; bool walk_count_nan;
+    unsigned idle_kind, idle_frame, tired_count;
+    bool low_hp;                    /* CharHP <= 3 (set by the course session) */
+    /* attackFrame "Sleep" (1450): 0-based frame (stop() at 10 until a key), snore count. */
+    bool sleeping, wake_keys; unsigned sleep_frame, snore;
+    /* Enemy Jump Animation 1445 while ejump: 1-based frame, landtime, midjump done. */
+    unsigned ejump_frame, ejump_landtime; bool ejump_checking;
+    /* attackFrame "Drown" (1692): 0-based frame (88 calls LifeLost()). */
+    bool drowning; unsigned drown_frame;
+    bool splashed;                  /* a Med-Splash was attached at Mario (the session shows it) */
     float set_vx, set_vy;    /* MarioHit setXspeed / setYspeed, added at hurt1 frame 4 (px/s) */
     bool fall_sfx;           /* fallingsfx: once per fall */
     TileType material;

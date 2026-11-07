@@ -91,11 +91,35 @@ SPEC = [
     *[(f'MARIO_FAINT1_{k}', 1411, list(range(9, 107)), 1, (2.0, -17.0, 1, 1), ()) for k in range(4)],
     *[(f'MARIO_FAINT3_{k}', 1430, list(range(23, 70)), 1, (0.35, -2.65, 1, 1), ()) for k in range(4)],
     ('MARIO_DEATH', 1702, None, 1, (0, 0, 1, 1), ()),
+    # Mario Main 'EJump' (Enemy Jump Animation 1445, held on a stomped Goomba) and
+    # 'Drown' (1692, to its frame 88 LifeLost()), per FLUDD state like the faint;
+    # Mario (None) Walk's 'Idle' (Idle Animation 1050, after 92 still frames) and
+    # 'Idle2' (Tired Animation 1067, at CharHP <= 3), and Main 'Sleep' (1450, which
+    # both end in): only without FLUDD (the FLUDD walk clips have no idle). Placed
+    # as in Mario Main (Walk 1068 at (0.35, -12.65)) plus Char's -3 px.
+    *[(f'MARIO_EJUMP_{k}', 1445, None, 1, (1.35, -14.45, 1, 1), ()) for k in range(4)],
+    *[(f'MARIO_DROWN_{k}', 1692, list(range(0, 88)), 1, (0.35, -3.0, 1, 1), ()) for k in range(4)],
+    ('MARIO_IDLE', 1050, None, 1, (2.35, -17.7, 1, 1), ()),
+    ('MARIO_TIRED', 1067, None, 1, (2.35, -17.8, 1, 1), ()),
+    ('MARIO_SLEEP', 1450, None, 1, (0.0, -14.2, 1, 1), ()),
+    # Drowning: the Stats clip's water meter (113 in 114, frame = WaterHP + 1) and
+    # the WaterBubble (2589) CharCode attaches in FrontGFX; the splash on falling
+    # into water (Med-Splash 2609, removed on its frame 10) and the Turbo's
+    # water-running splashes (Run-Splash1 2579 / 2 2587).
+    ('HUD_WATER_PIE', 113, None, 1, (0, 0, 1, 1), ()),
+    ('WATER_BUBBLE', 2589, list(range(0, 39)), 1, (0, 0, 1, 1), ()),
+    ('MED_SPLASH', 2609, list(range(0, 9)), 1, (0, 0, 1, 1), ()),
+    ('RUN_SPLASH1', 2579, list(range(0, 17)), 1, (0, 0, 1, 1), ()),
+    ('RUN_SPLASH2', 2587, list(range(0, 7)), 1, (0, 0, 1, 1), ()),
     ('HUD_TALK_BOX', 186, [0], 1, (0, 0, 1, 1), (2, 4)),       # 'tm' Toad message cloud (text drawn by the port)
     ('HUD_TALK_Z', 184, None, 1, (143.45, 1, 1.5, 1.5), ()),   # its 'bz' Z prompt
     # Shine Sprite 977/976: only on 8-E1-2-2 frames reached once Star[39] is set,
     # so a new save never shows it in the tutorial; not exported.
 ]
+
+
+# Clips rendered once per FLUDD state (their Fluddpow sprites set per variant).
+VARIANT_SPRITES = [1411, 1430, 1445, 1692]
 
 
 def child_matrix(sprites, parent, child):
@@ -219,13 +243,13 @@ def export(source, jar, out_dir):
                               str(work / 'svg'), str(swf_path)], check=True, stdout=log, stderr=log)
     # The faint clips per FLUDD state (export_movement_clips' Fluddpow choices).
     import export_movement_clips as M
-    choice = M.fludd_frames(sprites, raw, start, [1411, 1430])
+    choice = M.fludd_frames(sprites, raw, start, VARIANT_SPRITES)
     for k, v in enumerate(M.VARIANTS):
         vswf = work / f'objects-fludd{k}.swf'
         vswf.write_bytes(M.patched_swf(swf_path.read_bytes(), choice, v))
         with (work / 'export.log').open('a') as log:
             subprocess.run(cmd + swf_bitmap_fix.FFDEC_RENDER + ['-zoom', str(ZOOM), '-onerror', 'abort', '-selectid',
-                                  '1411,1430', '-export', 'sprite', str(work / f'png-fludd{k}'), str(vswf)],
+                                  ','.join(map(str, VARIANT_SPRITES)), '-export', 'sprite', str(work / f'png-fludd{k}'), str(vswf)],
                            check=True, stdout=log, stderr=log)
     clips, report = [], []
     for cid, (name, ident, frames, step, place, depths) in enumerate(SPEC):
@@ -247,7 +271,7 @@ def export(source, jar, out_dir):
         picks = picks[::step]
         out, repaired_px = [], 0
         for k in picks:
-            fl = re.match(r'MARIO_FAINT\d_(\d)$', name)
+            fl = re.match(r'MARIO_(?:FAINT\d|EJUMP|DROWN)_(\d)$', name)
             png = C.sprite_dir(work / (f'png-fludd{fl.group(1)}' if fl else 'png'), ident) / f'{k + 1}.png'
             # FFDec cracks (e.g. the transparent column inside the sign board): art_repair.py
             fixed, changed = art_repair.repair(np.asarray(Image.open(png).convert('RGBA')))

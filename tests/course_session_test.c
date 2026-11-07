@@ -216,17 +216,33 @@ static void test_hud_power_meter(void)
     HudState h;
     hud_init(&h, 8);
     assert(hud_meter_offset(&h) == 0 && hud_pie_frame(&h) == 8);
-    for (int i = 0; i < 161; ++i) hud_step(&h, 8);
+    for (int i = 0; i < 161; ++i) hud_step(&h, 8, 8);
     assert(hud_meter_offset(&h) == 0);           /* 160 frames at full health... */
-    for (int i = 0; i < 15; ++i) hud_step(&h, 8);
+    for (int i = 0; i < 15; ++i) hud_step(&h, 8, 8);
     assert(hud_meter_offset(&h) == -50);         /* ...then it slides away (frame 15) */
-    hud_step(&h, 7);                             /* hurt: slides back (frames 16-20) */
-    for (int i = 0; i < 6; ++i) hud_step(&h, 7);
+    hud_step(&h, 7, 8);                             /* hurt: slides back (frames 16-20) */
+    for (int i = 0; i < 6; ++i) hud_step(&h, 7, 8);
     assert(h.meter == 1 && hud_meter_offset(&h) == 0);
-    for (int i = 0; i < 4; ++i) hud_step(&h, 7);
+    for (int i = 0; i < 4; ++i) hud_step(&h, 7, 8);
     assert(hud_pie_frame(&h) == 7);              /* pie eases 0.3 a frame to CharHP */
-    hud_step(&h, 8);                             /* healed while shown: stays */
+    hud_step(&h, 8, 8);                             /* healed while shown: stays */
     assert(h.meter == 1 && h.count == 0);
+    /* Under water (WaterHP 7) with full HP: the water pie joins (frames 56-65,
+       "both"), the HP pie then leaves ("hpaway" to 45: water only); back at 8
+       the water pie leaves (46-55) and the HP meter is hidden at 15. */
+    float x, y;
+    hud_init(&h, 8);
+    for (int i = 0; i < 20; ++i) hud_step(&h, 8, 7);
+    assert(h.meter == 45 && hud_water_place(&h, &x, &y) && x == 0 && y == 0 && !hud_hp_place(&h, &x, &y));
+    for (int i = 0; i < 40; ++i) hud_step(&h, 8, 3);
+    assert(hud_water_frame(&h) == 3);
+    for (int i = 0; i < 12; ++i) hud_step(&h, 8, 8);
+    assert(h.meter == 15 && !hud_water_place(&h, &x, &y) && hud_meter_offset(&h) == -50);
+    /* hurt with the water meter shown: both, side by side */
+    hud_init(&h, 8);
+    for (int i = 0; i < 20; ++i) hud_step(&h, 8, 6);
+    for (int i = 0; i < 12; ++i) hud_step(&h, 5, 6);
+    assert(h.meter == 65 && hud_hp_place(&h, &x, &y) && x == 30 && hud_water_place(&h, &x, &y) && x == -30);
 }
 /* Phase 2 item 9: zoom by stick or Wii Remote +/- (smooth, limited). */
 static void test_zoom_controls(void)
@@ -392,6 +408,70 @@ static void test_rocket_once_per_jump(void)
     assert(p->grounded && p->power == 100);
 }
 
+static void test_idle_and_sleep(void)
+{
+    /* Mario (None) Walk.xml: standing still from the clip's start (count NaN)
+       shows Idle (Idle Animation, 978 frames: "Lets go" at 385 ... "Yawn" at
+       908), which ends in Sleep; Sleep stops on frame 11 snoring until a key,
+       then plays to 31. At CharHP <= 3: Idle2 (Tired Animation, 37 frames, 12
+       loops of 4..37). With FLUDD: no idle. */
+    Player *p = tutorial_mario(300);
+    p->has_fludd = false;
+    ticks((GameInput){.horizontal = 1}, 20);
+    ticks((GameInput){0}, 40);
+    assert(p->grounded && p->idle_kind == 0);                  /* moving: count from 0 */
+    ticks((GameInput){0}, 60 * 3);
+    assert(p->idle_kind == 1);                                 /* 92 still frames */
+    while (!p->sleeping) ticks((GameInput){0}, 1);
+    assert(p->idle_kind == 0 && p->sleep_frame == 0);
+    ticks((GameInput){0}, 60 * 4);
+    assert(p->sleeping && p->sleep_frame == 10);               /* snoring */
+    const float x = p->x;
+    ticks((GameInput){.horizontal = 1}, 2);                    /* wakes; no walking while getting up */
+    assert(p->sleeping && p->sleep_frame > 10 && fabsf(p->x - x) < 1);
+    ticks((GameInput){0}, 60);
+    assert(!p->sleeping);
+    /* jump and land standing still: the new walk clip goes to Idle at once */
+    ticks((GameInput){.jump_pressed = true, .jump_held = true}, 2);
+    ticks((GameInput){0}, 90);
+    assert(p->grounded && p->idle_kind == 1);
+    /* low HP: Tired */
+    s.progress.hp = 3;
+    ticks((GameInput){0}, 4);
+    assert(p->idle_kind == 2);
+    /* with FLUDD: never */
+    p = tutorial_mario(300);
+    p->has_fludd = true;
+    ticks((GameInput){0}, 60 * 5);
+    assert(p->idle_kind == 0 && !p->sleeping);
+}
+static void test_drowning(void)
+{
+    /* Head under water: every 81st frame a bubble, "sound - Drain", WaterHP - 1;
+       at 0 attackFrame "Drown" (Mario held still), frame 76 Blackout, 88
+       LifeLost, then the revive with WaterHP 8. Out of the water it heals 1
+       every 9th frame; the HUD shows the water pie. */
+    Player *p = tutorial_mario(300);
+    course_place_player(&s.runtime, p, 560, 280);   /* 8-E1-1's middle pool (floor at ~316) */
+    s.progress.water_hp = 2;
+    bool bubble = false, drown = false, black = false;
+    for (int i = 0; i < 60 * 20 && !s.lifelost; ++i) {
+        ticks((GameInput){0}, 1);
+        for (unsigned k = 0; k < s.fx_count; ++k) bubble |= s.fx[k].kind == COURSE_FX_BUBBLE;
+        if (p->drowning) { drown = true; assert(s.progress.water_hp == 0 && p->vx == 0 && p->vy == 0); }
+        if (s.blackout) { black = true; assert(p->drown_frame >= 75); }
+    }
+    assert(bubble && drown && black && s.lifelost);
+    float hx, hy;
+    assert(hud_water_place(&s.hud, &hx, &hy));
+    for (int i = 0; i < 60 * 6 && !s.starin; ++i) ticks((GameInput){0}, 1);
+    assert(s.starin && !p->drowning && s.progress.water_hp == 8);
+    /* healing on land */
+    p = tutorial_mario(300);
+    s.progress.water_hp = 5;
+    ticks((GameInput){0}, 60);   /* 32 frames: 3 heals */
+    assert(s.progress.water_hp == 8);
+}
 static void test_faint(void)
 {
     /* hurt1 at 0 HP: frame 4 adds the faint speeds and goes to 'falling' (10),
@@ -538,6 +618,6 @@ int main(void)
     test_sign_camera_steady(); test_triple_jump_chain(); test_crouch_backflip_on_slope(); test_dive_flip_chain();
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
     test_message_box_frames(); test_rocket_once_per_jump(); test_faint(); test_wipes_and_background_water();
-    test_camera_starts_inside_walls(); test_level_water_splash();
-    puts("18 course session (level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_camera_starts_inside_walls(); test_level_water_splash(); test_idle_and_sleep(); test_drowning();
+    puts("20 course session (idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }

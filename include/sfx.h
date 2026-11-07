@@ -15,6 +15,8 @@ typedef enum {
     SFX_BOXBREAK, SFX_NOZZLE_BOX, SFX_FLUDD_NOZZLE, SFX_FLUDD_LOOP, SFX_FLUDD_SWITCH,
     SFX_ROCKET_CHARGE, SFX_ROCKET_BLAST,  /* port-made: the original Rocket is silent */
     SFX_MAMAMIA,                          /* "Mario - Mamamiamoan": the faint */
+    SFX_DROWN, SFX_DRAIN, SFX_GOOMBA_DIE,  /* "mario-drown", "sound - Drain" (WaterHP), "Goomba-Die" */
+    SFX_LETSGO, SFX_MMMM, SFX_HMM, SFX_IMTIRED, SFX_YAWN, SFX_SNORE1, SFX_SNORE2,   /* Idle / Sleep */
     MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT,
     SFX_COUNT
 } SfxId;

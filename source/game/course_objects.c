@@ -235,6 +235,7 @@ void course_mario_hit(Player *p, CourseProgress *g, int hp, int blink, float vy,
     if (p->blink > 0 || g->hp < 1) return; /* _root.MarioHit guard */
     p->blink = blink; g->hp -= hp; g->hpcoins = 0;
     p->action = ACTION_NONE; p->spin_time = 0; p->pounding = false; p->ejump = false; /* attack = false */
+    p->sleeping = false; p->idle_kind = 0;
     if (hp > 0) {
         /* a > 0: speed halves and the attack becomes a hurt clip (attack = true). */
         p->vx *= 0.5f; p->vy *= 0.5f;
@@ -569,7 +570,7 @@ static void step_goomba(CourseObjects *o, LiveObject *l, CourseRuntime *c, Playe
             const float fy = course_cy(c, p->y + player_height(p));
             if (fabsf(top - fy) < 15) p->y += (top - fy) / 5 * COURSE_SCALE;
             if (fabsf(l->x - fx) < 15) p->x += (l->x - fx) / (fabsf(p->vx / 44 / 2) + 5) * COURSE_SCALE;
-            if (f == 4 || f == 6 || f == 8) if (jump_key && l->p3 != 1) l->p3 = 2; /* landtime 2 */
+            if (f == 4 || f == 6 || f == 8) if (jump_key && l->p3 != 1) { l->p3 = 2; if (l->bounce) p->ejump_landtime = 2; } /* landtime 2 */
             if (f == 8) p->y -= 5 * COURSE_SCALE;
         }
         if (l->bounce && f == 9) {
@@ -617,6 +618,7 @@ static void step_goomba(CourseObjects *o, LiveObject *l, CourseRuntime *c, Playe
         if (!held) { p->ejump = true; p->action = ACTION_NONE; p->spin_time = 0; }
         else p->vy = 0;
         l->p3 = jump_key ? 1 : 0; /* landtime 1 when Up is held on contact */
+        if (!held) { p->ejump_landtime = l->p3; p->ejump_frame = 0; }   /* Enemy Jump Animation from frame 1 */
     }
     float b;
     if (course_area_water(c->area, l->x, l->y, &b)) { l->hurt = true; l->tumblerot = 0; }
@@ -1344,8 +1346,9 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
         if (overlap(box, body) || inside(fx, fy - 15, box)) {
             l->collected = true; l->frame = 0;
             sfx_play(SFX_COIN, 100, 0); /* GoldCoin frame 4: "CoinJingle" */
-            if (l->kind == LIVE_COIN) { g->coins += 1; g->coincount += 1; g->hpcoins += 1; }
-            else { g->coins += 5; g->coincount += 5; g->hpcoins += 15; }
+            /* GoldCoin: WaterHP + 1 (to 8); BlueCoin: WaterHP = 8 */
+            if (l->kind == LIVE_COIN) { g->coins += 1; g->coincount += 1; g->hpcoins += 1; g->water_hp = g->water_hp < 8 ? g->water_hp + 1 : 8; }
+            else { g->coins += 5; g->coincount += 5; g->hpcoins += 15; g->water_hp = 8; }
             heal(g);
             if (!l->bounce && taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
         }

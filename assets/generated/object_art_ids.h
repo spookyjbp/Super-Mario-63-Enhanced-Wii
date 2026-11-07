@@ -2,7 +2,7 @@
 #ifndef SM63_OBJECT_ART_IDS_H
 #define SM63_OBJECT_ART_IDS_H
 #define OBJECT_ART_ZOOM 1.6f
-#define OBJECT_ART_PACKS 3
+#define OBJECT_ART_PACKS 4
 enum {
     OBJ_COIN_SPIN = 0, /* pack 0 */
     OBJ_COIN_COLLECT = 1, /* pack 0 */
@@ -62,16 +62,32 @@ enum {
     OBJ_MARIO_FAINT3_2 = 55, /* pack 2 */
     OBJ_MARIO_FAINT3_3 = 56, /* pack 2 */
     OBJ_MARIO_DEATH = 57, /* pack 2 */
-    OBJ_HUD_TALK_BOX = 58, /* pack 2 */
-    OBJ_HUD_TALK_Z = 59, /* pack 2 */
-    OBJ_HUD_DIGITS = 60, /* pack 2 */
-    OBJ_CLIP_COUNT = 61
+    OBJ_MARIO_EJUMP_0 = 58, /* pack 2 */
+    OBJ_MARIO_EJUMP_1 = 59, /* pack 2 */
+    OBJ_MARIO_EJUMP_2 = 60, /* pack 2 */
+    OBJ_MARIO_EJUMP_3 = 61, /* pack 2 */
+    OBJ_MARIO_DROWN_0 = 62, /* pack 2 */
+    OBJ_MARIO_DROWN_1 = 63, /* pack 2 */
+    OBJ_MARIO_DROWN_2 = 64, /* pack 2 */
+    OBJ_MARIO_DROWN_3 = 65, /* pack 3 */
+    OBJ_MARIO_IDLE = 66, /* pack 3 */
+    OBJ_MARIO_TIRED = 67, /* pack 3 */
+    OBJ_MARIO_SLEEP = 68, /* pack 3 */
+    OBJ_HUD_WATER_PIE = 69, /* pack 3 */
+    OBJ_WATER_BUBBLE = 70, /* pack 3 */
+    OBJ_MED_SPLASH = 71, /* pack 3 */
+    OBJ_RUN_SPLASH1 = 72, /* pack 3 */
+    OBJ_RUN_SPLASH2 = 73, /* pack 3 */
+    OBJ_HUD_TALK_BOX = 74, /* pack 3 */
+    OBJ_HUD_TALK_Z = 75, /* pack 3 */
+    OBJ_HUD_DIGITS = 76, /* pack 3 */
+    OBJ_CLIP_COUNT = 77
 };
 /* Toad head (2498) registration per TOAD_IDLE / TOAD_WALK frame, course px from
    the Toad Main Clip origin (the body placement plus the head matrix in it). */
 static const float toad_head_idle[][2] = {{-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}};
 static const float toad_head_walk[][2] = {{0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}};
 static const unsigned char object_art_pack_of[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
 };
 #endif

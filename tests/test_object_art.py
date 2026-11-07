@@ -52,6 +52,26 @@ class ObjectArtTests(unittest.TestCase):
             heights = [f[3] / zoom for f in frames(pack, clip)]
             self.assertLess(max(heights), 16, name)   # body only (with a head: ~30 course px)
 
+    def test_mario_extra_clips(self):
+        """Clips beyond the player atlas: Enemy Jump (21 frames), Drown (to its
+        frame 88 LifeLost: 88), per FLUDD state; Idle (978), Tired (37), Sleep
+        (31); the water pie (9), WaterBubble (39 shown), Med-Splash (9 shown).
+        Mario stands on his registration point (feet at y 0 within a few px)."""
+        table, zoom = ids()
+        want = {'MARIO_IDLE': 978, 'MARIO_TIRED': 37, 'MARIO_SLEEP': 31, 'HUD_WATER_PIE': 9, 'WATER_BUBBLE': 39,
+                'MED_SPLASH': 9}
+        for k in range(4):
+            want[f'MARIO_EJUMP_{k}'] = 21
+            want[f'MARIO_DROWN_{k}'] = 88
+        for name, count in want.items():
+            clip, pack = table[name]
+            self.assertEqual(len(frames(pack, clip)), count, name)
+        for name in ('MARIO_IDLE', 'MARIO_TIRED'):
+            clip, pack = table[name]
+            x, y, w, h, ox, oy, duration, _ = frames(pack, clip)[0]
+            self.assertAlmostEqual(oy / 20 + h / zoom, 0, delta=4, msg=name)   # feet on the floor
+            self.assertAlmostEqual(ox / 20 + w / zoom / 2, 0, delta=6, msg=name)
+
     def test_sign_post_ends_at_origin(self):
         table, zoom = ids()
         clip, pack = table['SIGN']

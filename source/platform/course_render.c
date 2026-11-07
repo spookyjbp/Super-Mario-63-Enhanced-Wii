@@ -24,6 +24,9 @@
 #if OBJECT_ART_PACKS > 2
 #include "objects_8e1_2_bin.h"
 #endif
+#if OBJECT_ART_PACKS > 3
+#include "objects_8e1_3_bin.h"
+#endif
 #include <gccore.h>
 #include <math.h>
 #include <stdio.h>
@@ -31,7 +34,7 @@
 
 #define MEM2_RESERVE (26u * 1024 * 1024)
 #define PICTURE_BYTES (1024u * 1024)
-#define OBJECT_BYTES (13u * 512 * 1024)   /* three packs of up to 2 MiB */
+#define OBJECT_BYTES (17u * 512 * 1024)   /* four packs of up to 2 MiB */
 #define PROMPT_BYTES (128u * 1024)
 #define ANIM_BYTES (320u * 1024)   /* one frame of an animated picture sign or of the faint's screens */
 static CourseArtPack art;
@@ -48,7 +51,7 @@ static bool objects_ready;
 static GXTexObj water_tex, font_tex, prompt_tex;
 static const CourseArtLayer *loaded_prompt;
 
-/* Decode the three compressed object packs (art pack v3) into MEM2 once. */
+/* Decode the compressed object packs (art pack v3) into MEM2 once. */
 static bool load_objects(unsigned char *dst, size_t cap)
 {
     const unsigned char *blobs[OBJECT_ART_PACKS] = {objects_8e1_0_bin,
@@ -58,6 +61,9 @@ static bool load_objects(unsigned char *dst, size_t cap)
 #if OBJECT_ART_PACKS > 2
         objects_8e1_2_bin,
 #endif
+#if OBJECT_ART_PACKS > 3
+        objects_8e1_3_bin,
+#endif
     };
     const unsigned sizes[OBJECT_ART_PACKS] = {objects_8e1_0_bin_size,
 #if OBJECT_ART_PACKS > 1
@@ -66,8 +72,11 @@ static bool load_objects(unsigned char *dst, size_t cap)
 #if OBJECT_ART_PACKS > 2
         objects_8e1_2_bin_size,
 #endif
-    };
 #if OBJECT_ART_PACKS > 3
+        objects_8e1_3_bin_size,
+#endif
+    };
+#if OBJECT_ART_PACKS > 4
 #error "add the extra object art packs here"
 #endif
     size_t used = 0;
@@ -165,8 +174,13 @@ static void draw_hud(const CourseSession *s, float width)
     hud_clip(OBJ_COIN_SPIN, s->hud.ticks % 16, 342.6f, 10.3f, width, 1);
     hud_clip(OBJ_HUD_DIGITS, 10, 349.5f, 2.9f, width, 1);
     hud_number(s->progress.coins, 364.1f, 2.9f, width, 1, false);
-    /* POWER meter (114 at (225, 25)) with the CharHP pie (111). */
-    hud_clip(OBJ_HUD_PIE, hud_pie_frame(&s->hud), 225, 25 + hud_meter_offset(&s->hud), width, 1);
+    /* POWER meter (114 at (225, 25)): the WaterHP pie (113, depth 1) under the
+       CharHP pie (111, depth 5), each where 114's frame places it. */
+    {
+        float mx, my;
+        if (hud_water_place(&s->hud, &mx, &my)) hud_clip(OBJ_HUD_WATER_PIE, hud_water_frame(&s->hud), 225 + mx, 25 + my, width, 1);
+        if (hud_hp_place(&s->hud, &mx, &my)) hud_clip(OBJ_HUD_PIE, hud_pie_frame(&s->hud), 225 + mx, 25 + my, width, 1);
+    }
     /* FLUDD tank (160 at (431.2, 266.9)): level 'cl', power gauge, percentage. */
     const Player *p = &s->game.player;
     if (p->has_fludd) {
@@ -452,13 +466,29 @@ void course_render(const CourseSession *s, float t)
     const bool faint3 = p->fainting && p->action == ACTION_HURT && p->hurt_kind == 3 && p->hurt_frame >= 23;
     /* CharCode blink: charClip.frame._alpha 20 when blink is a multiple of 3, else 70. */
     const unsigned char alpha = p->blink > 0 ? (p->blink % 3 == 0 ? 51 : 179) : 255;
-    if (s->death) {
-    } else if (faint1 || faint3) {
+    const unsigned v = p->has_fludd ? 1u + (unsigned)p->nozzle : 0u;   /* none, Hover, Rocket, Turbo */
+    const unsigned vi = v < 4 ? v : 0;
+    /* Mario clips from the object packs (the player atlas is full): the faint,
+       Drown, EJump, and without FLUDD the idle ones (Idle, Idle2 / Tired, Sleep). */
+    int clip = -1; unsigned frame = 0;
+    if (faint1 || faint3) {
         static const int faint_clips[2][4] = {{OBJ_MARIO_FAINT1_0, OBJ_MARIO_FAINT1_1, OBJ_MARIO_FAINT1_2, OBJ_MARIO_FAINT1_3},
                                               {OBJ_MARIO_FAINT3_0, OBJ_MARIO_FAINT3_1, OBJ_MARIO_FAINT3_2, OBJ_MARIO_FAINT3_3}};
-        const unsigned v = p->has_fludd ? 1u + (unsigned)p->nozzle : 0u;   /* none, Hover, Rocket, Turbo */
-        const ObjectDraw d = {.clip = faint_clips[faint1 ? 0 : 1][v < 4 ? v : 0],
-                              .frame = p->hurt_frame - (faint1 ? 9u : 23u), .alpha = alpha * 100.0f / 255,
+        clip = faint_clips[faint1 ? 0 : 1][vi]; frame = p->hurt_frame - (faint1 ? 9u : 23u);
+    } else if (p->drowning) {
+        static const int drown[4] = {OBJ_MARIO_DROWN_0, OBJ_MARIO_DROWN_1, OBJ_MARIO_DROWN_2, OBJ_MARIO_DROWN_3};
+        clip = drown[vi]; frame = p->drown_frame;
+    } else if (p->ejump && p->ejump_frame > 0 && p->action == ACTION_NONE) {
+        static const int ejump[4] = {OBJ_MARIO_EJUMP_0, OBJ_MARIO_EJUMP_1, OBJ_MARIO_EJUMP_2, OBJ_MARIO_EJUMP_3};
+        clip = ejump[vi]; frame = p->ejump_frame - 1;
+    } else if (p->sleeping && p->action == ACTION_NONE) {
+        clip = OBJ_MARIO_SLEEP; frame = p->sleep_frame;
+    } else if (p->idle_kind && !p->has_fludd && p->action == ACTION_NONE) {
+        clip = p->idle_kind == 1 ? OBJ_MARIO_IDLE : OBJ_MARIO_TIRED; frame = p->idle_frame;
+    }
+    if (s->death) {
+    } else if (clip >= 0) {
+        const ObjectDraw d = {.clip = clip, .frame = frame, .alpha = alpha * 100.0f / 255,
                               .scale = 1, .flip_x = !p->facing_left};   /* the art faces left (_xscale > 0) */
         draw_object_frame(&d, px + PLAYER_WIDTH / 2, py + player_height(p));
     } else {
@@ -469,6 +499,11 @@ void course_render(const CourseSession *s, float t)
     draw_level_water(s, ox, oy);
     draw_layer(ART_LAYER_FRONT, ox, oy, 1);
     draw_objects(s, ox, oy, true);
+    for (unsigned i = 0; i < s->fx_count; ++i) {   /* FrontGFX effects: WaterBubble, Med-Splash */
+        const ObjectDraw d = {.clip = s->fx[i].kind == COURSE_FX_BUBBLE ? OBJ_WATER_BUBBLE : OBJ_MED_SPLASH,
+                              .frame = s->fx[i].frame, .alpha = 100, .scale = 1};
+        draw_object_frame(&d, course_wx(c, s->fx[i].x) - camx, course_wy(c, s->fx[i].y) - camy);
+    }
     if (s->death) {   /* MarioDeathGFX in FrontGFX, where Mario was */
         const ObjectDraw d = {.clip = OBJ_MARIO_DEATH, .frame = s->death - 1, .alpha = 100, .scale = 1};
         draw_object_frame(&d, s->death_x - camx, s->death_y - camy);

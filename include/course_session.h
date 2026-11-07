@@ -11,6 +11,7 @@
 extern "C" {
 #endif
 typedef enum { SESSION_PLAY, SESSION_OPENING, SESSION_SIGN, SESSION_TALK, SESSION_WARP, SESSION_COMPLETE } SessionState;
+enum { COURSE_FX_BUBBLE, COURSE_FX_SPLASH };   /* CourseSession fx kinds */
 typedef struct {
     const CoursePack *pack;
     CourseRuntime runtime;
@@ -73,6 +74,11 @@ typedef struct {
     /* The level water (Water Code strips, water_places.h): water_places indices,
        their waves, and the water blocks' frame (133-frame loop, from area entry). */
     unsigned water_count, water_index[6], water_frame;
+    /* CharCode underwatercount / abovewatercount (WaterHP), and the effects
+       attached in FrontGFX: WaterBubble (rises 3 px a frame) and Med-Splash. */
+    unsigned under_count, above_count;
+    struct { int kind; float x, y, dy; unsigned frame, frames; } fx[12];   /* kind: COURSE_FX_* ; course px */
+    unsigned fx_count;
     BgWave water_wave[6];
     float death_x, death_y;
 } CourseSession;

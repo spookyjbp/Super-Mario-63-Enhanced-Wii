@@ -70,7 +70,8 @@ typedef struct CourseObjects {
     float cam_x_var, cam_y_var;
 } CourseObjects;
 /* Shared player progress (_root.Coins, CharHP, hpcoincount). */
-typedef struct { unsigned coins, coincount, hpcoins; int hp; } CourseProgress;
+/* WaterHP (0..8): air under water (CharCode), shown by the Stats water meter. */
+typedef struct { unsigned coins, coincount, hpcoins; int hp, water_hp; } CourseProgress;
 /* _root.MarioHit(a, b, c, d, e, f, g): lose a HP, blink b frames, stun e. With
    a > 0 the speed halves and (d, c) replaces it ("hurt1"), or is added when g
    (add) is true; with a == 0, (d, c) is added and the attack ends (a shove). */

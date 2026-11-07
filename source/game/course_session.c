@@ -66,6 +66,7 @@ static void enter_area(CourseSession *s, const CourseArea *a, float cx, float cy
             bg_wave_init(&s->bg_wave[s->bg_water_count], bg_waters[i].points, bg_waters[i].length, 63u + i);
             s->bg_water_index[s->bg_water_count++] = i;
         }
+    s->fx_count = 0;   /* FrontGFX's effects go with the area */
     /* The level water: makeWave when the Water clip is attached */
     s->water_count = 0; s->water_frame = 0;
     for (unsigned i = 0; i < WATER_PLACES && s->water_count < 6; ++i)
@@ -115,6 +116,7 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     s->last_hurt_frame = ~0u;
     s->game.player.has_fludd = false; s->game.player.nozzles = 0; /* StartChar(..., Fluddpow "") */
     s->progress.hp = 8;                 /* _root.CharHP = 8 */
+    s->progress.water_hp = 8;           /* _root.WaterHP = 8 */
     hud_init(&s->hud, s->progress.hp);
     /* StartChar(..., resetmusic = true): _root["8-E1-1MusicIntro"], then "8-E1-1Music". */
     if (course_string_equals(course_pack_area(pack, id)->id, "8-E1-1") || course_string_equals(course_pack_area(pack, id)->id, "8-E1-2-2"))
@@ -312,6 +314,71 @@ void course_session_zoom_step(CourseSession *s, float axis, bool talking, bool s
     }
     s->zoom = (s->zoom2_from + (s->zoom2 - s->zoom2_from) * fminf(1, fmaxf(0, frac))) / 100;
 }
+static void add_fx(CourseSession *s, int kind, float x, float y, float dy, unsigned frames)
+{
+    if (s->fx_count >= sizeof s->fx / sizeof s->fx[0]) return;
+    s->fx[s->fx_count].kind = kind; s->fx[s->fx_count].x = x; s->fx[s->fx_count].y = y;
+    s->fx[s->fx_count].dy = dy; s->fx[s->fx_count].frame = 0; s->fx[s->fx_count].frames = frames;
+    ++s->fx_count;
+}
+/* The FrontGFX effects, one source frame: WaterBubble 2589 rises 3 px a frame
+   and removes itself on frame 40, Med-Splash 2609 on frame 10. */
+static void fx_step(CourseSession *s)
+{
+    unsigned n = 0;
+    for (unsigned i = 0; i < s->fx_count; ++i) {
+        s->fx[i].y += s->fx[i].dy;
+        if (++s->fx[i].frame < s->fx[i].frames) s->fx[n++] = s->fx[i];
+    }
+    s->fx_count = n;
+}
+/* CharCode's air (WaterHP), one source frame: with the feet in the water and
+   the head (tall above) too, every 81st frame a WaterBubble rises from the
+   chest, "sound - Drain" plays and WaterHP drops (at 0: attackFrame "Drown");
+   feet in but head out heals 1 every 9th frame, and so does being out of the
+   water (Char.Water false, which also restarts the count). */
+static void water_hp_step(CourseSession *s)
+{
+    Player *p = &s->game.player;
+    CourseProgress *g = &s->progress;
+    const CourseArea *a = s->runtime.area;
+    const float x = course_cx(&s->runtime, p->x + PLAYER_WIDTH / 2), feet = course_cy(&s->runtime, p->y + player_height(p));
+    const float tall = player_height(p) / COURSE_SCALE;
+    if (course_area_water(a, x, feet, NULL)) {
+        if (course_area_water(a, x, feet - tall, NULL)) {
+            if (++s->under_count > 80) {   /* _root.WaterDrownSpeed */
+                add_fx(s, COURSE_FX_BUBBLE, x, feet - tall * 0.75f, -3, 39);
+                sfx_play(SFX_DRAIN, 100, 0);
+                if (--g->water_hp <= 0 && !p->drowning) {
+                    p->drowning = true; p->drown_frame = 0;
+                    p->action = ACTION_NONE; p->sleeping = false; p->ejump = false; p->pounding = false; p->spin_time = 0;
+                    sfx_play(SFX_DROWN, 100, 0);   /* Mario Drown frame 1: "mario-drown" */
+                }
+                if (g->water_hp < 0) g->water_hp = 0;
+                s->under_count = 0;
+            }
+        } else if (++s->above_count > 8) {   /* _root.WaterHealSpeed */
+            s->above_count = 0;
+            if (g->water_hp < 8) ++g->water_hp;
+        }
+    }
+    if (!p->submerged) {
+        s->under_count = 0;
+        if (++s->above_count > 8) { s->above_count = 0; if (g->water_hp < 8) ++g->water_hp; }
+    }
+}
+/* Mario Drown (1692), one source frame on: 34 bgsong.stop(), 48 "Mario -
+   Mamamiamoan", 76 Blackout(), 88 LifeLost() (1-based clip frames). */
+static void drown_events(CourseSession *s)
+{
+    Player *p = &s->game.player;
+    if (p->drown_frame < 87) ++p->drown_frame;
+    const unsigned f = p->drown_frame + 1;
+    if (f == 34) sfx_music(-1, -1);
+    if (f == 48) sfx_play(SFX_MAMAMIA, 100, 0);
+    if (f == 76 && !s->blackout) s->blackout = 1;
+    if (f == 88 && !s->lifelost) s->lifelost = 1;
+}
 /* The faint's timeline, from the hurt clip Mario is in (0-based frames):
    hurt1 1411 60 bgsong.stop(), 67 "Mario - Mamamiamoan", 95 Blackout(),
    107 LifeLost(); hurt3 1430 24, 30, 58, 70. Otherwise (hurt2 ended, or no
@@ -341,7 +408,9 @@ static void faint_events(CourseSession *s)
 static void revive(CourseSession *s)
 {
     Player *p = &s->game.player;
-    s->progress.hp = 8; s->progress.hpcoins = 0;
+    s->progress.hp = 8; s->progress.hpcoins = 0; s->progress.water_hp = 8;
+    p->drowning = false; p->drown_frame = 0; p->sleeping = false; p->idle_kind = 0;
+    s->under_count = s->above_count = 0; s->fx_count = 0;
     p->fainting = false; p->action = ACTION_NONE; p->hurt_frame = 0; p->blink = 0;
     s->death = s->blackout = 0; s->last_hurt_frame = ~0u;
     enter_area(s, s->runtime.area, course_cx(&s->runtime, s->world.spawn_x + PLAYER_WIDTH / 2),
@@ -465,10 +534,26 @@ void course_session_step(CourseSession *s, GameInput in)
         }
         break;
     case SESSION_PLAY:
-        if (p->stun > 0 || p->ejump) in = (GameInput){.jump_held = in.jump_held}; /* StunTime / EJump: no control */
-        if (p->fainting || s->death) in = (GameInput){0};
+        p->low_hp = s->progress.hp <= 3;
+        /* Sleep: attack = true, no control; Up, Right, Left, Down or Space wake him. */
+        p->wake_keys = in.horizontal != 0 || in.jump_held || in.vertical != 0 || in.crouch_held || in.nozzle_held;
+        if (p->stun > 0 || p->ejump || p->sleeping) in = (GameInput){.jump_held = in.jump_held}; /* StunTime / EJump: no control */
+        if (p->fainting || s->death || p->drowning) in = (GameInput){0};
         if (s->death) { p->vx = p->vy = 0; break; }       /* Faint: Mario is hidden while MarioDeathGFX plays */
+        if (p->drowning) {   /* attackFrame "Drown": xspeed = 0, yspeed 0 in water (-gravity out of it) */
+            const float hx = p->x, hy = p->y;
+            game_step(&s->game, &s->world, in, s->view_width);
+            p->x = hx; p->y = hy; p->vx = p->vy = 0;
+            if (p->source_step) { fx_step(s); drown_events(s); }
+            break;
+        }
         game_step(&s->game, &s->world, in, s->view_width);
+        if (p->source_step) { fx_step(s); water_hp_step(s); }
+        if (p->splashed) {   /* Med-Splash at Mario's feet */
+            p->splashed = false;
+            add_fx(s, COURSE_FX_SPLASH, course_cx(&s->runtime, p->x + PLAYER_WIDTH / 2),
+                   course_cy(&s->runtime, p->y + player_height(p)), 0, 9);
+        }
         if (p->source_step && s->tm_alpha > 0.01f) tm_step(s, false); /* the cloud fades out after the talk */
         if (s->progress.hp <= 0 && !p->fainting && p->action != ACTION_HURT && p->action != ACTION_BONK) p->fainting = true;
         if (p->fainting) { faint_events(s); break; }
@@ -480,7 +565,7 @@ void course_session_step(CourseSession *s, GameInput in)
     if (s->state != SESSION_WARP)
         course_objects_step(&s->objects, &s->runtime, &s->game.player, &s->progress, pickups_for(s), false,
                             s->game.camera.cx, s->game.camera.cy, in.jump_held);
-    if (s->game.player.source_step) hud_step(&s->hud, s->progress.hp);
+    if (s->game.player.source_step) hud_step(&s->hud, s->progress.hp, s->progress.water_hp);
     if (s->camera_override && s->state != SESSION_WARP) {
         /* Camcenter = another clip: the only camera move this frame (following
            Mario as well made the two moves and the CamEdge push fight: shake). */
