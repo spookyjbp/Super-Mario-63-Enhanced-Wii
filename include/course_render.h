@@ -4,6 +4,9 @@
 /* Wii renderer for original course areas (artwork from course_8e1_art.bin). */
 /* The course's art pack (a data file, data_files.h; it must stay loaded). */
 bool course_render_init(const uint8_t *art_data, size_t art_size);
+/* Another course art data file (or the same one loaded again) in place of
+   the one given before: its areas are uploaded when next shown. */
+bool course_render_set_art(const uint8_t *art_data, size_t art_size);
 /* Only the text (course_render_text), for a message when the data files are missing. */
 bool course_render_init_text(void);
 void course_render(const CourseSession *session, float interpolation);

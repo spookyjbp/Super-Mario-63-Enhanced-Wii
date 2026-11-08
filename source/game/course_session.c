@@ -207,8 +207,8 @@ static void check_exits(CourseSession *s, GameInput in)
             const float sx = o->a;
             const float box[4] = {o->x + door_box[0] * sx, o->y + door_box[1], o->x + door_box[2] * sx, o->y + door_box[3]};
             if (inside(box, fx, fy) && in.crouch_held && s->game.player.grounded) {
-                /* doorplace "C-Opening" with Star[39] false: Intro Movie 2, then the
-                   Castle. Neither exists in this port yet: stop at a boundary. */
+                /* doorplace "C-Opening" with Star[39] false: bgsong.stop() and
+                   gotoAndStop("Intro2"): main.c plays Intro Movie 2 (cinema.h) */
                 s->state = SESSION_COMPLETE;
                 s->game.player.vx = s->game.player.vy = 0;
                 /* Intro Movie 2 (1503) ends with _root.Star[39] = true; SaveFile() */

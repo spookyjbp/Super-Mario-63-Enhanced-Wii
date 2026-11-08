@@ -19,8 +19,9 @@ SOUND := $(ROOT)/build/host/sound_tests
 TEXT := $(ROOT)/build/host/text_layout_tests
 ACH := $(ROOT)/build/host/achievement_tests
 FRONT := $(ROOT)/build/host/front_end_tests
+CINEMA := $(ROOT)/build/host/cinema_tests
 .PHONY: test clean
-test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND) $(TEXT) $(ACH) $(FRONT)
+test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND) $(TEXT) $(ACH) $(FRONT) $(CINEMA)
 	$(OUTPUT)
 	$(ORIENTATION)
 	$(RENDER)
@@ -37,6 +38,7 @@ test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) 
 	$(TEXT)
 	$(ACH)
 	$(FRONT)
+	cd $(ROOT)/build/host && ./cinema_tests
 $(OUTPUT): $(SOURCES) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated $(SOURCES) -lm -o $@
@@ -87,3 +89,6 @@ $(FRONT): front_end_test.c $(ROOT)/source/game/front_end.c $(ROOT)/source/game/s
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated front_end_test.c $(ROOT)/source/game/front_end.c $(ROOT)/source/game/sfx.c -lm -o $@
 clean:
 	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND) $(TEXT) $(ACH)
+$(CINEMA): cinema_test.c $(ROOT)/source/game/cinema.c $(ROOT)/source/render/timeline.c $(ROOT)/source/assets/lz4_block.c $(ROOT)/include/cinema.h $(ROOT)/include/timeline.h
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated cinema_test.c $(ROOT)/source/game/cinema.c $(ROOT)/source/render/timeline.c $(ROOT)/source/assets/lz4_block.c -lm -o $@

@@ -79,3 +79,88 @@ void timeline_vertex(const TlDraw *d, unsigned i, float *x, float *y, float *u, 
     const uint8_t *p = d->verts + 16 * i;
     *x = bef(p); *y = bef(p + 4); *u = bef(p + 8); *v = bef(p + 12);
 }
+
+/* ---- SM63TLP3 ---- */
+bool tls_parse(const uint8_t *data, size_t size, TimelineStream *s)
+{
+    memset(s, 0, sizeof *s);
+    if (size < 40 || memcmp(data, "SM63TLP3", 8)) return false;
+    s->pages = be32(data + 8); s->bakes = be32(data + 12); s->clips = be32(data + 16); s->frames = be32(data + 20);
+    s->chunk_frames = be32(data + 24); s->chunks = be32(data + 28); s->intervals = be32(data + 32);
+    s->max_chunk = be32(data + 36);
+    if (s->pages > TLS_MAX_PAGES || s->clips > TL_MAX_CLIPS || s->chunks > TLS_MAX_CHUNKS || !s->chunk_frames ||
+        s->chunks != (s->frames + s->chunk_frames - 1) / s->chunk_frames)
+        return false;
+    size_t q = 40;
+    for (unsigned i = 0; i < s->pages; ++i) {
+        if (q + 16 > size) return false;
+        TlsPage *pg = &s->page[i];
+        pg->w = (unsigned short)be16(data + q); pg->h = (unsigned short)be16(data + q + 2);
+        pg->packed = be32(data + q + 4); pg->format = data[q + 8];
+        pg->intervals = be16(data + q + 10); pg->first_interval = be32(data + q + 12);
+        pg->data = data + q + 16;
+        if (pg->w > 512 || pg->h > 512 || pg->first_interval + pg->intervals > s->intervals) return false;
+        q += 16 + pg->packed;
+        q += (4 - q % 4) % 4;
+        if (q > size) return false;
+    }
+    s->interval_data = data + q; q += (size_t)s->intervals * 8;
+    s->bake_data = data + q; q += (size_t)s->bakes * 24;
+    for (unsigned i = 0; i < s->clips; ++i) {
+        if (q + 24 > size) return false;
+        memcpy(s->clip[i].name, data + q, 16); s->clip[i].name[16] = 0;
+        s->clip[i].first = be32(data + q + 16); s->clip[i].count = be32(data + q + 20);
+        if (s->clip[i].first + s->clip[i].count > s->frames) return false;
+        q += 24;
+    }
+    s->frame_data = data + q; q += (size_t)s->frames * 8;
+    for (unsigned c = 0; c < s->chunks; ++c) {
+        if (q + 8 > size) return false;
+        s->chunk_bytes[c] = be32(data + q); s->chunk_packed[c] = be32(data + q + 4);
+        s->chunk[c] = data + q + 8;
+        if (s->chunk_bytes[c] > s->max_chunk) return false;
+        q += 8 + s->chunk_packed[c];
+        q += (4 - q % 4) % 4;
+        if (q > size) return false;
+    }
+    return true;
+}
+int tls_find(const TimelineStream *s, const char *name)
+{
+    for (unsigned i = 0; i < s->clips; ++i)
+        if (!strncmp(s->clip[i].name, name, 16)) return (int)i;
+    return -1;
+}
+TlBake tls_bake(const TimelineStream *s, unsigned i)
+{
+    const uint8_t *b = s->bake_data + (size_t)i * 24;
+    return (TlBake){(unsigned short)be16(b), (unsigned short)be16(b + 2), (unsigned short)be16(b + 4),
+                    (unsigned short)be16(b + 6), (unsigned short)be16(b + 8), bef(b + 10), bef(b + 14), bef(b + 18)};
+}
+bool tls_page_used(const TlsPage *pg, const TimelineStream *s, unsigned f0, unsigned f1)
+{
+    for (unsigned i = 0; i < pg->intervals; ++i) {
+        const uint8_t *iv = s->interval_data + (size_t)(pg->first_interval + i) * 8;
+        if (be32(iv) <= f1 && be32(iv + 4) >= f0) return true;
+    }
+    return false;
+}
+unsigned tls_chunk_of(const TimelineStream *s, unsigned frame)
+{
+    if (frame >= s->frames) frame = s->frames ? s->frames - 1 : 0;
+    return frame / s->chunk_frames;
+}
+bool tls_unpack_chunk(const TimelineStream *s, unsigned c, uint8_t *dst, size_t cap)
+{
+    if (c >= s->chunks || cap < s->chunk_bytes[c]) return false;
+    return lz4_block_decode(s->chunk[c], s->chunk_packed[c], dst, s->chunk_bytes[c]) == (long)s->chunk_bytes[c];
+}
+const uint8_t *tls_frame(const TimelineStream *s, unsigned frame, const uint8_t *chunk_data, unsigned *count)
+{
+    *count = 0;
+    if (!s->frames || !chunk_data) return NULL;
+    if (frame >= s->frames) frame = s->frames - 1;
+    const uint8_t *f = s->frame_data + (size_t)frame * 8;
+    *count = be32(f + 4);
+    return chunk_data + be32(f);
+}

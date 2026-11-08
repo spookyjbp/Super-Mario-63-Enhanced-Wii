@@ -27,6 +27,7 @@ jobs:
           python tests/test_art_repair.py
           python tests/test_water.py
           python tests/test_picture_signs.py
+          python tests/test_cinema.py
           python tools/build_level.py --check
           python tests/test_level.py
       - name: Test platform-independent physics
@@ -48,6 +49,8 @@ jobs:
           test -s dist/apps/super-mario-63-enhanced-wii/meta.xml
           test -s dist/apps/super-mario-63-enhanced-wii/data/front_end.bin
           test -s dist/apps/super-mario-63-enhanced-wii/data/course_8e1_art.bin
+          test -s dist/apps/super-mario-63-enhanced-wii/data/cinema_intro.bin
+          test -s dist/apps/super-mario-63-enhanced-wii/data/cinema_intro2.bin
           /opt/devkitpro/devkitPPC/bin/powerpc-eabi-readelf -h boot.elf
       - name: MEM1 budget
         run: |

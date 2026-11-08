@@ -126,9 +126,45 @@ def sounds(raw, start):
     return out
 
 
+SWF_ADPCM_INDEX = {2: [-1, 2], 3: [-1, -1, 2, 4], 4: [-1, -1, -1, -1, 2, 4, 6, 8],
+                   5: [-1, -1, -1, -1, -1, -1, -1, -1, 1, 2, 4, 6, 8, 10, 13, 16]}
+
+
+def swf_adpcm(data, samples):
+    """Flash's own ADPCM (DefineSound format 1, mono): packets of 4096
+    samples, each a 16-bit first sample and 6-bit index, then codes."""
+    b = S.Bits(data, 0)
+    total = len(data) * 8
+    def left():
+        return total - (b.byte * 8 + b.bit)
+    nbits = b.ub(2) + 2
+    sign, k0, table = 1 << (nbits - 1), 1 << (nbits - 2), SWF_ADPCM_INDEX[nbits]
+    out = []
+    while len(out) < samples and left() >= 22:
+        pred, index = b.sb(16), b.ub(6)
+        out.append(pred)
+        for _ in range(4095):
+            if len(out) >= samples or left() < nbits:
+                break
+            code = b.ub(nbits)
+            step, vp, k = STEPS[index], 0, k0
+            while k:
+                if code & k:
+                    vp += step
+                step >>= 1; k >>= 1
+            vp += step
+            pred = max(-32768, min(32767, pred - vp if code & sign else pred + vp))
+            index = max(0, min(88, index + table[code & (sign - 1)]))
+            out.append(pred)
+    a = np.array(out, dtype=np.int32)
+    return a[:samples] if len(a) >= samples else np.pad(a, (0, samples - len(a)))
+
+
 def decode(fmt, rate, stereo, samples, data):
+    if fmt == 1 and not stereo:
+        return swf_adpcm(data, samples)
     if fmt != 2:
-        raise ValueError('Only MP3 sounds are used by the tutorial')
+        raise ValueError('only MP3 and mono ADPCM sounds are supported')
     seek = struct.unpack_from('<h', data)[0]
     with tempfile.TemporaryDirectory() as tmp:
         mp3 = Path(tmp) / 's.mp3'

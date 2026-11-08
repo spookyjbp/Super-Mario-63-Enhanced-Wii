@@ -8,6 +8,8 @@
 #include "save_io.h"
 #include "front_end.h"
 #include "front_render.h"
+#include "cinema.h"
+#include "cinema_render.h"
 #include "data_files.h"
 #include "font_metrics.h"
 #include <string.h>
@@ -52,6 +54,59 @@ static int missing_data(void)
     return EXIT_SUCCESS;
 }
 
+/* The data files in MEM1 (data_files.h): the front end's and the course
+   art stay while they are used; a cutscene's file takes their place while it
+   plays (they are read again after it). */
+static uint8_t *fe_data, *art_data, *cin_data;
+static size_t fe_size, art_size, cin_size;
+static SaveData save;
+static CinemaData cin_file;
+static Cinema cin;
+
+static bool load_front(void)
+{
+    if (!fe_data && !(fe_data = data_load("front_end.bin", &fe_size))) return false;
+    return front_render_init(&save, fe_data, fe_size);
+}
+static void drop_front(void)
+{
+    front_render_release();
+    if (fe_data) data_free(fe_data);
+    fe_data = NULL;
+}
+static bool load_art(void)
+{
+    if (art_data) return true;
+    if (!(art_data = data_load("course_8e1_art.bin", &art_size))) return false;
+    return course_render_set_art(art_data, art_size);
+}
+static void drop_art(void)
+{
+    if (art_data) data_free(art_data);
+    art_data = NULL;
+}
+/* Start a story cutscene (cinema.h); false when its file cannot be used. */
+static bool begin_cinema(const char *name)
+{
+    drop_front();
+    drop_art();
+    if (!(cin_data = data_load(name, &cin_size))) return false;
+    if (cinema_parse(cin_data, cin_size, &cin_file) && cinema_render_begin(&cin_file)) {
+        cinema_start(&cin, &cin_file);
+        return true;
+    }
+    data_free(cin_data);
+    cin_data = NULL;
+    return false;
+}
+static void end_cinema(void)
+{
+    if (!cin_data) return;
+    cinema_render_end();
+    data_free(cin_data);
+    cin_data = NULL;
+}
+
 int main(int argc, char **argv)
 {
     if (!graphics_init()) return EXIT_FAILURE;
@@ -68,9 +123,8 @@ int main(int argc, char **argv)
     static CoursePack pack;
     static CourseSession session;
     /* The art packs are data files next to boot.dol (data_files.h). */
-    size_t art_size = 0, fe_size = 0;
-    const uint8_t *art_data = data_init(argc, argv) ? data_load("course_8e1_art.bin", &art_size) : NULL;
-    const uint8_t *fe_data = art_data ? data_load("front_end.bin", &fe_size) : NULL;
+    art_data = data_init(argc, argv) ? data_load("course_8e1_art.bin", &art_size) : NULL;
+    fe_data = art_data ? data_load("front_end.bin", &fe_size) : NULL;
     if (!art_data || !fe_data) return missing_data();
     const bool tutorial = course_pack_parse(course_8e1_bin, course_8e1_bin_size, &pack) &&
                           course_render_init(art_data, art_size);
@@ -78,14 +132,13 @@ int main(int argc, char **argv)
     /* The save file (SD card): the four files' progress and achievements, and
        Mute Music. A save from before achievements existed, or progress the
        file already proves, is awarded when the file is played. */
-    static SaveData save;
     static Achievements ach;
     save_io_load(&save);
     sfx_set_music_muted(save.music_muted);
     static FrontEnd front;
     front_init(&front);
     const bool menus = tutorial && front_render_init(&save, fe_data, fe_size);
-    bool in_front = menus, in_course = false;
+    bool in_front = menus, in_course = false, in_cinema = false;
     if (tutorial && !menus) {   /* no front end: straight into the tutorial with the last file */
         ach_init(&ach, save.slot[save.current].used ? &save.slot[save.current].progress : NULL);
         ach_evaluate_all(&ach);
@@ -121,6 +174,9 @@ int main(int argc, char **argv)
         unsigned steps = 0;
         while (accumulator >= GAME_DT && steps < 8) {
             if (in_front) front_step(&front, &pending);
+            else if (in_cinema)   /* the read button (or jump) goes on, START skips */
+                cinema_step(&cin, pending.pound_pressed || pending.jump_pressed || pending.confirm_pressed,
+                            pending.pause_pressed);
             else if (in_course) course_session_step(&session, pending);
             else game_step(&lab, &movement_world, pending, graphics_width());
             game_input_consume(&pending);
@@ -137,19 +193,42 @@ int main(int argc, char **argv)
             save_io_write(&save);
             front.files.changed = false; front.files.copy_from = front.files.copy_to = front.files.erase = -1;
         }
-        if (in_front && front.state == FE_PLAY) {   /* Play: LoadFile() and the tutorial */
+        if (in_front && front.state == FE_PLAY) {   /* Play: LoadFile() */
             save.current = (unsigned char)front.play_slot;
             SaveSlot *slot = &save.slot[save.current];
             ach_init(&ach, slot->used ? &slot->progress : NULL);
             ach_evaluate_all(&ach);
             front_render_release();
-            in_course = course_session_start(&session, &pack, "8-E1-1", 0, 0, graphics_width());
-            session.ach = &ach; pause_init(&session.pause, sfx_music_muted());
-            in_front = !in_course;
-            if (!in_course) front_to_title(&front);
+            in_front = false;
+            /* a new file (TotalStars 0): gotoAndStop("Intro"), the story
+               before the tutorial; the Intro's end starts the tutorial */
+            if (ach_popcount(ach.p.shines) == 0 && begin_cinema("cinema_intro.bin")) {
+                in_cinema = true;
+            } else {
+                in_course = load_art() &&
+                            course_session_start(&session, &pack, "8-E1-1", 0, 0, graphics_width());
+                session.ach = &ach; pause_init(&session.pause, sfx_music_muted());
+                if (!in_course && load_front()) { in_front = true; front_to_title(&front); }
+            }
+        }
+        if (in_cinema && cin.done) {   /* the cutscene's StartChar */
+            end_cinema();
+            in_cinema = false;
+            in_course = !strcmp(cin.course, "8-E1-1") && load_art() &&
+                        course_session_start(&session, &pack, "8-E1-1", cin.end_x, cin.end_y, graphics_width());
+            if (in_course) { session.ach = &ach; pause_init(&session.pause, sfx_music_muted()); }
+            /* the Castle is not in the port yet: back to the title */
+            if (!in_course) { load_art(); in_front = load_front(); front_to_title(&front); }
+        }
+        if (in_course && session.state == SESSION_COMPLETE && !session.save_request) {
+            /* the tutorial's last pipe: Intro Movie 2, then the Castle */
+            in_course = false;
+            in_cinema = begin_cinema("cinema_intro2.bin");
+            if (!in_cinema) { load_art(); in_front = load_front(); front_to_title(&front); }
         }
         if (in_course && session.game.quit) {   /* Quit Game: ReturnToTitle() */
-            in_course = false; in_front = true;
+            in_course = false;
+            in_front = load_front();
             front_to_title(&front);
         }
         /* Write at the game's save points, or soon after an unlock; never every frame. */
@@ -161,8 +240,10 @@ int main(int argc, char **argv)
             if (save_io_write(&save)) ach.dirty = false;
             session.save_request = false; since_write = 0;
         }
-        if (tutorial) audio_update(in_course && session.game.paused);
+        if (tutorial && in_cinema) audio_cinema_update(&cin);
+        else if (tutorial) audio_update(in_course && session.game.paused);
         if (in_front) front_render(&front);
+        else if (in_cinema) cinema_render(&cin, pending.controller);
         else if (in_course) course_render(&session, (float)(accumulator / GAME_DT));
         else render_game(&lab, &movement_world, (float)(accumulator / GAME_DT));
         graphics_present();

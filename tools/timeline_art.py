@@ -11,6 +11,7 @@ flatten(...)          a frame of a clip with its child clips playing as Flash
                       plays them (from their placement, holding on stop()),
                       down to shapes, text and bitmaps
 """
+import math
 import struct
 import swf_states as S
 
@@ -70,6 +71,53 @@ def _has_stop(action):
     return False
 
 
+def parse_timeline(raw, pos, end):
+    """(frames, labels, stops) of the timeline whose tags are raw[pos:end]."""
+    frames, labels, stops, display = [], {}, set(), {}
+    for c, p, n in S.tags(raw, pos, end):
+        if c in (26, 70):
+            flags = raw[p]; flags2 = raw[p + 1] if c == 70 else 0
+            q = p + (2 if c == 70 else 1)
+            depth = struct.unpack_from('<H', raw, q)[0]; q += 2
+            if flags2 & 0x08:
+                q = raw.index(0, q) + 1
+            old = display.get(depth)
+            e = dict(old) if old and flags & 0x01 else {'matrix': IDENT, 'cx': NO_CX, 'filters': [], 'clip': 0}
+            if flags & 0x02:
+                new = struct.unpack_from('<H', raw, q)[0]; q += 2
+                if not (old and flags & 0x01 and old['id'] == new):
+                    e['born'] = len(frames)
+                e['id'] = new
+            if flags & 0x04:
+                b = S.Bits(raw, q); e['matrix'] = _matrix(b); q = b.byte
+            if flags & 0x08:
+                b = S.Bits(raw, q); e['cx'] = _cxform(b); q = b.byte
+            if flags & 0x10:
+                e['ratio'] = struct.unpack_from('<H', raw, q)[0]; q += 2
+            if flags & 0x20:
+                z = raw.index(0, q); e['name'] = raw[q:z].decode('latin-1'); q = z + 1
+            if flags & 0x40:
+                e['clip'] = struct.unpack_from('<H', raw, q)[0]; q += 2
+            if flags2 & 0x01:
+                e['filters'], q = _filters(raw, q)
+            if flags2 & 0x02:
+                e['blend'] = raw[q]; q += 1
+            if flags & 0x80:
+                e['actions'] = True
+            if 'id' in e:
+                e.setdefault('born', len(frames))
+                display[depth] = e
+        elif c in (5, 28):
+            display.pop(struct.unpack_from('<H', raw, p + (2 if c == 5 else 0))[0], None)
+        elif c == 43:
+            labels[raw[p:raw.index(0, p)].decode('latin-1')] = len(frames)
+        elif c == 12 and _has_stop(raw[p:p + n]):
+            stops.add(len(frames))
+        elif c == 1:
+            frames.append({d: dict(e) for d, e in display.items()})
+    return frames, labels, stops
+
+
 def parse(swf):
     """{id: {'kind': 'sprite'|'shape'|'text'|'other', 'frames': [{depth: placement}],
     'labels': {name: index}, 'stops': {index}}} (frame indices from 0)."""
@@ -90,48 +138,7 @@ def parse(swf):
         if code != 39:
             continue
         ident = struct.unpack_from('<H', raw, pos)[0]
-        frames, labels, stops, display = [], {}, set(), {}
-        for c, p, n in S.tags(raw, pos + 4, pos + length):
-            if c in (26, 70):
-                flags = raw[p]; flags2 = raw[p + 1] if c == 70 else 0
-                q = p + (2 if c == 70 else 1)
-                depth = struct.unpack_from('<H', raw, q)[0]; q += 2
-                if flags2 & 0x08:
-                    q = raw.index(0, q) + 1
-                old = display.get(depth)
-                e = dict(old) if old and flags & 0x01 else {'matrix': IDENT, 'cx': NO_CX, 'filters': [], 'clip': 0}
-                if flags & 0x02:
-                    new = struct.unpack_from('<H', raw, q)[0]; q += 2
-                    if not (old and flags & 0x01 and old['id'] == new):
-                        e['born'] = len(frames)
-                    e['id'] = new
-                if flags & 0x04:
-                    b = S.Bits(raw, q); e['matrix'] = _matrix(b); q = b.byte
-                if flags & 0x08:
-                    b = S.Bits(raw, q); e['cx'] = _cxform(b); q = b.byte
-                if flags & 0x10:
-                    e['ratio'] = struct.unpack_from('<H', raw, q)[0]; q += 2
-                if flags & 0x20:
-                    end = raw.index(0, q); e['name'] = raw[q:end].decode('latin-1'); q = end + 1
-                if flags & 0x40:
-                    e['clip'] = struct.unpack_from('<H', raw, q)[0]; q += 2
-                if flags2 & 0x01:
-                    e['filters'], q = _filters(raw, q)
-                if flags2 & 0x02:
-                    e['blend'] = raw[q]; q += 1
-                if flags & 0x80:
-                    e['actions'] = True
-                if 'id' in e:
-                    e.setdefault('born', len(frames))
-                    display[depth] = e
-            elif c in (5, 28):
-                display.pop(struct.unpack_from('<H', raw, p + (2 if c == 5 else 0))[0], None)
-            elif c == 43:
-                labels[raw[p:raw.index(0, p)].decode('latin-1')] = len(frames)
-            elif c == 12 and _has_stop(raw[p:p + n]):
-                stops.add(len(frames))
-            elif c == 1:
-                frames.append({d: dict(e) for d, e in display.items()})
+        frames, labels, stops = parse_timeline(raw, pos + 4, pos + length)
         out[ident] = {'kind': 'sprite', 'frames': frames, 'labels': labels, 'stops': stops}
     return out
 
@@ -365,6 +372,13 @@ def _blur(filters):
     return 0.0
 
 
+class Recorded:
+    """A clip's frames as flatten() lists made elsewhere (a cutscene played
+    with its scripts), for collect() / build_pack() in place of a sprite."""
+    def __init__(self, frames):
+        self.frames = frames
+
+
 def collect(tl, clip, frames, hold=None, groups=None, skip=()):
     """Per frame [(bake key, weight 0..1, matrix, cx, group, clips)] and the
     bake keys. `groups`: {top depth: group} tags draws under those depths so
@@ -372,7 +386,12 @@ def collect(tl, clip, frames, hold=None, groups=None, skip=()):
     instance names left out (drawn by the port on their own). A shape or
     text character is a one-frame clip of itself."""
     raw = []
-    if tl.get(clip, {}).get('kind') != 'sprite':
+    if isinstance(clip, Recorded):      # frames recorded by a script player (tools/cinema_sim.py)
+        for d in clip.frames:
+            raw.append([(s, quantise_filters(fl), m, c, (groups or {}).get(p[0], 0), cl)
+                        for p, s, m, c, fl, cl in d])
+        frames = ()
+    elif tl.get(clip, {}).get('kind') != 'sprite':
         k = (clip, 0)
         return [[((k, ()), 1.0, IDENT, NO_CX, 0, ())]], [(k, ())]
     for f in frames:
@@ -421,6 +440,16 @@ def bake_all(tl, jar, work, swf, keys):
     detail needs (a low render first decides)."""
     bakes = [(s[0], s[1] if tl.get(s[0], {}).get('kind') == 'morph' else None, fl) for s, fl in keys]
     work.mkdir(parents=True, exist_ok=True)
+    cache = work / 'baked.pickle'      # the last run's bakes (the same SWF and pieces: reused)
+    import hashlib, pickle
+    tag = hashlib.sha1(swf + repr(keys).encode()).hexdigest()
+    if cache.exists():
+        try:
+            got = pickle.loads(cache.read_bytes())
+            if got[0] == tag:
+                return got[1]
+        except Exception:
+            pass
     (work / 'probe').mkdir(exist_ok=True)
     probe = render_bakes(jar, work / 'probe', swf, bakes, 0.4)
     zoom = []
@@ -440,7 +469,9 @@ def bake_all(tl, jar, work, swf, keys):
             rr = render_bakes(jar, work / str(z), swf, [bakes[i] for i in idx], z)
         for i, (im, ox, oy) in zip(idx, rr):
             out[i] = (im, ox, oy, z)
-    return dict(zip(keys, out))
+    result = dict(zip(keys, out))
+    cache.write_bytes(pickle.dumps((tag, result)))
+    return result
 
 
 def pack_pages(images, size=1024, order=None):
@@ -482,8 +513,10 @@ def rgba8_tiles(im):
     return np.concatenate([ar, gb], 1).tobytes()
 
 
-def build_pack(tl, jar, work, swf, clips, load_groups=None):
+def build_pack(tl, jar, work, swf, clips, load_groups=None, stream=None):
     """A timeline pack ("SM63TLP2") of several clips sharing their pieces.
+    With `stream` (a StreamOptions), the streamed form "SM63TLP3" instead, for
+    cutscenes longer than memory holds (see write_stream).
     clips: [(name, sprite, frames, hold, groups[, skip])]; `load_groups` maps a
     clip name to its load group (the pages the port uploads together; a piece
     used by two groups is stored in each). Big-endian:
@@ -514,6 +547,9 @@ def build_pack(tl, jar, work, swf, clips, load_groups=None):
             if k not in keys:
                 keys.append(k)
     baked = bake_all(tl, jar, work, swf, keys)
+    if stream:
+        baked = {k: stream.cap(v) for k, v in baked.items()}
+        all_frames, keys = stream.levels(all_frames, keys, baked)
     # keep only what is ever on screen (the 16:9 view around the clip at the
     # stage centre), then split what is still bigger than a page into tiles
     view = [(-VIEW_W, -VIEW_H), (VIEW_W, -VIEW_H), (VIEW_W, VIEW_H), (-VIEW_W, VIEW_H)]
@@ -551,9 +587,10 @@ def build_pack(tl, jar, work, swf, clips, load_groups=None):
         x0, y0 = x0 // 4 * 4, y0 // 4 * 4
         x1, y1 = min(im.width, -(-int(x1) // 4) * 4), min(im.height, -(-int(y1) // 4) * 4)
         tl_ = []
-        for ty in range(y0, y1, TILE):
-            for tx in range(x0, x1, TILE):
-                sub = im.crop((tx, ty, min(x1, tx + TILE), min(y1, ty + TILE)))
+        tile = stream.tile if stream else TILE
+        for ty in range(y0, y1, tile):
+            for tx in range(x0, x1, tile):
+                sub = im.crop((tx, ty, min(x1, tx + tile), min(y1, ty + tile)))
                 if sub.getchannel('A').getbbox() is None:
                     continue
                 sk = (k, tx, ty)
@@ -561,6 +598,10 @@ def build_pack(tl, jar, work, swf, clips, load_groups=None):
                 tl_.append(sk)
         tiles[k] = tl_
     keys = [sk for k in keys for sk in tiles[k]]
+    if stream:     # each frame draws only the tiles on screen then
+        all_frames = [[(sk, wgt, m, c, g, cl) for k, wgt, m, c, g, cl in fr for sk in tiles[k]
+                       if _on_view(baked[sk], m)] for fr in all_frames]
+        return write_stream(all_frames, keys, baked, clip_rows, stream)
     all_frames = [[(sk, wgt, m, c, g, cl) for k, wgt, m, c, g, cl in fr for sk in tiles[k]] for fr in all_frames]
     images = []
     for k in keys:
@@ -654,6 +695,198 @@ def build_pack(tl, jar, work, swf, clips, load_groups=None):
     out += struct.pack('>I', len(packed)) + packed
     return bytes(out), {'pages': len(pages), 'bakes': len(keys), 'frames': len(all_frames),
                         'draw bytes': len(draw_data)}
+
+
+def _on_view(bake, m, margin=2):
+    """Whether a baked piece through matrix m shows in the 16:9 view."""
+    im, ox, oy, z = bake
+    w, h = im.width / z, im.height / z
+    pts = [_apply(m, x, y) for x, y in ((ox, oy), (ox + w, oy), (ox + w, oy + h), (ox, oy + h))]
+    return not (max(p[0] for p in pts) < -VIEW_W - margin or min(p[0] for p in pts) > VIEW_W + margin or
+                max(p[1] for p in pts) < -VIEW_H - margin or min(p[1] for p in pts) > VIEW_H + margin)
+
+
+class StreamOptions:
+    """How a streamed pack is cut: big pieces at most `max_zoom` texels per
+    stage px (smaller pieces keep the detail zoom) and smaller where they are
+    drawn smaller (levels), `page` x `page` texture pages packed in the order
+    the frames first use them, draws in LZ4 chunks of `chunk` frames."""
+    def __init__(self, max_zoom=1.6, big=320 * 320, page=256, chunk=64):
+        self.max_zoom, self.big, self.page, self.chunk = max_zoom, big, page, chunk
+        self.pack_window = 8          # pieces first used within so many frames share pages
+        self.tile = page - 4          # big pieces in tiles a page holds (with its 1 texel borders)
+
+    SCREEN = 1.6          # screen px a stage px (cinema_render.c's K)
+
+    def levels(self, frames, keys, baked):
+        """Each draw at the resolution it is drawn at: a piece drawn smaller
+        uses a copy 2^(L/2) times smaller (the first that still gives 0.9
+        texels a screen px). A piece keeps its level while that still lies
+        between 0.9 and 2 texels a screen px, so a zoom does not change it
+        every frame."""
+        from PIL import Image
+        cur, out, new_keys = {}, [], list(keys)
+        for fr in frames:
+            row = []
+            for k, *rest in fr:
+                m = rest[1]
+                im, ox, oy, z = baked[k]
+                need = self.SCREEN * math.sqrt(abs(m[0] * m[3] - m[1] * m[2])) or 1e-6
+                L = cur.get(k)
+                if L is None or not (0.9 * need <= z / 2 ** (L / 2) <= 2 * need) or (L > 0 and z / 2 ** (L / 2) < 0.9 * need):
+                    L = 0
+                    while L < 12 and z / 2 ** ((L + 1) / 2) >= 0.9 * need:
+                        L += 1
+                cur[k] = L
+                if L == 0:
+                    row.append((k, *rest))
+                    continue
+                nk = (k, 'L', L)
+                if nk not in baked:
+                    w, h = max(1, round(im.width / 2 ** (L / 2))), max(1, round(im.height / 2 ** (L / 2)))
+                    baked[nk] = (im.resize((w, h), Image.LANCZOS), ox, oy, z * w / im.width)
+                    new_keys.append(nk)
+                row.append((nk, *rest))
+            out.append(row)
+        return out, new_keys
+
+    def cap(self, bake):
+        from PIL import Image
+        im, ox, oy, z = bake
+        if z <= self.max_zoom or im.width * im.height <= self.big:
+            return bake
+        k = self.max_zoom / z
+        w, h = max(1, round(im.width * k)), max(1, round(im.height * k))
+        return (im.resize((w, h), Image.LANCZOS), ox, oy, z * w / im.width)
+
+
+def _draw_bytes(k, wgt, m, c, g, cl, baked, index, images):
+    _, ox, oy, z = baked[k]
+    im = images[index[k]]
+    verts = []
+    if cl:
+        kk = 1 / z
+        corners = [(ox, oy), (ox + im.width * kk, oy), (ox + im.width * kk, oy + im.height * kk), (ox, oy + im.height * kk)]
+        poly = [_apply(m, x, y) for x, y in corners]
+        whole = poly
+        for clp in cl:
+            poly = clip_poly(poly, clp)
+            if not poly:
+                return None                       # wholly masked
+        if poly != whole:
+            A, B, C, D, TX, TY = m
+            det = A * D - B * C
+            for x, y in poly:
+                lx = (D * (x - TX) - C * (y - TY)) / det
+                ly = (-B * (x - TX) + A * (y - TY)) / det
+                verts.append((x, y, (lx - ox) / (im.width * kk), (ly - oy) / (im.height * kk)))
+    mul_ = [max(-32768, min(32767, round(v * 256))) for v in c[:4]]
+    add = [max(-32768, min(32767, round(v))) for v in c[4:]]
+    out = struct.pack('>HBBB3x6f4h4h', index[k], round(wgt * 255), g, len(verts), *m, *mul_, *add)
+    for v in verts:
+        out += struct.pack('>4f', *v)
+    return out
+
+
+def write_stream(all_frames, keys, baked, clip_rows, opt):
+    """The streamed pack "SM63TLP3": the port keeps only the pages the next
+    frames use (it decodes each page ahead of the frame that first needs it)
+    and unpacks the draws a chunk at a time. Big-endian:
+      header: magic, u32 pages, u32 bakes, u32 clips, u32 frames, u32 chunk
+              frames, u32 chunks, u32 intervals, u32 biggest chunk (bytes)
+      pages: u16 w, u16 h, u32 packed size, u8 format, u8 0, u16 intervals,
+             u32 first interval, LZ4 texture tiles (4-byte aligned)
+      intervals: u32 first frame, u32 last frame (the frames a page is used on)
+      bakes, clips: as SM63TLP2
+      frames: u32 draw offset (into its chunk), u32 draws
+      chunks: u32 bytes, u32 packed size, LZ4 draws (4-byte aligned)
+    Draws as SM63TLP2."""
+    import lz4.block
+    from PIL import Image
+    first_use, last_use = {}, {}
+    for fi, fr in enumerate(all_frames):
+        for k, *_ in fr:
+            first_use.setdefault(k, fi)
+            last_use[k] = fi
+    keys = [k for k in keys if k in first_use]
+    images = []
+    for k in keys:
+        im = baked[k][0]
+        w4, h4 = -(-im.width // 4) * 4, -(-im.height // 4) * 4
+        if (w4, h4) != im.size:
+            c = Image.new('RGBA', (w4, h4)); c.paste(im, (0, 0)); im = c
+        images.append(im)
+    index = {k: i for i, k in enumerate(keys)}
+    # RGB5A3 throughout (3-bit alpha at soft edges): half the memory, which
+    # is what lets a cutscene's next frames' pages all stay decoded
+    fmt = [1] * len(keys)
+    # pages in the order of first use: one window of frames after another
+    place, pages, page_fmt = {}, [], []
+    window = opt.pack_window
+    for w0 in range(0, len(all_frames), window):
+        for f in (0, 1):
+            idx = [i for i, k in enumerate(keys) if first_use[k] // window == w0 // window and fmt[i] == f]
+            if not idx:
+                continue
+            pl, pg = pack_pages(images, size=opt.page, order=idx)
+            for i, (p_, x, y) in pl.items():
+                place[i] = (len(pages) + p_, x, y)
+            pages += pg; page_fmt += [f] * len(pg)
+    # the frames each page is used on, as intervals (gaps under a chunk merged)
+    used = [set() for _ in pages]
+    for fi, fr in enumerate(all_frames):
+        for k, *_ in fr:
+            used[place[index[k]][0]].add(fi)
+    intervals, page_iv = [], []
+    for u in used:
+        fs = sorted(u)
+        iv = []
+        for f in fs:
+            if iv and f - iv[-1][1] <= opt.chunk:
+                iv[-1][1] = f
+            else:
+                iv.append([f, f])
+        page_iv.append((len(intervals), len(iv)))
+        intervals += iv
+    chunks, frame_rows = [], []
+    for c0 in range(0, len(all_frames), opt.chunk):
+        data = bytearray()
+        for fr in all_frames[c0:c0 + opt.chunk]:
+            start, count = len(data), 0
+            for d in fr:
+                b = _draw_bytes(*d, baked, index, images)
+                if b is None:
+                    continue
+                data += b; count += 1
+            frame_rows.append((start, count))
+        chunks.append(bytes(data))
+    out = bytearray(b'SM63TLP3')
+    out += struct.pack('>8I', len(pages), len(keys), len(clip_rows), len(all_frames), opt.chunk, len(chunks),
+                       len(intervals), max(len(c) for c in chunks))
+    for pg, f, (iv0, ivn) in zip(pages, page_fmt, page_iv):
+        blob = lz4.block.compress((rgb5a3_tiles if f else rgba8_tiles)(pg), store_size=False)
+        out += struct.pack('>HHIBBHI', pg.width, pg.height, len(blob), f, 0, ivn, iv0) + blob
+        out += b'\0' * (-len(out) % 4)
+    for a, b in intervals:
+        out += struct.pack('>II', a, b)
+    for i, k in enumerate(keys):
+        pg, x, y = place[i]
+        im = images[i]
+        _, ox, oy, z = baked[k]
+        out += struct.pack('>5H3f', pg, x, y, im.width, im.height, ox, oy, 1 / z) + b'\0' * 2
+    for name, first, n in clip_rows:
+        out += name.encode()[:16].ljust(16, b'\0') + struct.pack('>II', first, n)
+    for start, count in frame_rows:
+        out += struct.pack('>II', start, count)
+    packed_bytes = 0
+    for c in chunks:
+        p = lz4.block.compress(c, store_size=False)
+        out += struct.pack('>II', len(c), len(p)) + p
+        out += b'\0' * (-len(out) % 4)
+        packed_bytes += len(p)
+    texel = sum(pg.width * pg.height * (2 if f else 4) for pg, f in zip(pages, page_fmt))
+    return bytes(out), {'pages': len(pages), 'bakes': len(keys), 'frames': len(all_frames), 'chunks': len(chunks),
+                        'texture bytes': texel, 'draw bytes': sum(map(len, chunks)), 'draws packed': packed_bytes}
 
 
 def read_pack(data):

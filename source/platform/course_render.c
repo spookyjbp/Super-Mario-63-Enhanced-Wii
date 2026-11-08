@@ -264,6 +264,12 @@ bool course_render_init(const uint8_t *art_data, size_t art_size)
     user_art_set_scale(COURSE_SCALE);
     return true;
 }
+bool course_render_set_art(const uint8_t *art_data, size_t art_size)
+{
+    loaded_area = NULL;
+    loaded_picture = NULL;
+    return art_data && course_art_parse(art_data, art_size, &art);
+}
 static bool upload(const CourseArtTile *t, unsigned char *dst, size_t cap, GXTexObj *tex)
 {
     if (t->size > cap || lz4_block_decode(t->data, t->packed, dst, t->size) != (long)t->size) return false;
@@ -1044,12 +1050,8 @@ void course_render(const CourseSession *s, float t)
     }
     if (s->blackout) draw_fx("StarOut~", s->blackout - 1, width);
     if (s->starin) draw_fx("StarIn~", s->starin - 1, width);
-    if (s->state == SESSION_COMPLETE) {
-        graphics_rect(0, 0, width, 480, (GXColor){0, 0, 0, 230});
-        draw_cstring(FONT_SIGN, "Tutorial complete!", 20, width - 20, 190, white, ALIGN_CENTRE);
-        draw_cstring(FONT_TALK, "Intro movie 2 and the castle are not in this port yet.", 20, width - 20, 240, white,
-                     ALIGN_CENTRE);
-    }
+    if (s->state == SESSION_COMPLETE)   /* gotoAndStop("Intro2"): main.c starts Intro Movie 2 */
+        graphics_rect(0, 0, width, 480, (GXColor){0, 0, 0, 255});
     graphics_set_zoom(1);
     draw_pause(s, width);
     draw_achievement_card(s, width);
