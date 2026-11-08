@@ -52,8 +52,9 @@ jobs:
           # code, data and bss must leave room in MEM1 (24 MiB from 0x80000000)
           # for the heap, the two framebuffers and the GX FIFO
           /opt/devkitpro/devkitPPC/bin/powerpc-eabi-size -A boot.elf | grep -E "^\.(text|data|rodata|bss|sbss|sdata)" || true
-          end=$(/opt/devkitpro/devkitPPC/bin/powerpc-eabi-nm -n boot.elf | awk '$3=="_end"{print $1}')
-          used=$(( 0x$end - 0x80000000 ))
+          # the end of .bss (its address + size) is the program's end in MEM1
+          end=$(/opt/devkitpro/devkitPPC/bin/powerpc-eabi-size -A -d boot.elf | awk '$1==".bss"{print $2 + $3}')
+          used=$(( end - 0x80000000 ))
           echo "MEM1 used by the program: $used bytes ($(( used / 1048576 )) MiB of 24)"
           test "$used" -lt $(( 22 * 1048576 + 512 * 1024 ))
       - name: Upload Homebrew Channel application
