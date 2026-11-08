@@ -59,6 +59,39 @@ class Interpreter(unittest.TestCase):
         self.assertIsNone(c.get('onEnterFrame'))
 
 
+class ScriptPlayer(unittest.TestCase):
+    """tools/cinema_sim.py on a two-frame timeline (no SWF needed)."""
+    def make(self):
+        import cinema_sim as C, timeline_art as T
+        place = lambda x: {'id': 11, 'born': 0, 'matrix': (1, 0, 0, 1, x, 0), 'cx': T.NO_CX, 'filters': [], 'clip': 0,
+                           'name': 'cam'}
+        tl = {10: {'kind': 'sprite', 'frames': [{1: place(0)}, {1: place(50)}], 'labels': {}, 'stops': set()},
+              11: {'kind': 'sprite', 'frames': [{}], 'labels': {}, 'stops': set()}}
+
+        class NoScripts:
+            def frame(self, sprite, f): return []
+            def clip_events(self, sprite, f, depth): return {}
+        sim = C.Sim(tl, NoScripts(), None)
+        top = C.Clip(sim, None, None, 0, None, 'root')
+        movie = sim.new_clip(10, top, 1, {'id': 10, 'born': 0, 'matrix': T.IDENT, 'cx': T.NO_CX, 'filters': [], 'clip': 0})
+        top.children[1] = movie
+        return sim, top, movie.children[1]
+
+    def test_reading_does_not_take_a_clip_over(self):
+        # the camera script (9862) reads its own _xscale every frame: the
+        # timeline must still move it (it froze every cutscene camera)
+        sim, top, cam = self.make()
+        cam.get('_xscale'); cam.get('_rotation'); cam.get('_x')
+        sim.step(top)
+        self.assertEqual(cam.get('_x'), 50)
+
+    def test_setting_does(self):
+        sim, top, cam = self.make()
+        cam.set('_y', 7)
+        sim.step(top)
+        self.assertEqual((cam.get('_x'), cam.get('_y')), (0, 7))
+
+
 class DataFiles(unittest.TestCase):
     def check(self, name, frames, course):
         data = (ROOT / 'assets/data' / name).read_bytes()

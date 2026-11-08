@@ -250,13 +250,15 @@ class Clip(Obj):
 
     # -- properties
     def transform(self):
-        if self.tf is None:
-            self.tf = decompose(self.matrix)
-        return self.tf
+        """x, y, xscale, yscale, x rotation, y rotation: the script's own once
+        a script set one (the timeline no longer moves the clip then), else
+        the timeline matrix's (reading them does not take the clip over)."""
+        return self.tf if self.tf is not None else decompose(self.matrix)
 
     def set_tf(self, i, v):
-        t = self.transform()
+        t = list(self.transform())
         t[i] = v
+        self.tf = t
         self.matrix = compose(t)
 
     def bounds(self, sim):
@@ -327,7 +329,9 @@ class Clip(Obj):
                 if r != r:
                     return
                 d = r - t[4]
+                t = list(t)
                 t[4] += d; t[5] += d
+                self.tf = t
                 self.matrix = compose(t)
                 return
             if low == '_alpha':
@@ -450,7 +454,7 @@ class Root(Obj):
 class Sim:
     def __init__(self, tl, scripts, swf, seed=63):
         self.tl, self.scripts = tl, scripts
-        self.sounds, self.exports = sound_tags(swf)
+        self.sounds, self.exports = sound_tags(swf) if swf is not None else ({}, {})
         self.rng = _random.Random(seed)
         self.tick = 0
         self.queue = []
