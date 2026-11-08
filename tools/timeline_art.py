@@ -357,6 +357,7 @@ def detail(im):
 
 VIEW_W, VIEW_H = 270, 150   # what the 16:9 screen shows around a clip at the stage centre (stage px)
 TILE = 508                  # big pieces are split into tiles (two to a page row)
+OVERLAP = 2                 # texels a streamed tile carries of each neighbour
 MAX_VARIANTS = 6        # a piece with more filter variants is baked at key blurs and cross-faded
 KEYS = 7
 ZOOMS = ((2, 0.2), (8, 0.4), (25, 0.8), (1e9, 1.6))   # detail below -> bake zoom
@@ -578,6 +579,7 @@ def build_pack(tl, jar, work, swf, clips, load_groups=None, stream=None):
             u = seen.get(k)
             seen[k] = (x0, y0, x1, y1) if u is None else (min(u[0], x0), min(u[1], y0), max(u[2], x1), max(u[3], y1))
     tiles = {}   # key -> [(sub key, x, y)] in the bake's texels
+    inset = {}   # streamed tiles: (left, top, width, height) of their own part
     for k in keys:
         im, ox, oy, z = baked[k]
         if k not in seen:
@@ -594,14 +596,26 @@ def build_pack(tl, jar, work, swf, clips, load_groups=None, stream=None):
                 if sub.getchannel('A').getbbox() is None:
                     continue
                 sk = (k, tx, ty)
-                baked[sk] = (sub, ox + tx / z, oy + ty / z, z)
+                if stream:
+                    # a streamed piece's tiles carry OVERLAP texels of their
+                    # neighbours, drawn only inside their own part: filtering at
+                    # a tile's edge then reads the next tile's texels, not the
+                    # page's clear border (no lines between tiles)
+                    w_, h_ = sub.size
+                    l_, t_ = min(OVERLAP, tx), min(OVERLAP, ty)
+                    r_, b_ = min(OVERLAP, im.width - tx - w_), min(OVERLAP, im.height - ty - h_)
+                    sub = im.crop((tx - l_, ty - t_, tx + w_ + r_, ty + h_ + b_))
+                    inset[sk] = (l_, t_, w_, h_)
+                    baked[sk] = (sub, ox + (tx - l_) / z, oy + (ty - t_) / z, z)
+                else:
+                    baked[sk] = (sub, ox + tx / z, oy + ty / z, z)
                 tl_.append(sk)
         tiles[k] = tl_
     keys = [sk for k in keys for sk in tiles[k]]
     if stream:     # each frame draws only the tiles on screen then
         all_frames = [[(sk, wgt, m, c, g, cl) for k, wgt, m, c, g, cl in fr for sk in tiles[k]
                        if _on_view(baked[sk], m)] for fr in all_frames]
-        return write_stream(all_frames, keys, baked, clip_rows, stream)
+        return write_stream(all_frames, keys, baked, clip_rows, stream, inset)
     all_frames = [[(sk, wgt, m, c, g, cl) for k, wgt, m, c, g, cl in fr for sk in tiles[k]] for fr in all_frames]
     images = []
     for k in keys:
@@ -714,7 +728,7 @@ class StreamOptions:
     def __init__(self, max_zoom=1.6, big=320 * 320, page=256, chunk=64):
         self.max_zoom, self.big, self.page, self.chunk = max_zoom, big, page, chunk
         self.pack_window = 8          # pieces first used within so many frames share pages
-        self.tile = page - 4          # big pieces in tiles a page holds (with its 1 texel borders)
+        self.tile = page - 8          # big pieces in tiles a page holds (with OVERLAP and 1 texel borders)
 
     SCREEN = 1.6          # screen px a stage px (cinema_render.c's K)
 
@@ -760,9 +774,22 @@ class StreamOptions:
         return (im.resize((w, h), Image.LANCZOS), ox, oy, z * w / im.width)
 
 
-def _draw_bytes(k, wgt, m, c, g, cl, baked, index, images):
+class _Size:
+    def __init__(self, w, h):
+        self.width, self.height = w, h
+
+
+def _core(k, baked, im, inset):
+    """(ox, oy, z, size) of the part of a bake that is drawn."""
     _, ox, oy, z = baked[k]
-    im = images[index[k]]
+    if inset and k in inset:
+        l, t, w, h = inset[k]
+        return ox + l / z, oy + t / z, z, _Size(w, h)
+    return ox, oy, z, im
+
+
+def _draw_bytes(k, wgt, m, c, g, cl, baked, index, images, inset=None):
+    ox, oy, z, im = _core(k, baked, images[index[k]], inset)
     verts = []
     if cl:
         kk = 1 / z
@@ -788,7 +815,7 @@ def _draw_bytes(k, wgt, m, c, g, cl, baked, index, images):
     return out
 
 
-def write_stream(all_frames, keys, baked, clip_rows, opt):
+def write_stream(all_frames, keys, baked, clip_rows, opt, inset=None):
     """The streamed pack "SM63TLP3": the port keeps only the pages the next
     frames use (it decodes each page ahead of the frame that first needs it)
     and unpacks the draws a chunk at a time. Big-endian:
@@ -854,7 +881,7 @@ def write_stream(all_frames, keys, baked, clip_rows, opt):
         for fr in all_frames[c0:c0 + opt.chunk]:
             start, count = len(data), 0
             for d in fr:
-                b = _draw_bytes(*d, baked, index, images)
+                b = _draw_bytes(*d, baked, index, images, inset)
                 if b is None:
                     continue
                 data += b; count += 1
@@ -871,8 +898,9 @@ def write_stream(all_frames, keys, baked, clip_rows, opt):
         out += struct.pack('>II', a, b)
     for i, k in enumerate(keys):
         pg, x, y = place[i]
-        im = images[i]
-        _, ox, oy, z = baked[k]
+        ox, oy, z, im = _core(k, baked, images[i], inset)
+        if inset and k in inset:
+            x += inset[k][0]; y += inset[k][1]
         out += struct.pack('>5H3f', pg, x, y, im.width, im.height, ox, oy, 1 / z) + b'\0' * 2
     for name, first, n in clip_rows:
         out += name.encode()[:16].ljust(16, b'\0') + struct.pack('>II', first, n)

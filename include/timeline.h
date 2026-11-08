@@ -51,7 +51,7 @@ void timeline_vertex(const TlDraw *d, unsigned i, float *x, float *y, float *u, 
    `chunk_frames` frames. The player keeps the pages of the next frames
    (source/platform/cinema_render.c) and one chunk unpacked. */
 #define TLS_MAX_PAGES 4096
-#define TLS_MAX_CHUNKS 256
+#define TLS_MAX_CHUNKS 1024
 typedef struct {
     unsigned short w, h;
     unsigned char format;

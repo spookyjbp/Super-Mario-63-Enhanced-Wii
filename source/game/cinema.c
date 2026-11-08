@@ -75,10 +75,16 @@ static void apply(Cinema *p, const CinemaEvent *e, unsigned seek_to)
         const unsigned n = e->size ? e->size - 1 : 0;
         const unsigned k = n < CIN_TEXT - 1 ? n : CIN_TEXT - 1;
         if (e->size) p->portrait = e->payload[0];
-        if (k != p->length || memcmp(p->message, e->payload + 1, k)) p->restart = true;
-        memcpy(p->message, e->payload + 1, k);
-        p->message[k] = 0;
-        p->length = k;
+        if (!k) { p->on = false; break; }      /* "": the box fades out with its text */
+        if (!p->on || k != p->length || memcmp(p->message, e->payload + 1, k)) {
+            /* a new message: 627 starts typing it once the box is in; until
+               then its field shows nothing (txt = "" at _alpha <= 2) */
+            memcpy(p->message, e->payload + 1, k);
+            p->message[k] = 0;
+            p->length = k;
+            p->typed = 0;
+        }
+        p->on = true;
         break;
     }
     case CIN_MUSIC:
@@ -156,7 +162,7 @@ static void seek(Cinema *p, unsigned to)
     events_to(p, to, to);
     p->frame = to;
     p->sfx_count = 0;
-    p->alpha = p->length ? 100 : 0;
+    p->alpha = p->on ? 100 : 0;
     ++p->music.serial;
     next_hold(p);
 }
@@ -164,25 +170,31 @@ static void seek(Cinema *p, unsigned to)
 static void box_frame(Cinema *p, bool read)
 {
     p->finished = false;
-    p->alpha += ((p->length ? 100.0f : 0.0f) - p->alpha) / 4;
+    p->alpha += ((p->on ? 100.0f : 0.0f) - p->alpha) / 4;
     p->prompt_alpha += (p->prompt_target - p->prompt_alpha) / 2;
-    if (p->alpha > 98) {
-        if (p->restart) { p->typed = 0; p->restart = false; }
+    if (p->alpha > 98 && p->on) {
         for (unsigned i = 0; i < 2; ++i) {
             if (p->typed < p->length) ++p->typed;
             else p->finished = true;
         }
         if (read) p->typed = p->length;
         p->prompt_target = p->typed >= p->length ? 100.0f : 0.0f;
+    } else if (p->alpha <= 2 && !p->on) {
+        p->length = p->typed = 0; p->message[0] = 0;   /* txt = "" */
     }
 }
 static void source_frame(Cinema *p, bool read)
 {
-    const bool was_finished = p->finished && p->length;
+    const bool was_finished = p->finished && p->on;
     box_frame(p, read);
     if (p->done) return;
     if (p->frame == p->hold_at) {
-        if (!(read && was_finished)) return;      /* held until the read button */
+        if (!(read && was_finished)) {
+            /* not pressed yet: the cutscene goes on moving, the recording's
+               last CIN_HOLD_LOOP frames before the press again */
+            if (p->hold_at >= CIN_HOLD_LOOP) p->frame = p->hold_at - CIN_HOLD_LOOP;
+            return;
+        }
         p->hold_at = NONE;
     } else if (read && was_finished && p->hold_at != NONE && p->hold_at > p->frame) {
         /* the read button with the text out: on from where the recording pressed */

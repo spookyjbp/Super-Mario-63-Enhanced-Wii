@@ -76,7 +76,7 @@ static unsigned play_through(Cinema *p, const CinemaData *d, unsigned *holds)
     unsigned ticks = 0, last = 0, still = 0;
     *holds = 0;
     while (!p->done && ticks < 2000000) {
-        const bool held = p->frame == p->hold_at && p->finished;
+        const bool held = p->hold_at != 0xFFFFFFFFu && p->frame + 40 >= p->hold_at && p->finished && p->on;
         if (held) ++*holds;
         cinema_step(p, held && (ticks & 1), false);
         if (p->frame == last) ++still; else still = 0;
@@ -99,22 +99,42 @@ static void check_cinema(const char *path, const char *course, float x, float y)
     printf("%s: %u frames, %u events, %u sounds\n", path, d.frames, d.events, d.sounds);
     check_pack(&d);
     static Cinema p;
-    /* with no button the cutscene stops at the first PRESS, the text out */
+    /* the first message: its text types in from nothing once the box is in
+       (never the whole text first); with no button the scene goes on moving,
+       the last CIN_HOLD_LOOP frames before the PRESS again and again */
     CinemaEvent e;
     const unsigned press = first_event(&d, CIN_PRESS, &e);
     if (press != 0xFFFFFFFFu) {
         cinema_start(&p, &d);
-        for (unsigned t = 0; t < (press + 400) * 2; ++t) cinema_step(&p, false, false);
-        CHECK(p.frame == press);
-        CHECK(p.length > 0 && p.typed == p.length && p.finished);
+        bool seen_on = false, whole_early = false;
+        unsigned last_typed = 0;
+        for (unsigned t = 0; t < 4000 && p.frame < press - CIN_HOLD_LOOP; ++t) {
+            cinema_step(&p, false, false);
+            if (p.on && !seen_on) { seen_on = true; last_typed = p.typed; whole_early = p.typed == p.length; }
+            if (p.on) { CHECK(p.typed >= last_typed); last_typed = p.typed; }
+        }
+        CHECK(seen_on && !whole_early && p.typed == p.length);
+        unsigned lo = ~0u, hi = 0, frames_moved = 0, last = p.frame;
+        for (unsigned t = 0; t < 60 * 30; ++t) {
+            cinema_step(&p, false, false);
+            lo = p.frame < lo ? p.frame : lo; hi = p.frame > hi ? p.frame : hi;
+            frames_moved += p.frame != last; last = p.frame;
+        }
+        CHECK(hi <= press && lo >= press - CIN_HOLD_LOOP);      /* looped inside the wait */
+        CHECK(frames_moved > 800);                              /* never frozen */
+        CHECK(p.on && p.length > 0 && p.typed == p.length && p.finished);
         char text[CIN_TEXT];
         unsigned name_end;
         cinema_visible_text(&p, text, sizeof text, &name_end);
         CHECK(strchr(text, '<') == NULL && name_end > 0 && name_end < strlen(text));
-        /* the read button goes on */
+        /* the read button goes on, from the PRESS */
         cinema_step(&p, true, false);
         for (unsigned t = 0; t < 8; ++t) cinema_step(&p, false, false);
-        CHECK(p.frame > press);
+        CHECK(p.frame > press && p.frame < press + 10);
+        /* the box fades out showing the old text, then is empty */
+        CHECK(!p.on);
+        for (unsigned t = 0; t < 16 && !p.on; ++t) cinema_step(&p, false, false);
+        CHECK(p.on || (p.alpha < 15 && p.length > 0));     /* fading, the old text still there */
     }
     /* START: where the original's Skip button goes, the music as it would be */
     cinema_start(&p, &d);
@@ -133,7 +153,7 @@ static void check_cinema(const char *path, const char *course, float x, float y)
     /* START again and again ends it too */
     cinema_start(&p, &d);
     for (unsigned t = 0; t < 200000 && !p.done; ++t)
-        cinema_step(&p, p.frame == p.hold_at && p.finished, (t % 90) == 0);
+        cinema_step(&p, p.hold_at != 0xFFFFFFFFu && p.finished && p.on, (t % 90) == 0);
     CHECK(p.done && !strcmp(p.course, course));
     /* the music: seeking lands on the samples playing from the start reaches */
     for (unsigned i = 0; i < d.sounds; ++i) {

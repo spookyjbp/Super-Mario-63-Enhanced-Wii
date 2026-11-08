@@ -150,6 +150,8 @@ def stream_pcm(raw, start, sprite):
 
 def build(tl, swf, scripts, jar, work, sprite, init):
     frames, events, labels, sim = C.record(tl, scripts, swf, sprite, init=init)
+    if not sim.ended:
+        raise SystemExit(f'{sprite}: the recording did not reach its StartChar in {len(frames)} frames')
     raw, start = S.body(swf)
     names, defined = A.linkage(raw, start), A.sounds(raw, start)
     sounds, index = [], {}

@@ -34,7 +34,7 @@ FPS = 32
 STAGE_W, STAGE_H = 450, 300
 TIMELINE_DEPTH = 16384          # SWF depth of script depth 0
 HIDDEN = {627, 9791}            # drawn by the port itself: the message box, the Skip button
-HOLD = 40                       # frames a finished message stays before the recording presses
+HOLD = 320                      # frames a finished message stays before the recording presses (10 s; cinema.h CIN_HOLD_LOOP replays its last 160)
 
 
 # ---- the original's scripts ------------------------------------------------
@@ -630,24 +630,28 @@ class Sim:
             prog, c = self.queue.pop(0)
             if c.removed:
                 continue
+            if prog == 'enterFrame':        # the clip's enterFrame, run where it was queued
+                if 'enterFrame' in c.handlers:
+                    self.interp.run(c.handlers['enterFrame'], c)
+                h = c.props.get('onEnterFrame', UNDEF)
+                if isinstance(h, (Function, Native)):
+                    self.interp.call(h, c, [])
+                continue
             self.interp.run(prog, c)
 
     def step(self, top):
-        """One frame of Flash Player."""
+        """One frame of Flash Player (AVM1, as Ruffle's run_frame_avm1): each
+        clip, parents first, queues its enterFrame and then goes to its next
+        frame (its display list changes at once, its frame scripts are
+        queued); then the queue runs in order. So enterFrame code already
+        sees the clip on its new frame."""
         self.tick += 1
         for c in self.preorder(top, []):
-            if c.removed:
+            if c.removed or c.created >= self.tick:
                 continue
-            if 'enterFrame' in c.handlers:
-                self.interp.run(c.handlers['enterFrame'], c)
-            h = c.props.get('onEnterFrame', UNDEF)
-            if isinstance(h, (Function, Native)):
-                self.interp.call(h, c, [])
-            self.run_queue()
-        for c in self.preorder(top, []):
-            if c.removed or c.created >= self.tick or not c.playing:
-                continue
-            c.advance()
+            self.queue.append(('enterFrame', c))
+            if c.playing:
+                c.advance()
         self.run_queue()
 
     # -- the recording's read button
@@ -713,7 +717,7 @@ class Sim:
         return out
 
 
-def record(tl, scripts, swf, sprite, max_frames=20000, seed=63, init=None):
+def record(tl, scripts, swf, sprite, max_frames=60000, seed=63, init=None):
     """Plays `sprite` (a cutscene on the main timeline) until it starts a
     course. Returns (frames, events, labels_at, sim): frames = the flatten
     list per frame; events = [(frame, kind, ...)]; labels_at = {label: first

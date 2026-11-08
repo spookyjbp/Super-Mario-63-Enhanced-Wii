@@ -27,7 +27,7 @@
 #define SLOT_RGBA8 (256u * 256u * 4u)
 #define SLOT_RGB5A3 (256u * 256u * 2u)
 #define MAX_SLOTS 192
-#define CIN_MAX_FRAMES 16384
+#define CIN_MAX_FRAMES 65536
 
 static TimelineStream pack;
 static const CinemaData *data;

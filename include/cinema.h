@@ -13,9 +13,11 @@
    - the message box is 627's script: it fades in (_alpha += (100 - _alpha)
      / 4), types 2 characters a frame once it is all in, the read button
      shows the whole text, the Z prompt (bz) fades in when it is out;
-   - a PRESS event is where the recording pressed the read button: the
-     cutscene holds there until the player presses it with the text out
-     (pressing earlier, once the text is out, goes on from there at once);
+   - a PRESS event is where the recording pressed the read button (10 s
+     after the text was out, the scene moving on meanwhile as in the
+     original, where only the timeline waits): pressing it with the text out
+     goes on from there at once; waiting longer replays the last 5 s of the
+     wait (CIN_HOLD_LOOP) until the press;
    - START goes to the original's Skip target, with the music it would have
      there.
    The read button: the port's read button (the course signs' one) or jump. */
@@ -32,6 +34,10 @@ enum { CIN_MESSAGE = 1, CIN_PRESS, CIN_MUSIC, CIN_STOP, CIN_VOLUME, CIN_SFX, CIN
 #define CIN_MAX_SOUNDS 64
 #define CIN_TEXT 400
 #define CIN_SEEK_SAMPLES 32768u    /* a decoder state every so many samples */
+/* A held message: the recording goes on CIN_HOLD frames (tools/cinema_sim.py
+   HOLD) after the text is out before it presses; a player who waits longer
+   sees the last CIN_HOLD_LOOP of them again, and again, until the press. */
+#define CIN_HOLD_LOOP 160u
 
 typedef struct {
     unsigned rate, samples;
@@ -79,7 +85,8 @@ typedef struct Cinema {
     float prompt_target;        /* bz.aa */
     bool latched;               /* the read button, until the next 32 Hz frame */
     unsigned typed;             /* num */
-    bool restart;               /* lasttm !== CinemaMessage */
+    bool restart;               /* (unused) */
+    bool on;                    /* CinemaMessage is not "" */
     bool finished;              /* CinemaMessageFinished */
     /* audio */
     CinemaMusic music;

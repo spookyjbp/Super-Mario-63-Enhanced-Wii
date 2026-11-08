@@ -118,7 +118,7 @@ void audio_shutdown(void)
 }
 
 /* ---- the story cutscenes (cinema.h) ---- */
-#define STREAM_SAMPLES 4096u
+#define STREAM_SAMPLES 16384u    /* 0.37 s at 44.1 kHz, 0.74 s at 22 kHz a buffer */
 #define STREAM_BUFFERS 3u
 static const CinemaData *cin;
 static int16_t *cin_pcm[CIN_MAX_SOUNDS];
@@ -191,6 +191,17 @@ void audio_cinema_update(Cinema *p)
             stream_on = true;
             stream_volume = m->volume;
         }
+    }
+    if (stream_on && !stream.ended && ASND_StatusVoice(MUSIC_VOICE) == SND_UNUSED) {
+        /* the voice ran dry (a long frame: a page or chunk decoded at a cut):
+           on from where the stream is */
+        int16_t *b = stream_buf[stream_next_buf];
+        stream_next_buf = (stream_next_buf + 1) % STREAM_BUFFERS;
+        stream_fill(b);
+        volumes((unsigned)(m->volume < 0 ? 0 : m->volume > 100 ? 100 : m->volume), 0, &l, &r);
+        ASND_SetVoice(MUSIC_VOICE, VOICE_MONO_16BIT, (int)cinema_stream_rate(&stream), 0, b, (int)(STREAM_SAMPLES * 2),
+                      l, r, NULL);
+        stream_volume = m->volume;
     }
     if (stream_on) {
         while (ASND_TestVoiceBufferReady(MUSIC_VOICE) == 1) {

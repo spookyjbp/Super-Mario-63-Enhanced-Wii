@@ -83,7 +83,7 @@ class DataFiles(unittest.TestCase):
         self.check('cinema_intro.bin', 1050, '8-E1-1')
 
     def test_intro2(self):
-        self.check('cinema_intro2.bin', 7800, 'Castle')
+        self.check('cinema_intro2.bin', 21498, 'Castle')
 
 
 if __name__ == '__main__':
