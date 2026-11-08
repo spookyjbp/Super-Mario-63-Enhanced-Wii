@@ -15,8 +15,14 @@ bool data_mount(void)
     if (!tried) { tried = true; mounted = fatInitDefault(); }
     return mounted;
 }
+/* A data folder: one that holds front_end.bin (opened, not stat'ed: some
+   FAT setups, Dolphin's SD card among them, do not report directories). */
 static bool is_dir(const char *path)
 {
+    char file[320];
+    snprintf(file, sizeof file, "%s/front_end.bin", path);
+    FILE *f = fopen(file, "rb");
+    if (f) { fclose(f); return true; }
     struct stat st;
     return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
@@ -41,6 +47,8 @@ bool data_init(int argc, char **argv)
     static const char *const DATA_FOLDERS[] = {
         "sd:/apps/" DATA_APP "/data", "usb:/apps/" DATA_APP "/data",
         "sd:/apps/sm63wii/data", "usb:/apps/sm63wii/data",
+        "sd:/" DATA_APP "/data", "usb:/" DATA_APP "/data", "sd:/data", "usb:/data",
+        "/apps/" DATA_APP "/data",
     };
     for (unsigned i = 0; i < sizeof DATA_FOLDERS / sizeof DATA_FOLDERS[0]; ++i)
         if (is_dir(DATA_FOLDERS[i])) {
@@ -68,3 +76,26 @@ uint8_t *data_load(const char *name, size_t *size)
     return buf;
 }
 void data_free(uint8_t *data) { free(data); }
+
+#include <dirent.h>
+/* What the SD card's root and apps folder hold (for the error screen). */
+void data_describe(char *out, size_t cap)
+{
+    static const char *const dirs[] = {"sd:/", "sd:/apps", "sd:/apps/" DATA_APP};
+    size_t n = 0;
+    out[0] = 0;
+    for (unsigned i = 0; i < 3 && n + 1 < cap; ++i) {
+        n += (size_t)snprintf(out + n, cap - n, "%s%s:", i ? "\r" : "", dirs[i]);
+        DIR *d = opendir(dirs[i]);
+        if (!d) { n += (size_t)snprintf(out + n, n < cap ? cap - n : 0, " (cannot open)"); continue; }
+        unsigned k = 0;
+        struct dirent *e;
+        while ((e = readdir(d)) != NULL && n + 1 < cap && k < 8) {
+            if (e->d_name[0] == '.') continue;
+            n += (size_t)snprintf(out + n, cap - n, " %s", e->d_name);
+            ++k;
+        }
+        closedir(d);
+        if (n >= cap) { out[cap - 1] = 0; return; }
+    }
+}

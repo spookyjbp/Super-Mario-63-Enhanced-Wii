@@ -24,4 +24,6 @@ uint8_t *data_load(const char *name, size_t *size);
 void data_free(uint8_t *data);
 /* Mount the SD card / USB drive once (true: mounted). */
 bool data_mount(void);
+/* A line or three of what the SD card holds where the data folder belongs. */
+void data_describe(char *out, size_t cap);
 #endif

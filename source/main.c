@@ -48,18 +48,21 @@ static int missing_data(const char *file, bool found_folder, bool exists)
                                            : "The data file %s is missing.", file);
         snprintf(where, sizeof where, "Data folder: %s", data_folder());
     }
+    static char seen[400];
+    data_describe(seen, sizeof seen);
     while (!exit_requested && !power_requested && SYS_MainLoop()) {
         const GameInput in = input_poll();
         if (in.pause_pressed) break;
         const float w = graphics_width();
         graphics_rect(0, 0, w, 480, (GXColor){0, 0, 0, 255});
         course_render_text(FONT_SIGN, what, 40, w - 40, 130, (GXColor){255, 255, 255, 255}, ALIGN_CENTRE, true);
-        course_render_text(FONT_HINT, where, 40, w - 40, 200, (GXColor){255, 220, 120, 255}, ALIGN_CENTRE, true);
+        course_render_text(FONT_HINT, where, 40, w - 40, 170, (GXColor){255, 220, 120, 255}, ALIGN_CENTRE, true);
+        course_render_text(FONT_HINT, seen, 40, w - 40, 385, (GXColor){150, 200, 255, 255}, ALIGN_CENTRE, true);
         course_render_text(FONT_HINT,
                            "Copy the whole apps/" DATA_APP " folder, with its data folder,\rto the SD card, "
                            "then start the game from the Homebrew Channel.\r(Dolphin: Config > Wii > SD card inserted, "
                            "and its SD sync folder holds apps/" DATA_APP "/data.)\r\rPress START to leave.",
-                           40, w - 40, 250, (GXColor){220, 220, 220, 255}, ALIGN_CENTRE, true);
+                           40, w - 40, 210, (GXColor){220, 220, 220, 255}, ALIGN_CENTRE, true);
         graphics_present();
     }
     graphics_shutdown();
