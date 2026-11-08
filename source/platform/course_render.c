@@ -12,6 +12,7 @@
 #include "object_select.h"
 #include "water_places.h"
 #include "font_atlas_bin.h"
+#include "lz4w.h"
 #include "trophies_bin.h"
 #include "pause_layout.h"
 #include "text_layout.h"
@@ -35,7 +36,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MEM2_RESERVE (26u * 1024 * 1024)
+#define MEM2_RESERVE COURSE_MEM2_RESERVE
 #define PICTURE_BYTES (1024u * 1024)
 #define OBJECT_BYTES (17u * 512 * 1024)   /* four packs of up to 2 MiB */
 #define PROMPT_BYTES (128u * 1024)
@@ -160,7 +161,6 @@ static void hud_number(unsigned value, float x, float y, float width, float scal
     float left = centre ? x - n * advance / 2 : x;
     for (int i = 0; i < n; ++i) hud_clip(OBJ_HUD_DIGITS, (unsigned)(buf[i] - '0'), left + i * advance, y, width, scale);
 }
-enum { ALIGN_LEFT, ALIGN_CENTRE, ALIGN_RIGHT };
 /* Lines the text wraps to in [x0, x1] (screen px). */
 static unsigned text_lines(unsigned font, const char *src, size_t len, float wrap_width)
 {
@@ -224,7 +224,11 @@ bool course_render_init(void)
     SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES + ANIM_BYTES + PAUSE_PARTS_BYTES);
     objects_ready = load_objects(lo + MEM2_RESERVE + PICTURE_BYTES, OBJECT_BYTES);
     /* The original font 155 (tools/export_fonts.py): RGBA8 after a 32-byte header. */
-    GX_InitTexObj(&font_tex, (void *)(font_atlas_bin + 32), FONT_ATLAS_W, FONT_ATLAS_H, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP,
+    size_t font_size;
+    const unsigned char *font_data = lz4w_open(font_atlas_bin, font_atlas_bin_size, &font_size);   /* MEM2 */
+    if (!font_data || font_size < 32 + FONT_ATLAS_W * FONT_ATLAS_H * 4) return false;
+    DCFlushRange((void *)font_data, font_size);
+    GX_InitTexObj(&font_tex, (void *)(font_data + 32), FONT_ATLAS_W, FONT_ATLAS_H, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP,
                   GX_FALSE);
     GX_InitTexObjLOD(&font_tex, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
     /* The four trophies (tools/export_trophies.py): one RGBA8 strip, cells side by side. */
@@ -890,3 +894,23 @@ void course_render(const CourseSession *s, float t)
     draw_pause(s, width);
     draw_achievement_card(s, width);
 }
+
+/* ---- for the front end (front_render.c) ---- */
+unsigned char *course_render_scratch(size_t *size)
+{
+    loaded_area = NULL;          /* its textures are overwritten: reload on the next course frame */
+    loaded_picture = NULL;
+    *size = MEM2_RESERVE;
+    return mem2;
+}
+void course_render_text(unsigned font, const char *text, float x0, float x1, float y, GXColor colour, int align,
+                        bool glow)
+{
+    if (glow) draw_text_glow(font, text, strlen(text), x0, x1, y, colour, align, ~0u);
+    else draw_text(font, text, strlen(text), x0, x1, y, colour, align, ~0u);
+}
+void course_render_trophy(unsigned tier, float x, float y, float size, bool lit, float alpha)
+{
+    draw_trophy(tier, x, y, size, lit, alpha);
+}
+

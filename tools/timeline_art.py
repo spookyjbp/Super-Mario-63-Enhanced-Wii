@@ -81,6 +81,10 @@ def parse(swf):
         elif code in SHAPES or code in TEXTS or code in (7, 34):   # shapes, texts, buttons
             ident = struct.unpack_from('<H', raw, pos)[0]
             out[ident] = {'kind': 'shape' if code in SHAPES else 'text' if code in TEXTS else 'other'}
+            if code in SHAPES:
+                b = S.Bits(raw, pos + 2); n = b.ub(5)
+                x0, x1, y0, y1 = (b.sb(n) / 20 for _ in range(4))
+                out[ident]['bounds'] = (x0, y0, x1, y1)
         elif code in (6, 20, 21, 35, 36, 90):
             out[struct.unpack_from('<H', raw, pos)[0]] = {'kind': 'bitmap'}
         if code != 39:
@@ -165,33 +169,81 @@ def _single_child(tl, ident):
     return all(len(f) <= 1 for f in fr)
 
 
-def flatten(tl, sprite, frame, matrix=IDENT, cx=NO_CX, path=(), out=None, hold=None, filters=()):
-    """[(path, symbol, matrix, cx, filters, clip)] drawn back to front for
-    `sprite`'s frame `frame`; symbol = (character, ratio). `path` is the chain
-    of depths. `hold`: {sprite: frame} for clips the caller drives itself.
-    A filtered clip holding one child passes its filters down to it; other
-    filtered or masking clips stay one piece (character, frame)."""
+def _apply(m, x, y):
+    return m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]
+
+
+def flatten(tl, sprite, frame, matrix=IDENT, cx=NO_CX, path=(), out=None, hold=None, filters=(), clips=(), skip=()):
+    """[(path, symbol, matrix, cx, filters, clips)] drawn back to front for
+    `sprite`'s frame `frame`; symbol = (character, ratio); clips = the convex
+    polygons (stage px) of the masks over it. `path` is the chain of depths.
+    `hold`: {sprite: frame} for clips the caller drives itself. A filtered
+    clip holding one child (or only blurred) passes its filters down; other
+    filtered clips stay one piece (character, frame). Masks are shapes: their
+    bounding rectangles clip what they cover."""
     if out is None:
         out = []
     fr = tl[sprite]['frames'][frame]
+    masks = []   # (last depth covered, polygon)
     for depth in sorted(fr):
         e = fr[depth]
         ident = e['id']
+        if ident in skip or e.get('name') in skip:
+            continue
         m, c = mul(matrix, e['matrix']), cx_mul(cx, e['cx'])
         kind = tl.get(ident, {}).get('kind', 'other')
         p = path + (depth,)
+        if e['clip']:
+            bx = tl.get(ident, {}).get('bounds')
+            if bx is None:
+                raise ValueError(f'mask {ident} is not a shape')
+            x0, y0, x1, y1 = bx
+            masks.append((e['clip'], [_apply(m, x, y) for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]))
+            continue
+        here = clips + tuple(poly for last, poly in masks if depth <= last)
         fl = tuple(filters) + tuple(e['filters'])
         if kind == 'sprite' and tl[ident]['frames']:
             f = hold[ident] if hold and ident in hold else child_frame(tl, ident, frame - e['born'])
             # blur is near enough linear to apply to each child instead of the group
             blur_only = all(t == 1 for t, _ in fl)
-            if (fl and not (blur_only or _single_child(tl, ident))) or e['clip']:
-                out.append((p, (ident, f), m, c, fl, e['clip']))
+            if fl and not (blur_only or _single_child(tl, ident)):
+                out.append((p, (ident, f), m, c, fl, here))
             else:
-                flatten(tl, ident, f, m, c, p, out, hold, fl)
+                flatten(tl, ident, f, m, c, p, out, hold, fl, here, skip)
         else:
             ratio = round(e.get('ratio', 0) / 65535 * RATIO_STEPS) * 65535 // RATIO_STEPS if kind == 'morph' else 0
-            out.append((p, (ident, ratio), m, c, fl, e['clip']))
+            out.append((p, (ident, ratio), m, c, fl, here))
+    return out
+
+
+def clip_poly(poly, clip):
+    """Sutherland-Hodgman: convex polygon `poly` [(x, y)] inside convex `clip`."""
+    def inside(p, a, b, sgn):
+        return sgn * ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) >= 0
+    def cross(p, q, a, b):
+        d1 = (q[0] - p[0], q[1] - p[1]); d2 = (b[0] - a[0], b[1] - a[1])
+        den = d1[0] * d2[1] - d1[1] * d2[0]
+        if abs(den) < 1e-12:
+            return q
+        t = ((a[0] - p[0]) * d2[1] - (a[1] - p[1]) * d2[0]) / den
+        return (p[0] + t * d1[0], p[1] + t * d1[1])
+    area = sum(clip[i][0] * clip[(i + 1) % len(clip)][1] - clip[(i + 1) % len(clip)][0] * clip[i][1]
+               for i in range(len(clip)))
+    sgn = 1 if area > 0 else -1
+    out = list(poly)
+    for i in range(len(clip)):
+        a, b = clip[i], clip[(i + 1) % len(clip)]
+        src, out = out, []
+        for j in range(len(src)):
+            pj, pk = src[j], src[(j + 1) % len(src)]
+            if inside(pk, a, b, sgn):
+                if not inside(pj, a, b, sgn):
+                    out.append(cross(pj, pk, a, b))
+                out.append(pk)
+            elif inside(pj, a, b, sgn):
+                out.append(cross(pj, pk, a, b))
+        if not out:
+            return []
     return out
 
 
@@ -296,6 +348,8 @@ def detail(im):
 
 # ---- a clip as the port's timeline pack ----
 
+VIEW_W, VIEW_H = 270, 150   # what the 16:9 screen shows around a clip at the stage centre (stage px)
+TILE = 508                  # big pieces are split into tiles (two to a page row)
 MAX_VARIANTS = 6        # a piece with more filter variants is baked at key blurs and cross-faded
 KEYS = 7
 ZOOMS = ((2, 0.2), (8, 0.4), (25, 0.8), (1e9, 1.6))   # detail below -> bake zoom
@@ -311,19 +365,24 @@ def _blur(filters):
     return 0.0
 
 
-def collect(tl, clip, frames, hold=None, extra=None):
-    """Per frame [(bake key, weight 0..1, matrix, cx)] and the bake keys.
-    `extra(frame, draws)` may edit a frame's draws (script-driven motion)."""
+def collect(tl, clip, frames, hold=None, groups=None, skip=()):
+    """Per frame [(bake key, weight 0..1, matrix, cx, group, clips)] and the
+    bake keys. `groups`: {top depth: group} tags draws under those depths so
+    the port can drive them (script-driven clips). `skip`: characters or
+    instance names left out (drawn by the port on their own). A shape or
+    text character is a one-frame clip of itself."""
     raw = []
+    if tl.get(clip, {}).get('kind') != 'sprite':
+        k = (clip, 0)
+        return [[((k, ()), 1.0, IDENT, NO_CX, 0, ())]], [(k, ())]
     for f in frames:
-        d = flatten(tl, clip, f, hold=hold)
-        if extra:
-            d = extra(f, d)
-        raw.append([(s, quantise_filters(fl), m, c) for p, s, m, c, fl, cl in d])
+        d = flatten(tl, clip, f, hold=hold, skip=skip)
+        raw.append([(s, quantise_filters(fl), m, c, (groups or {}).get(p[0], 0), cl)
+                    for p, s, m, c, fl, cl in d])
     # pieces with many filter variants: KEYS key blurs, cross-faded
     variants = {}
     for fr in raw:
-        for s, fl, m, c in fr:
+        for s, fl, m, c, g, cl in fr:
             variants.setdefault(s, {})[fl] = _blur(fl)
     keyed = {}
     for s, vs in variants.items():
@@ -335,9 +394,9 @@ def collect(tl, clip, frames, hold=None, extra=None):
     out = []
     for fr in raw:
         draws = []
-        for s, fl, m, c in fr:
+        for s, fl, m, c, g, cl in fr:
             if s not in keyed:
-                draws.append(((s, fl), 1.0, m, c))
+                draws.append(((s, fl), 1.0, m, c, g, cl))
                 continue
             b, ks = variants[s][fl], keyed[s]
             j = 0
@@ -345,9 +404,9 @@ def collect(tl, clip, frames, hold=None, extra=None):
                 j += 1
             lo, hi = ks[j], ks[min(j + 1, len(ks) - 1)]
             t = 0.0 if hi[1] == lo[1] else min(1.0, max(0.0, (b - lo[1]) / (hi[1] - lo[1])))
-            draws.append(((s, lo[0]), 1.0, m, c))
+            draws.append(((s, lo[0]), 1.0, m, c, g, cl))
             if t > 0.02:
-                draws.append(((s, hi[0]), t, m, c))      # the next key over it
+                draws.append(((s, hi[0]), t, m, c, g, cl))      # the next key over it
         out.append(draws)
     keys = []
     for fr in out:
@@ -367,7 +426,7 @@ def bake_all(tl, jar, work, swf, keys):
     zoom = []
     for (s, fl), (im, ox, oy) in zip(keys, probe):
         z = next(z for lim, z in ZOOMS if detail(im) < lim)
-        blur = _blur(fl)
+        blur = max((struct.unpack_from('<I', d, 0)[0] / 65536 for t, d in fl if t == 1), default=0)   # Blur only
         if blur > 1.5:   # a blur of b px leaves nothing finer: ~3 / b texels per px is enough
             z = min(z, max(0.2, min(ZOOMS, key=lambda zz: abs(zz[1] - 3 / blur))[1]))
         zoom.append(z)
@@ -384,11 +443,11 @@ def bake_all(tl, jar, work, swf, keys):
     return dict(zip(keys, out))
 
 
-def pack_pages(images, size=1024):
+def pack_pages(images, size=1024, order=None):
     """Shelf-pack images into size x size pages: [(page, x, y)] and the pages."""
     from PIL import Image
-    order = sorted(range(len(images)), key=lambda i: -images[i].height)
-    place = [None] * len(images)
+    order = sorted(order if order is not None else range(len(images)), key=lambda i: -images[i].height)
+    place = {}
     pages, x, y, row = [], 0, 0, 0
     pages.append(Image.new('RGBA', (size, size)))
     for i in order:
@@ -404,11 +463,11 @@ def pack_pages(images, size=1024):
         pages[-1].paste(im, (x + 1, y + 1))
         place[i] = (len(pages) - 1, x + 1, y + 1)
         x += w; row = max(row, h)
-    # trim the last page's unused height (to a multiple of 4)
-    last = pages[-1]
-    bb = last.getchannel('A').getbbox()
-    if bb:
-        pages[-1] = last.crop((0, 0, size, min(size, -(-(bb[3] + 1) // 4) * 4)))
+    # every page cut to the height it uses (to a multiple of 4)
+    used = {}
+    for i, (pg, x, y) in place.items():
+        used[pg] = max(used.get(pg, 0), y + images[i].height + 1)
+    pages = [pg.crop((0, 0, size, min(size, -(-used.get(k, 4) // 4) * 4))) for k, pg in enumerate(pages)]
     return place, pages
 
 
@@ -423,27 +482,86 @@ def rgba8_tiles(im):
     return np.concatenate([ar, gb], 1).tobytes()
 
 
-def build_pack(tl, jar, work, swf, clips):
-    """A timeline pack ("SM63TLP1") of several clips sharing their pieces.
-    clips: [(name, sprite, frames, hold, extra)]. Big-endian:
-      header: magic, u32 pages, u32 bakes, u32 clips, u32 total draws
-      pages: u16 w, u16 h, u32 packed size, LZ4 RGBA8 tiles
+def build_pack(tl, jar, work, swf, clips, load_groups=None):
+    """A timeline pack ("SM63TLP2") of several clips sharing their pieces.
+    clips: [(name, sprite, frames, hold, groups[, skip])]; `load_groups` maps a
+    clip name to its load group (the pages the port uploads together; a piece
+    used by two groups is stored in each). Big-endian:
+      header: magic, u32 pages, u32 bakes, u32 clips, u32 frames, u32 draw bytes
+      pages: u16 w, u16 h, u32 packed size, u8 format (0 RGBA8, 1 RGB5A3), u8 clip,
+             2 pad, LZ4 texture tiles (4-byte aligned)
       bakes: u16 page, u16 x, u16 y, u16 w, u16 h, f32 ox, f32 oy, f32 px (stage px per texel)
       clips: char[16] name, u32 first frame, u32 frames
-      frames: u32 first draw, u32 draws (over all clips)
-      draws: u16 bake, u8 weight, u8 0, f32 a b c d tx ty, s16 mul rgba (8.8), s16 add rgba
-    """
+      frames: u32 draw offset (bytes into the draw data), u32 draws
+      u32 packed size, LZ4 draw data:
+      draws: u16 bake, u8 weight, u8 group, u8 vertices (0: the bake's quad
+             through the matrix), 3 pad, f32 a b c d tx ty, s16 mul rgba (8.8),
+             s16 add rgba, then vertices x f32 (x, y, u, v): stage px and
+             texture coordinates within the bake (0..1)
+    Coordinates are the clip's own (registration at 0, 0)."""
     import lz4.block
     from PIL import Image
-    all_frames, keys, clip_rows = [], [], []
-    for name, sprite, frames, hold, extra in clips:
-        fr, ks = collect(tl, sprite, frames, hold, extra)
+    all_frames, keys, clip_rows, whole = [], [], [], set()
+    for spec in clips:
+        name, sprite, frames, hold, groups = spec[:5]
+        skip = spec[5] if len(spec) > 5 else ()
+        if len(spec) > 6 and spec[6] == 'whole':   # moved by the port (scrolled): keep all of it
+            whole.add(len(clip_rows))
+        fr, ks = collect(tl, sprite, frames, hold, groups, skip)
         clip_rows.append((name, len(all_frames), len(fr)))
         all_frames += fr
         for k in ks:
             if k not in keys:
                 keys.append(k)
     baked = bake_all(tl, jar, work, swf, keys)
+    # keep only what is ever on screen (the 16:9 view around the clip at the
+    # stage centre), then split what is still bigger than a page into tiles
+    view = [(-VIEW_W, -VIEW_H), (VIEW_W, -VIEW_H), (VIEW_W, VIEW_H), (-VIEW_W, VIEW_H)]
+    seen = {}
+    whole_frames = {fi for ci in whole for fi in range(clip_rows[ci][1], clip_rows[ci][1] + clip_rows[ci][2])}
+    for fi, fr in enumerate(all_frames):
+        for k, wgt, m, c, g, cl in fr:
+            if fi in whole_frames:
+                im = baked[k][0]
+                seen[k] = (0, 0, im.width, im.height)
+                continue
+            A, B, C, D, TX, TY = m
+            det = A * D - B * C
+            if abs(det) < 1e-9:
+                continue
+            im, ox, oy, z = baked[k]
+            pts = []
+            for x, y in view:
+                lx = (D * (x - TX) - C * (y - TY)) / det
+                ly = (-B * (x - TX) + A * (y - TY)) / det
+                pts.append(((lx - ox) * z, (ly - oy) * z))
+            x0 = max(0, min(p[0] for p in pts) - 2); y0 = max(0, min(p[1] for p in pts) - 2)
+            x1 = min(im.width, max(p[0] for p in pts) + 2); y1 = min(im.height, max(p[1] for p in pts) + 2)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            u = seen.get(k)
+            seen[k] = (x0, y0, x1, y1) if u is None else (min(u[0], x0), min(u[1], y0), max(u[2], x1), max(u[3], y1))
+    tiles = {}   # key -> [(sub key, x, y)] in the bake's texels
+    for k in keys:
+        im, ox, oy, z = baked[k]
+        if k not in seen:
+            tiles[k] = []
+            continue
+        x0, y0, x1, y1 = (int(v) for v in seen[k])
+        x0, y0 = x0 // 4 * 4, y0 // 4 * 4
+        x1, y1 = min(im.width, -(-int(x1) // 4) * 4), min(im.height, -(-int(y1) // 4) * 4)
+        tl_ = []
+        for ty in range(y0, y1, TILE):
+            for tx in range(x0, x1, TILE):
+                sub = im.crop((tx, ty, min(x1, tx + TILE), min(y1, ty + TILE)))
+                if sub.getchannel('A').getbbox() is None:
+                    continue
+                sk = (k, tx, ty)
+                baked[sk] = (sub, ox + tx / z, oy + ty / z, z)
+                tl_.append(sk)
+        tiles[k] = tl_
+    keys = [sk for k in keys for sk in tiles[k]]
+    all_frames = [[(sk, wgt, m, c, g, cl) for k, wgt, m, c, g, cl in fr for sk in tiles[k]] for fr in all_frames]
     images = []
     for k in keys:
         im = baked[k][0]
@@ -451,26 +569,176 @@ def build_pack(tl, jar, work, swf, clips):
         if (w4, h4) != im.size:
             c = Image.new('RGBA', (w4, h4)); c.paste(im, (0, 0)); im = c
         images.append(im)
-    place, pages = pack_pages(images)
-    out = bytearray(b'SM63TLP1')
-    total = sum(len(f) for f in all_frames)
-    out += struct.pack('>4I', len(pages), len(keys), len(clip_rows), total)
-    for pg in pages:
-        blob = lz4.block.compress(rgba8_tiles(pg), store_size=False)
-        out += struct.pack('>HHI', pg.width, pg.height, len(blob)) + blob
-        out += b'\0' * (-len(out) % 4)
+    # pages by load group (only the groups on show are decoded), a piece used
+    # by several groups stored in each; opaque detailed pieces in RGB5A3,
+    # soft or see-through ones in RGBA8
+    group_of = [(load_groups or {}).get(name, ci) for ci, (name, first, n) in enumerate(clip_rows)]
+    expanded, keymap = [], {}
+    for ci, (name, first, n) in enumerate(clip_rows):
+        g = group_of[ci]
+        for fi in range(first, first + n):
+            new = []
+            for k, *rest in all_frames[fi]:
+                if (k, g) not in keymap:
+                    keymap[(k, g)] = len(expanded)
+                    expanded.append((k, g))
+                    baked[(k, g)] = baked[k]
+                new.append(((k, g), *rest))
+            all_frames[fi] = new
+    image_of = {k: images[i] for i, k in enumerate(keys)}
+    keys = [(k, g) for k, g in expanded]
+    images = [image_of[k] for k, g in expanded]
     index = {k: i for i, k in enumerate(keys)}
+    users = {k: k[1] for k in keys}
+    fmt = [1 if baked[k][3] >= 1.6 and opaque_enough(images[i]) else 0 for i, k in enumerate(keys)]
+    place, pages, page_fmt, page_clip = {}, [], [], []
+    for ci in sorted(set(group_of)):
+        for f in (0, 1):
+            idx = [i for i, k in enumerate(keys) if users.get(k) == ci and fmt[i] == f]
+            if not idx:
+                continue
+            pl, pg = pack_pages(images, order=idx)
+            for i, (p_, x, y) in pl.items():
+                place[i] = (len(pages) + p_, x, y)
+            pages += pg; page_fmt += [f] * len(pg); page_clip += [ci] * len(pg)
+    place = [place.get(i, (0, 0, 0)) for i in range(len(keys))]
+    draw_data, frame_rows = bytearray(), []
+    for fr in all_frames:
+        start, count = len(draw_data), 0
+        for k, wgt, m, c, g, cl in fr:
+            _, ox, oy, z = baked[k]
+            im = images[index[k]]
+            verts = []
+            if cl:
+                kk = 1 / z
+                corners = [(ox, oy), (ox + im.width * kk, oy), (ox + im.width * kk, oy + im.height * kk),
+                           (ox, oy + im.height * kk)]
+                poly = [_apply(m, x, y) for x, y in corners]
+                whole = poly
+                for clp in cl:
+                    poly = clip_poly(poly, clp)
+                    if not poly:
+                        break
+                if not poly:
+                    continue                      # wholly masked
+                if poly != whole:
+                    # texture coordinates by inverting the piece's affine map
+                    A, B, C, D, TX, TY = m
+                    det = A * D - B * C
+                    for x, y in poly:
+                        lx = (D * (x - TX) - C * (y - TY)) / det
+                        ly = (-B * (x - TX) + A * (y - TY)) / det
+                        verts.append((x, y, (lx - ox) / (im.width * kk), (ly - oy) / (im.height * kk)))
+            mul_ = [max(-32768, min(32767, round(v * 256))) for v in c[:4]]
+            add = [max(-32768, min(32767, round(v))) for v in c[4:]]
+            draw_data += struct.pack('>HBBB3x6f4h4h', index[k], round(wgt * 255), g, len(verts), *m, *mul_, *add)
+            for v in verts:
+                draw_data += struct.pack('>4f', *v)
+            count += 1
+        frame_rows.append((start, count))
+    out = bytearray(b'SM63TLP2')
+    out += struct.pack('>5I', len(pages), len(keys), len(clip_rows), len(all_frames), len(draw_data))
+    for pg, f, ci in zip(pages, page_fmt, page_clip):
+        blob = lz4.block.compress((rgb5a3_tiles if f else rgba8_tiles)(pg), store_size=False)
+        out += struct.pack('>HHIBB2x', pg.width, pg.height, len(blob), f, ci) + blob
+        out += b'\0' * (-len(out) % 4)
     for k, (pg, x, y), im in zip(keys, place, images):
         _, ox, oy, z = baked[k]
         out += struct.pack('>5H3f', pg, x, y, im.width, im.height, ox, oy, 1 / z)
+        out += b'\0' * 2                        # 24 bytes a bake
     for name, first, n in clip_rows:
         out += name.encode()[:16].ljust(16, b'\0') + struct.pack('>II', first, n)
-    d = 0
-    for fr in all_frames:
-        out += struct.pack('>II', d, len(fr)); d += len(fr)
-    for fr in all_frames:
-        for k, wgt, m, c in fr:
-            mul = [max(-32768, min(32767, round(v * 256))) for v in c[:4]]
-            add = [max(-32768, min(32767, round(v))) for v in c[4:]]
-            out += struct.pack('>HBB6f4h4h', index[k], round(wgt * 255), 0, *m, *mul, *add)
-    return bytes(out), {'pages': len(pages), 'bakes': len(keys), 'draws': total}
+    for start, count in frame_rows:
+        out += struct.pack('>II', start, count)
+    packed = lz4.block.compress(bytes(draw_data), store_size=False)
+    out += struct.pack('>I', len(packed)) + packed
+    return bytes(out), {'pages': len(pages), 'bakes': len(keys), 'frames': len(all_frames),
+                        'draw bytes': len(draw_data)}
+
+
+def read_pack(data):
+    """The pack back as Python data (for previews and tests)."""
+    import lz4.block, numpy as np
+    from PIL import Image
+    assert data[:8] == b'SM63TLP2'
+    npages, nbakes, nclips, nframes, nbytes = struct.unpack_from('>5I', data, 8)
+    q = 28
+    pages = []
+    for _ in range(npages):
+        w, h, n, f, ci = struct.unpack_from('>HHIBB', data, q); q += 12
+        raw = lz4.block.decompress(data[q:q + n], uncompressed_size=w * h * (2 if f else 4)); q += n
+        q += -q % 4
+        if f:
+            v = np.frombuffer(raw, '>u2').reshape(h // 4, w // 4, 4, 4).transpose(0, 2, 1, 3).reshape(h, w).astype(int)
+            op = (v & 0x8000) != 0
+            r = np.where(op, (v >> 10 & 31) * 255 // 31, (v >> 8 & 15) * 17)
+            g = np.where(op, (v >> 5 & 31) * 255 // 31, (v >> 4 & 15) * 17)
+            b = np.where(op, (v & 31) * 255 // 31, (v & 15) * 17)
+            a = np.where(op, 255, (v >> 12 & 7) * 255 // 7)
+            img = np.stack([r, g, b, a], -1).astype(np.uint8)
+        else:
+            t = np.frombuffer(raw, np.uint8).reshape(-1, 64)
+            ar, gb = t[:, :32].reshape(-1, 16, 2), t[:, 32:].reshape(-1, 16, 2)
+            px = np.stack([ar[..., 1], gb[..., 0], gb[..., 1], ar[..., 0]], -1)
+            img = px.reshape(h // 4, w // 4, 4, 4, 4).transpose(0, 2, 1, 3, 4).reshape(h, w, 4)
+        pages.append(Image.fromarray(img))
+    bakes = []
+    for _ in range(nbakes):
+        bakes.append(struct.unpack_from('>5H3f', data, q)); q += 24
+    clips = {}
+    for _ in range(nclips):
+        name = data[q:q + 16].rstrip(b'\0').decode(); first, n = struct.unpack_from('>II', data, q + 16); q += 24
+        clips[name] = (first, n)
+    frames = [struct.unpack_from('>II', data, q + 8 * i) for i in range(nframes)]; q += 8 * nframes
+    plen = struct.unpack_from('>I', data, q)[0]; q += 4
+    dd = lz4.block.decompress(data[q:q + plen], uncompressed_size=nbytes)
+    draws_per_frame = []
+    for off, n in frames:
+        lst = []
+        for _ in range(n):
+            v = struct.unpack_from('>HBBB3x6f4h4h', dd, off); off += 48
+            verts = [struct.unpack_from('>4f', dd, off + 16 * i) for i in range(v[3])]; off += 16 * v[3]
+            lst.append((v[0], v[1] / 255, v[2], v[4:10], [x / 256 for x in v[10:14]], list(v[14:18]), verts))
+        draws_per_frame.append(lst)
+    return pages, bakes, clips, draws_per_frame
+
+
+def preview(data, frame, scale=1.6, size=(720, 480), origin=(360, 240)):
+    """A frame drawn the way the port draws it (stage px * scale)."""
+    import numpy as np
+    from PIL import Image, ImageDraw
+    pages, bakes, clips, frames = read_pack(data)
+    canvas = np.zeros((size[1], size[0], 3), float)
+    for b, wgt, g, m, mul_, add, verts in frames[frame]:
+        pg, x, y, w, h, ox, oy, k = bakes[b]
+        im = np.asarray(pages[pg].crop((x, y, x + w, y + h))).astype(float) / 255
+        rgb = np.clip(im[..., :3] * mul_[:3] + np.array(add[:3]) / 255, 0, 1)
+        a = np.clip(im[..., 3] * mul_[3] + add[3] / 255, 0, 1) * wgt
+        src = Image.fromarray((np.dstack([rgb, a]) * 255).astype(np.uint8))
+        A, B, C, D, TX, TY = m
+        M = np.array([[A * k, C * k, A * ox + C * oy + TX], [B * k, D * k, B * ox + D * oy + TY], [0, 0, 1]])
+        S_ = np.array([[scale, 0, origin[0]], [0, scale, origin[1]], [0, 0, 1]])
+        inv = np.linalg.inv(S_ @ M)
+        warped = np.asarray(src.transform(size, Image.AFFINE, tuple(inv[:2].ravel()), Image.BILINEAR)).astype(float) / 255
+        if verts:
+            mask = Image.new('L', size)
+            ImageDraw.Draw(mask).polygon([(vx * scale + origin[0], vy * scale + origin[1]) for vx, vy, u, v in verts],
+                                         fill=255)
+            warped[..., 3] *= np.asarray(mask).astype(float) / 255
+        canvas = warped[..., :3] * warped[..., 3:] + canvas * (1 - warped[..., 3:])
+    return Image.fromarray((canvas * 255).astype(np.uint8))
+
+
+def rgb5a3_tiles(im):
+    import numpy as np
+    from water_art import rgb5a3_words
+    return rgb5a3_words(np.asarray(im.convert('RGBA'))).astype('>u2').tobytes()
+
+
+def opaque_enough(im):
+    """True when RGB5A3 (opaque 15-bit colour, 3-bit alpha) keeps the piece:
+    few see-through-but-not-clear pixels."""
+    import numpy as np
+    a = np.asarray(im)[..., 3]
+    cover = a > 8
+    return cover.any() and ((a > 8) & (a < 232)).sum() < 0.08 * cover.sum()

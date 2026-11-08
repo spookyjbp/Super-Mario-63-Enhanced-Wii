@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 #include "player_art_bin.h"
+#include "lz4w.h"
 #include "player_art_select.h"
 #include "player_spray.h"
 
@@ -37,8 +38,11 @@ void user_art_init(void)
     if(loaded) return;
     if(fatInitDefault() && !load_file("sd:/apps/super-mario-63-enhanced-wii/player.art"))
         load_file("usb:/apps/super-mario-63-enhanced-wii/player.art");
-    if(!loaded && player_art_bin_size>0 && art_pack_parse(player_art_bin,player_art_bin_size,&art))
-        loaded=player_art_bin;
+    if(!loaded && player_art_bin_size>0) {   /* LZ4-wrapped in the DOL (tools/pack_lz4.py): unpacked into MEM2 */
+        size_t n;
+        const unsigned char *data=lz4w_open(player_art_bin,player_art_bin_size,&n);
+        if(data && art_pack_parse(data,n,&art)) loaded=data;
+    }
     if(!loaded) return;
     DCFlushRange((void *)art.texture,art.width*art.height*4);
     GX_InitTexObj(&texture,(void *)art.texture,art.width,art.height,GX_TF_RGBA8,GX_CLAMP,GX_CLAMP,GX_FALSE);

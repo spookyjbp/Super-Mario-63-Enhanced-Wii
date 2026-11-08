@@ -18,8 +18,9 @@ OBJS := $(ROOT)/build/host/course_objects_tests
 SOUND := $(ROOT)/build/host/sound_tests
 TEXT := $(ROOT)/build/host/text_layout_tests
 ACH := $(ROOT)/build/host/achievement_tests
+FRONT := $(ROOT)/build/host/front_end_tests
 .PHONY: test clean
-test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND) $(TEXT) $(ACH)
+test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND) $(TEXT) $(ACH) $(FRONT)
 	$(OUTPUT)
 	$(ORIENTATION)
 	$(RENDER)
@@ -35,6 +36,7 @@ test: $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) 
 	cd $(ROOT)/build/host && ./sound_tests
 	$(TEXT)
 	$(ACH)
+	$(FRONT)
 $(OUTPUT): $(SOURCES) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated $(SOURCES) -lm -o $@
@@ -52,7 +54,7 @@ $(CORRECTIONS): corrections_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated corrections_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
 $(ART): art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(ROOT)/source/render/player_art_select.c $(HEADERS) stubs/fat.h stubs/graphics.h
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Istubs -I$(ROOT)/include art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/platform/user_art.c $(ROOT)/source/render/player_art_select.c $(wildcard $(ROOT)/source/game/*.c) -I$(ROOT)/assets/generated -lm -o $@
+	$(CC) $(CFLAGS) -Istubs -I$(ROOT)/include art_pack_test.c $(ROOT)/source/assets/art_pack.c $(ROOT)/source/assets/lz4w.c $(ROOT)/source/assets/lz4_block.c $(ROOT)/source/platform/user_art.c $(ROOT)/source/render/player_art_select.c $(wildcard $(ROOT)/source/game/*.c) -I$(ROOT)/assets/generated -lm -o $@
 $(CONTROLS): controls_test.c $(wildcard $(ROOT)/source/game/*.c) $(HEADERS)
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated controls_test.c $(wildcard $(ROOT)/source/game/*.c) -lm -o $@
@@ -80,5 +82,8 @@ $(TEXT): text_layout_test.c $(ROOT)/source/render/text_layout.c $(ROOT)/include/
 $(ACH): achievements_test.c $(ROOT)/source/game/achievements.c $(ROOT)/source/game/save_data.c $(ROOT)/include/achievements.h $(ROOT)/include/save_data.h
 	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -I$(ROOT)/include achievements_test.c $(ROOT)/source/game/achievements.c $(ROOT)/source/game/save_data.c -o $@
+$(FRONT): front_end_test.c $(ROOT)/source/game/front_end.c $(ROOT)/source/game/sfx.c $(ROOT)/include/front_end.h $(ROOT)/assets/generated/front_end_layout.h
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(ROOT)/include -I$(ROOT)/assets/generated front_end_test.c $(ROOT)/source/game/front_end.c $(ROOT)/source/game/sfx.c -lm -o $@
 clean:
 	rm -f $(OUTPUT) $(ORIENTATION) $(RENDER) $(MOVEMENT) $(CORRECTIONS) $(CONTROLS) $(COURSE) $(PLAY) $(SESSION) $(CART) $(OBJS) $(ART) $(SOUND) $(TEXT) $(ACH)

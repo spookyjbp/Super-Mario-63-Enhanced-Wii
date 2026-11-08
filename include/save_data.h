@@ -14,7 +14,7 @@ extern "C" {
 
 #define SAVE_MAGIC "SM63WIIS"
 #define SAVE_VERSION 1
-#define SAVE_SLOTS 3            /* the original's three files (_root["File" + n + ...]) */
+#define SAVE_SLOTS 4            /* the original's four files A-D (_root["File" + file + ...]) */
 #define SAVE_SLOT_BYTES 64
 #define SAVE_HEADER_BYTES 16    /* magic, u16 version, u16 slots, u32 flags */
 #define SAVE_BYTES (SAVE_HEADER_BYTES + SAVE_SLOTS * SAVE_SLOT_BYTES + 4)

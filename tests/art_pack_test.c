@@ -1,5 +1,7 @@
 /* Player art pack (format v2): parser, loader precedence, clip selection and
    feet-anchored drawing. */
+#include "lz4w.h"
+#include <stdlib.h>
 #include "art_pack.h"
 #include "user_art.h"
 #include "player_art_select.h"
@@ -143,11 +145,21 @@ static void test_loader_and_drawing(void)
     user_art_init();assert(user_art_available());
     remove("sd:/apps/super-mario-63-enhanced-wii/player.art");user_art_shutdown();
 }
+/* The committed pack, unpacked when LZ4-wrapped (tools/pack_lz4.py). */
+static const unsigned char *committed_pack(size_t *n)
+{
+    FILE *e=fopen("../../assets/generated/player_art.bin","rb");assert(e);
+    static unsigned char file[4*1024*1024+128*1024];const size_t got=fread(file,1,sizeof(file),e);fclose(e);
+    const size_t raw=lz4w_size(file,got);
+    if(!raw) {*n=got;return file;}
+    static unsigned char out[4*1024*1024+128*1024];assert(raw<=sizeof(out)&&lz4w_unpack(file,got,out,sizeof(out)));
+    *n=raw;return out;
+}
+void *mem2_alloc(size_t size) {return malloc(size);}
 static void test_committed_pack(void)
 {
     /* The embedded pack: every movement state in all four FLUDD variants. */
-    FILE *e=fopen("../../assets/generated/player_art.bin","rb");assert(e);
-    static unsigned char real[4*1024*1024+128*1024];const size_t n=fread(real,1,sizeof(real),e);fclose(e);
+    size_t n;const unsigned char *real=committed_pack(&n);
     static ArtPack pack;assert(art_pack_parse(real,n,&pack));
     for(unsigned s=0;s<ART_STATE_COUNT;++s)
         for(unsigned v=0;v<ART_VARIANTS;++v) assert(art_pack_clip_length(&pack,art_clip((ArtState)s,v))>0);

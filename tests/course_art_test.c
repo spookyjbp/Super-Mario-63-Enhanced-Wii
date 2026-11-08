@@ -20,6 +20,13 @@ int main(void)
     for (unsigned i = 0; i < 4; ++i) {
         assert(course_art_layer(&pack, areas[i], ART_LAYER_BACK) && course_art_layer(&pack, areas[i], ART_LAYER_FRONT));
         assert(course_art_layer(&pack, areas[i], ART_LAYER_FAR) && course_art_layer(&pack, areas[i], ART_LAYER_CLOSE));
+        /* the area's textures fit the MEM2 area course_render.c reserves (32-byte aligned, as load_area) */
+        size_t used = 0;
+        for (unsigned k = 0; k < ART_LAYER_PICTURE; ++k) {
+            const CourseArtLayer *l = course_art_layer(&pack, areas[i], (CourseArtKind)k);
+            for (unsigned t = 0; l && t < l->tile_count; ++t) used = (used + l->tiles[t].size + 31) & ~(size_t)31;
+        }
+        assert(used <= COURSE_MEM2_RESERVE);
     }
     assert(!course_art_layer(&pack, "8-E1-2-2", ART_LAYER_BG)); /* no Background set for 8-E1-2-2 */
     const char *pages[] = {"Start", "controls", "goomba", "bomb", "stomp", "ttt", "hover", "refill", "zoom"};

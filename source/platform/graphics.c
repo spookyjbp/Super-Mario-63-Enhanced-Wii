@@ -82,6 +82,17 @@ bool graphics_init(void)
 }
 
 float graphics_width(void) { return logical_width; }
+/* Draw only inside a screen rectangle (logical px); the EFB is mode.fbWidth wide. */
+void graphics_scissor(float x, float y, float w, float h)
+{
+    const float kx = mode.fbWidth / logical_width, ky = mode.efbHeight / 480.0f;
+    const int x0 = x < 0 ? 0 : (int)(x * kx), y0 = y < 0 ? 0 : (int)(y * ky);
+    int x1 = (int)((x + w) * kx + 0.5f), y1 = (int)((y + h) * ky + 0.5f);
+    if (x1 > mode.fbWidth) x1 = mode.fbWidth;
+    if (y1 > mode.efbHeight) y1 = mode.efbHeight;
+    GX_SetScissor((u32)x0, (u32)y0, (u32)(x1 > x0 ? x1 - x0 : 0), (u32)(y1 > y0 ? y1 - y0 : 0));
+}
+void graphics_scissor_off(void) { GX_SetScissor(0, 0, mode.fbWidth, mode.efbHeight); }
 void graphics_set_zoom(float zoom)
 {
     Mtx view;
@@ -203,9 +214,10 @@ void graphics_quad_alpha(GXTexObj *texture, const float xs[4], const float ys[4]
     graphics_quad_cxform(texture, xs, ys, u0, v0, u1, v1, mul, add);
 }
 static unsigned char clamp_u8(float v) { return v <= 0 ? 0 : v >= 255 ? 255 : (unsigned char)(v + 0.5f); }
-void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4],
-                          float u0, float v0, float u1, float v1, const float mul[4], const float add[3])
+void graphics_poly_cxform(GXTexObj *texture, unsigned n, const float *xs, const float *ys, const float *us,
+                          const float *vs, const float mul[4], const float add[3])
 {
+    if (n < 3) return;
     GX_SetNumTexGens(1);
     GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
     GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
@@ -228,11 +240,10 @@ void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4
     GX_SetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
     GX_SetAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
     GX_LoadTexObj(texture, GX_TEXMAP0);
-    GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
-    GX_Position3f32(xs[0], ys[0], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(u0, v0);
-    GX_Position3f32(xs[1], ys[1], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(u1, v0);
-    GX_Position3f32(xs[2], ys[2], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(u1, v1);
-    GX_Position3f32(xs[3], ys[3], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(u0, v1);
+    GX_Begin(GX_TRIANGLEFAN, GX_VTXFMT0, (u16)n);
+    for (unsigned i = 0; i < n; ++i) {
+        GX_Position3f32(xs[i], ys[i], 0); GX_Color4u8(m.r, m.g, m.b, m.a); GX_TexCoord2f32(us[i], vs[i]);
+    }
     GX_End();
     GX_SetVtxDesc(GX_VA_TEX0, GX_NONE);
     GX_SetNumTexGens(0);
@@ -240,6 +251,12 @@ void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4
     GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
     GX_SetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+}
+void graphics_quad_cxform(GXTexObj *texture, const float xs[4], const float ys[4],
+                          float u0, float v0, float u1, float v1, const float mul[4], const float add[3])
+{
+    const float us[4] = {u0, u1, u1, u0}, vs[4] = {v0, v0, v1, v1};
+    graphics_poly_cxform(texture, 4, xs, ys, us, vs, mul, add);
 }
 void graphics_quad_uv(GXTexObj *texture, const float xs[4], const float ys[4], const float us[4], const float vs[4],
                       unsigned char alpha)

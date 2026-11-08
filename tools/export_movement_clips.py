@@ -387,7 +387,11 @@ def export(source, jar, output):
     (work / 'report.json').write_text(json.dumps(report, indent=1))
     data = {'canonical_facing': 'left', 'source_swf_sha256': SOURCE_SHA, 'origin': 'feet', 'clips': clips}
     (work / 'manifest.json').write_text(json.dumps(data, indent=1))
-    output.write_bytes(build(data, Path('/')))
+    data = build(data, Path('/'))
+    if output.name == 'player_art.bin':   # the embedded copy is LZ4-wrapped (include/lz4w.h)
+        import pack_lz4
+        data = pack_lz4.wrap(data)
+    output.write_bytes(data)
     return report
 
 

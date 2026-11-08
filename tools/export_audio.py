@@ -29,6 +29,13 @@ SOUNDS = [
     'Mario - Imtired', 'Mario - Yawn', 'Mario - Snore1', 'Mario - Snore2',
     'PrincessPeachesCastle-Intro', 'PrincessPeachesCastle-Repeat',
     '+achievement_ping',
+    # the front end (tools/export_front_end.py): the opening's sound stream
+    # (sprite 9280, MP3 blocks on its frames 158-341), the title theme as an
+    # intro (0 - 10.576 s) and a loop (2.58 - 10.576 s: the original repeats
+    # from 2.58 s; 10.576 s is where the music lines up with it again, an
+    # 8 s phrase, and the title's frames 82-337), and the file select song
+    '>9280', 'TitleScreenTheme@0:10.576', 'TitleScreenTheme@2.58:10.576',
+    'FileSelectSong-Intro', 'FileSelectSong-Repeat',
 ]
 # '+' sounds are the project's own WAV files in assets/audio/ (the achievement
 # notification sound, chosen by the project owner): mono, resampled to
@@ -158,6 +165,27 @@ def adpcm(samples):
     return bytes(out)
 
 
+def stream_sound(raw, start, sprite):
+    """A sprite's MP3 sound stream (SoundStreamHead + SoundStreamBlocks), mono PCM at its rate."""
+    head, mp3 = None, bytearray()
+    for code, pos, length in S.tags(raw, start, len(raw)):
+        if code == 39 and struct.unpack_from('<H', raw, pos)[0] == sprite:
+            for c, p, n in S.tags(raw, pos + 4, pos + length):
+                if c in (18, 45):
+                    head = raw[p:p + n]
+                elif c == 19 and n > 4:
+                    mp3 += raw[p + 4:p + n]          # sample count, seek, then MP3 frames
+    if head is None or (head[1] >> 4) != 2:
+        raise ValueError(f'sprite {sprite}: no MP3 stream')
+    rate = [5512, 11025, 22050, 44100][(head[1] >> 2) & 3]
+    with tempfile.TemporaryDirectory() as tmp:
+        f = Path(tmp) / 's.mp3'
+        f.write_bytes(bytes(mp3))
+        pcm = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(f), '-f', 's16le', '-ac', '1', '-ar', str(rate), '-'],
+                             check=True, capture_output=True).stdout
+    return np.frombuffer(pcm, dtype='<i2').astype(np.int32), rate
+
+
 def export(source, out_dir):
     swf = (source / 'Publish/Super_Mario_63_2010.swf').read_bytes()
     if hashlib.sha256(swf).hexdigest() != C.SOURCE_SHA:
@@ -171,8 +199,16 @@ def export(source, out_dir):
             blob = adpcm(pcm)
             entries.append((rate, len(pcm), blob))
             continue
-        fmt, rate, stereo, count, data = defined[names[name]]
+        if name[0] == '>':
+            pcm, rate = stream_sound(raw, start, int(name[1:]))
+            entries.append((rate, len(pcm), adpcm(pcm)))
+            continue
+        base, _, span = name.partition('@')
+        fmt, rate, stereo, count, data = defined[names[base]]
         pcm = decode(fmt, rate, stereo, count, data)
+        if span:   # 'name@from:to' seconds
+            t0, t1 = (float(v) for v in span.split(':'))
+            pcm = pcm[round(t0 * rate):round(t1 * rate)]
         blob = adpcm(pcm)
         entries.append((rate, len(pcm), blob))
     header = bytearray(b'SM63SND1' + struct.pack('>II', 1, len(entries)))

@@ -6,7 +6,9 @@ card and the save file that keeps them.
 
 ## What can unlock today
 
-Only the tutorial (8-E1-1 .. 8-E1-2-2) is in the port, so **only #1 A New
+Each of the four save files (A-D, chosen on the main menu's Story page,
+docs/front-end.md) keeps its own achievements. Only the tutorial
+(8-E1-1 .. 8-E1-2-2) is in the port, so **only #1 A New
 Adventure can be earned in normal play** (the tutorial's end: Intro Movie 2
 sets `_root.Star[39]`). Every other trigger is wired to the original's own
 progress variables and fires as soon as the port has the course, boss or
@@ -138,15 +140,15 @@ Notes on the checks against the original:
 ## Save format
 
 `sd:/sm63wii/save.dat` (developer builds: `devsave.dat`). Big-endian,
-212 bytes:
+276 bytes:
 
 | Offset | Size | Contents |
 |---|---|---|
 | 0 | 8 | `SM63WIIS` |
 | 8 | 2 | version (1) |
-| 10 | 2 | slot count (3, the original's three files) |
+| 10 | 2 | slot count (4, the original's files A-D) |
 | 12 | 4 | flags: bit 0 music muted; bits 8-15 the slot being played |
-| 16 | 64 x 3 | slots: +0 used, +1 Bowser keys (bit k-1), +4 milestones, +8 shines (bit n-1 = Star[n]), +16 Star Coins, +24 achievements unlocked (bit id-1), +32 32 reserved bytes |
+| 16 | 64 x 4 | slots: +0 used, +1 Bowser keys (bit k-1), +4 milestones, +8 shines (bit n-1 = Star[n]), +16 Star Coins, +24 achievements unlocked (bit id-1), +32 32 reserved bytes |
 | end | 4 | CRC-32 of everything before it |
 
 A write goes to `save.tmp`, is read back and checked, then the old file

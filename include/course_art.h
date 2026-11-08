@@ -5,6 +5,10 @@
    the far background's sky gradient). Pure parsing; GX upload lives in platform code. */
 #include "course_pack.h"
 #define COURSE_ART_MAX_LAYERS 80
+/* MEM2 for one area's textures (the largest area needs 19.7 MB); the front
+   end (front_render.c) uses the same space while no course is shown (its
+   largest set, the title, 19.6 MB). course_art_test / test_front_end check both. */
+#define COURSE_MEM2_RESERVE (21u * 1024 * 1024)
 #define COURSE_ART_MAX_TILES 128   /* an animated picture keeps one frame per tile */
 typedef enum { ART_LAYER_FAR, ART_LAYER_BG, ART_LAYER_MID, ART_LAYER_CLOSE, ART_LAYER_BACK, ART_LAYER_FRONT,
                ART_LAYER_PICTURE, ART_LAYER_KIND_COUNT } CourseArtKind;

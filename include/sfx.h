@@ -19,6 +19,9 @@ typedef enum {
     SFX_LETSGO, SFX_MMMM, SFX_HMM, SFX_IMTIRED, SFX_YAWN, SFX_SNORE1, SFX_SNORE2,   /* Idle / Sleep */
     MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT,
     SFX_ACHIEVEMENT,                      /* assets/audio/achievement_ping.wav (project sound) */
+    SFX_OPENING,                          /* the opening's sound stream (9280, frames 158-341) */
+    MUS_TITLE_INTRO, MUS_TITLE_LOOP,      /* TitleScreenTheme 0-10.576 s, then 2.58-10.576 s repeating */
+    MUS_FILE_SELECT_INTRO, MUS_FILE_SELECT_REPEAT,
     SFX_COUNT
 } SfxId;
 typedef struct { SfxId id; unsigned char volume; signed char pan; } SfxEvent; /* volume 0..100, pan -100..100 */
