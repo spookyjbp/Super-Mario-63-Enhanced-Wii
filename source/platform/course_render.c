@@ -720,13 +720,13 @@ static void draw_options_page(const CourseSession *s, const PauseView *v, float 
     }
     page_controls(&b, s, "switch");
 }
-/* Exit: 793 Exit Level (the Castle Grounds: not in the port), 788 Quit Game. */
+/* Exit: 793 Exit Level (to the Castle Grounds: not in the port yet), 788 Quit Game. */
 static void draw_exit_page(const CourseSession *s, const PauseView *v, float a, float width)
 {
     const PauseMenu *m = &s->pause;
     const PageBox b = page_box(v, PP_TITLE_EXIT, NULL, NULL, a, width);
     const struct { PauseItem item; unsigned part; const char *desc; } ex[2] = {
-        {PI_EXIT_LEVEL, PP_EXIT_EXITLEVEL, "No Castle Grounds in the port yet"},
+        {PI_EXIT_LEVEL, PP_EXIT_EXITLEVEL, "Not in the port yet"},
         {PI_QUIT, PP_EXIT_QUIT, "Back to the title screen"}};
     for (unsigned i = 0; i < 2; ++i) {
         const bool live = ex[i].item == PI_QUIT;

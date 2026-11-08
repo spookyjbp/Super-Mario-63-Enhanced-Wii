@@ -427,11 +427,15 @@ static void test_sign_messages_per_controller(void)
     assert(run.length);
     for (unsigned k = 0; k < CONTROLLER_KINDS; ++k) {
         const CourseString m = course_sign_message(run, k);
-        /* only "pressing Up and back" changes (Up is the keyboard jump) */
+        /* "pressing Up and back" changes (Up is the keyboard jump), and the
+           original's grammar is mended ("Dive forwards.", "while ducking") */
         const char *jump = k == CONTROLLER_CLASSIC ? "pressing B and back." : k == CONTROLLER_WIIMOTE ?
                            "pressing 2 and back." : "pressing A and back.";
-        assert(m.length == run.length - 1 && !memcmp(m.text + m.length - strlen(jump), jump, strlen(jump)));
-        assert(!memcmp(m.text, run.text, run.length - strlen("pressing Up and back.")));
+        assert(m.length == run.length - 3 && !memcmp(m.text + m.length - strlen(jump), jump, strlen(jump)));
+        const size_t same = strlen("You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge "
+                                   "or Dive forwards");
+        assert(!memcmp(m.text, run.text, same));
+        assert(strstr(m.text, "Dive forwards.\nAlso, while ducking/crouching on the ground,"));
     }
     assert(!memcmp(run.text + run.length - 21, "pressing Up and back.", 21));
     assert(course_session_start(&s, &pack, "8-E1-2-2", 0, 0, 854));
@@ -919,7 +923,7 @@ static void test_pause_menu(void)
     assert(s.pause.focus == PI_NOZ_NONE);
     ticks(spin, 1);
     assert(s.pause.focus == PI_FLUDD);
-    /* Exit: Exit Level cannot be chosen (no Castle Grounds in the port): Quit Game first */
+    /* Exit: Exit Level cannot be chosen (not in the port yet): Quit Game first */
     s.pause.focus = PI_EXIT; s.pause.column = PI_EXIT;
     ticks(r, 1); ticks((GameInput){0}, 30);
     assert(s.pause.page == PAUSE_EXIT && s.pause.focus == PI_QUIT);

@@ -890,7 +890,12 @@ def write_stream(all_frames, keys, baked, clip_rows, opt, inset=None):
     out = bytearray(b'SM63TLP3')
     out += struct.pack('>8I', len(pages), len(keys), len(clip_rows), len(all_frames), opt.chunk, len(chunks),
                        len(intervals), max(len(c) for c in chunks))
+    import art_repair
     for pg, f, (iv0, ivn) in zip(pages, page_fmt, page_iv):
+        # clear texels take their visible neighbours' colour: GX filters
+        # unpremultiplied texels, and clear black ones drew a dark line along
+        # every piece's edge (where pieces meet, a line between them)
+        pg = Image.fromarray(art_repair.bleed(pg.convert('RGBA'), passes=2), 'RGBA')
         blob = lz4.block.compress((rgb5a3_tiles if f else rgba8_tiles)(pg), store_size=False)
         out += struct.pack('>HHIBBHI', pg.width, pg.height, len(blob), f, 0, ivn, iv0) + blob
         out += b'\0' * (-len(out) % 4)

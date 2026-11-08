@@ -27,10 +27,16 @@ the way Flash Player does, with the game's own ActionScript:
   notes where (PRESS); random numbers come from a fixed seed.
 - `tools/export_cinema.py` turns the recording into the data file: the
   events (messages with their portrait, PRESS, music starts with their
-  `onSoundComplete` repeat, stops, volume changes, sound effects including the
+  `onSoundComplete` repeat and volume as the script gives them right after
+  `start()` (the recording notes each `onSoundComplete` it sets), stops, volume changes, sound effects including the
   timelines' own event sounds, the Skip button's target, the end), the sounds
   (IMA ADPCM with seek points, so the music can start part way), and a
   streamed timeline pack ("SM63TLP3", `timeline_art.write_stream`).
+  The original's lines have a few spelling, grammar and markup slips; the
+  exporter mends them (`CORRECTIONS`, each one checked to be used): "sittting",
+  "We'll need heat it up", "Your Castle mine", "unconcious", "there's now
+  way", "lets go", "expecting your another 30 minutes", missing commas and
+  colons, and mismatched `<b>`/`<i>` tags.
 
 The streamed pack exists because a cutscene's art is far bigger than memory
 (the Intro alone draws about 42 MB of textures). Each frame draws only the
@@ -38,7 +44,11 @@ The streamed pack exists because a cutscene's art is far bigger than memory
 2^(L/2) apart), all in RGB5A3; `cinema_render.c` keeps the tiles of the next
 8 frames decoded in the course renderer's MEM2 area (decoding a few ahead each
 frame) and the message box's always. The exporter checks the most this needs
-fits in that area.
+fits in that area. Clear texels take their visible neighbours' colour
+(`art_repair.bleed` on each page): GX filters unpremultiplied texels, and
+clear black ones drew dark lines along every piece's edge, where pieces meet
+a line between them. Big pieces' tiles carry 2 texels of their neighbours
+(`OVERLAP`) for the same reason.
 
 ## Playing them
 

@@ -382,6 +382,13 @@ class SoundObj(Obj):
             return Native(lambda this: self.volume)
         return super().get(name)
 
+    def set(self, name, value):
+        # the scripts set onSoundComplete after start(): the exporter needs it
+        # as it was then, not as it is at the end of the recording
+        if name == 'onSoundComplete':
+            self.sim.event('sound_complete', self.n, value)
+        return super().set(name, value)
+
 
 class ColorObj(Obj):
     def __init__(self, target):

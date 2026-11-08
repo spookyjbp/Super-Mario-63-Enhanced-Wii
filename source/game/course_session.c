@@ -839,8 +839,8 @@ void course_session_step(CourseSession *s, GameInput in)
    jump key; P its pause key. */
 CourseString course_sign_message(CourseString text, unsigned controller)
 {
-#define RUN_SIGN "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards\n" \
-    "Also, while on ducking/crouching on the ground, you can backflip off the ground by quickly pressing "
+#define RUN_SIGN "You can run by double tapping Right or Left.\nIn the air you can press Down to Lunge or Dive forwards.\n" \
+    "Also, while ducking/crouching on the ground, you can backflip off the ground by quickly pressing "
 #define PAUSE_SIGN "Oh!  Mario!  You can pause the game by pressing "
 #define PAUSE_END ".  There, you can change settings, view stuff you've collected, and switch FLUDD power-ups."
     /* Jump: GameCube A, Classic b, Wii Remote 2. Pause: START, PLUS, PLUS and MINUS together.

@@ -100,6 +100,63 @@ def repeat_name(fn):
     return found[0] if found else None
 
 
+# The original's cutscene lines with their spelling, grammar and markup
+# mended (each is applied once, and every one must be used).
+CORRECTIONS = [
+    ("<b><i>Peach</i></b> The Cake for Mario is still sittting in the Fridge?  We'll need heat it up for when "
+     "Mario gets here....",
+     "<b><i>Peach:</i></b> The Cake for Mario is still sitting in the Fridge?  We'll need to heat it up for when "
+     "Mario gets here..."),
+    ("Mario is still a half-an-hour away;  that", "Mario is still half an hour away; that"),
+    ("Woah!  Mario you surprised me!", "Whoa!  Mario, you surprised me!"),
+    ("we weren't expecting your another 30 minutes!", "we weren't expecting you for another 30 minutes!"),
+    ("<b><i>A Toad:</i> What's that noise?</b>", "<b><i>A Toad:</i></b> What's that noise?"),
+    ("Your Castle mine, Princess!", "Your Castle is mine, Princess!"),
+    ("<b><i>Bowser:</b> Here it is</i>... The", "<b><i>Bowser:</i></b> Here it is... The"),
+    ("lying unconcious outside", "lying unconscious outside"),
+    ("<b><i>Kamek:</i></b>The Battle", "<b><i>Kamek:</i></b> The Battle"),
+    ("there's now way he can", "there's no way he can"),
+    ("My Name is Eddie!", "My name is Eddie!"),
+    ("<b><i>Eddie:</i>  Or did he?</b>", "<b><i>Eddie:</i></b> Or did he?"),
+    ("What is it Mario?", "What is it, Mario?"),
+    ("since Mushroom Kingdom is now", "since the Mushroom Kingdom is now"),
+    ("Come on Mario, lets go", "Come on, Mario, let's go"),
+]
+
+
+def correct(text, used):
+    for i, (old, new) in enumerate(CORRECTIONS):
+        if old in text:
+            text = text.replace(old, new)
+            used.add(i)
+    return text
+
+
+def sound_state(events, i, n):
+    """Sound object n's repeat and volume for its start() at events[i]: the
+    onSoundComplete the script gives it next (before starting it again; the
+    scripts set it after start()), and its volume then (setVolume calls in the
+    same frame count, Flash starts the sound when the frame ends)."""
+    rep, volume = None, 100.0
+    for e in events[:i]:
+        if e[1] == 'sound_volume' and e[2] == n:
+            volume = e[3]
+    for e in events[i + 1:]:
+        if e[2:3] != (n,) or e[1] == 'sound_start':
+            if e[1] == 'sound_start' and e[2] == n:
+                break
+            continue
+        if e[1] == 'sound_complete':
+            rep = repeat_name(e[3])
+            break
+    for e in events[i + 1:]:
+        if e[0] != events[i][0]:
+            break
+        if e[1] == 'sound_volume' and e[2] == n:
+            volume = e[3]
+    return rep, volume
+
+
 LOOK = 8                        # cinema_render.c
 SLOT = (256 * 256 * 4, 256 * 256 * 2)
 SCRATCH = 21 * 1024 * 1024      # COURSE_MEM2_RESERVE (course_art.h)
@@ -169,8 +226,9 @@ def build(tl, swf, scripts, jar, work, sprite, init):
         return index[key]
 
     out = []   # (frame, kind, payload)
+    used = set()
     stream_started = False
-    for ev in events:
+    for i, ev in enumerate(events):
         f, kind, *args = ev
         f = min(f, len(frames) - 1)
         if kind == 'message':
@@ -179,23 +237,24 @@ def build(tl, swf, scripts, jar, work, sprite, init):
             # the portrait in force when the message was set
             for g in reversed([e for e in events if e[1] == 'portrait' and e[0] <= ev[0]]):
                 portrait = as2.toint(g[2]); break
+            text = correct(text, used)
             out.append((f, MESSAGE, bytes([portrait]) + text.encode('latin-1', 'replace')))
         elif kind == 'press':
             out.append((f, PRESS, b''))
         elif kind == 'sound_start':
             n, name, offset, loops = args
             obj = sim.sound_objects[n]
-            rep = repeat_name(obj.props.get('onSoundComplete'))
+            rep, volume = sound_state(events, i, n)
             if name is None:
                 continue
             if name not in names:
                 raise ValueError(f'unknown sound {name}')
             if obj.target is sim.root.props.get('Mariosound') or name.startswith('cannon'):
-                out.append((f, SFX, struct.pack('>B3xf', sound(name), obj.volume)))
+                out.append((f, SFX, struct.pack('>B3xf', sound(name), volume)))
                 continue
             r = sound(rep) if rep else sound(name) if loops > 1 else 255
             out.append((f, MUSIC, struct.pack('>BBBxff', sound(name), r, 1 if (loops > 1 or rep) else 0,
-                                               offset, obj.volume)))
+                                               offset, volume)))
         elif kind == 'sound_stop':
             out.append((f, STOP, b''))
         elif kind == 'sound_volume':
@@ -246,7 +305,7 @@ def build(tl, swf, scripts, jar, work, sprite, init):
         raise SystemExit(f'{sprite}: the cutscene needs {need} bytes of MEM2, more than {SCRATCH}')
     info['mem2'] = need
     info.update({'events': len(out), 'sounds': len(sounds), 'sound bytes': len(body), 'labels': labels,
-                 'missing calls': sim.interp.missing})
+                 'missing calls': sim.interp.missing, 'corrections': used})
     return bytes(blob), info
 
 
@@ -267,12 +326,16 @@ def main():
     tl = T.parse(swf)
     scripts = C.Scripts(a.scripts)
     a.data.mkdir(parents=True, exist_ok=True)
+    used = set()
     for name, (sprite, init) in CINEMAS.items():
         if a.only and a.only != name:
             continue
         data, info = build(tl, swf, scripts, a.ffdec_jar, a.work / name.split('.')[0], sprite, init)
         (a.data / name).write_bytes(data)
+        used |= info.pop('corrections')
         print(name, len(data), info)
+    if not a.only and len(used) != len(CORRECTIONS):
+        raise SystemExit(f'corrections never used: {[CORRECTIONS[i][0] for i in set(range(len(CORRECTIONS))) - used]}')
 
 
 if __name__ == '__main__':

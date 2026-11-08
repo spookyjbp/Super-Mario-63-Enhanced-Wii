@@ -9,6 +9,28 @@ import as2
 import export_cinema as E
 
 
+def black_edges(pack, pages=40):
+    """The share of clear texels next to visible ones that are black where
+    those neighbours are not (outlines are black: clear texels beside them
+    rightly are), in the pack's first pages."""
+    import lz4.block, numpy as np
+    n = min(pages, struct.unpack_from('>I', pack, 8)[0])
+    q, edge, black = 40, 0, 0
+    for _ in range(n):
+        w, h, size = struct.unpack_from('>HHI', pack, q); q += 16
+        t = np.frombuffer(lz4.block.decompress(pack[q:q + size], uncompressed_size=w * h * 2), '>u2')
+        q += size; q += -q % 4
+        t = t.reshape(h // 4, w // 4, 4, 4).transpose(0, 2, 1, 3).reshape(h, w)
+        op = (t & 0x8000) > 0
+        clear = ~op & (((t >> 12) & 7) == 0)
+        lit = ~clear & (np.where(op, t & 0x7fff, t & 0xfff) != 0)    # visible and not black
+        near = np.zeros_like(clear)
+        near[1:] |= lit[:-1]; near[:-1] |= lit[1:]; near[:, 1:] |= lit[:, :-1]; near[:, :-1] |= lit[:, 1:]
+        e = clear & near
+        edge += e.sum(); black += (e & ((t & 0xfff) == 0)).sum()
+    return black / max(1, edge)
+
+
 class Clip(as2.Obj):
     pass
 
@@ -92,8 +114,29 @@ class ScriptPlayer(unittest.TestCase):
         self.assertEqual((cam.get('_x'), cam.get('_y')), (0, 7))
 
 
+class Exporter(unittest.TestCase):
+    def test_repeat_set_after_start(self):
+        # 9979 frame 528: start(0, 1), setVolume(100), then onSoundComplete
+        # (the Airship intro went silent after 8 s: the repeat was read at the
+        # end of the recording, when the handler had cleared it)
+        fn = as2.parse('f = function () { _root.bgsong.attachSound("Airship Theme Repeat"); };')
+        it = as2.Interp({'_root': as2.Obj()})
+        this = Clip({})
+        it.run(fn, this)
+        events = [(5390, 'sound_volume', 3, 0.0), (5391, 'sound_stop', 3), (5391, 'sound_start', 4, 'Airship Theme Intro', 0.0, 1.0),
+                  (5391, 'sound_volume', 4, 100.0), (5391, 'sound_complete', 4, this.get('f')),
+                  (5500, 'sound_volume', 4, 0.0), (5600, 'sound_complete', 4, None)]
+        self.assertEqual(E.sound_state(events, 2, 4), ('Airship Theme Repeat', 100.0))
+
+    def test_corrections(self):
+        used = set()
+        self.assertEqual(E.correct("<b><i>Bowser:</i></b> Your Castle mine, Princess!", used),
+                         "<b><i>Bowser:</i></b> Your Castle is mine, Princess!")
+        self.assertEqual(len(used), 1)
+
+
 class DataFiles(unittest.TestCase):
-    def check(self, name, frames, course):
+    def check(self, name, frames, course, songs=True):
         data = (ROOT / 'assets/data' / name).read_bytes()
         self.assertEqual(data[:8], b'SM63CIN1')
         version, nframes, nevents, nsounds, ev, snd, pack, size = struct.unpack_from('>8I', data, 8)
@@ -111,9 +154,21 @@ class DataFiles(unittest.TestCase):
             q += 8 + (n + 3) // 4 * 4
         self.assertEqual(last[0], E.END)
         self.assertEqual(last[1][8:].decode(), course)
+        # every song that plays once and then repeats or loops says so (the
+        # music stopped after the intro of Bowser's invasion)
+        q = ev
+        for _ in range(nevents):
+            f, kind, n = struct.unpack_from('>IBB', data, q)
+            if kind == E.MUSIC and songs:
+                snd, rep, loops = struct.unpack_from('>BBB', data, q + 8)
+                self.assertTrue(rep != 255 and loops, f'music at {f} does not go on')
+            q += 8 + (n + 3) // 4 * 4
+        # clear texels beside visible ones carry a colour (black ones drew
+        # lines along every piece's edge)
+        self.assertLess(black_edges(p), 0.05)   # 0.98 before
 
     def test_intro(self):
-        self.check('cinema_intro.bin', 1050, '8-E1-1')
+        self.check('cinema_intro.bin', 1050, '8-E1-1', songs=False)   # its timeline's stream sound
 
     def test_intro2(self):
         self.check('cinema_intro2.bin', 21498, 'Castle')
