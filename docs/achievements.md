@@ -115,9 +115,17 @@ Notes on the checks against the original:
   close animation, button easing, page-change clip 661, pages default / Star
   Map / Fludd / Options / Exit), laid out for the TV and D-pad: the panel over
   the 16:9 screen, the original buttons (and the port's Achievements) in a
-  column on the left, the chosen page on the right. Up / Down move in the
-  column, jump or Right opens the page and steps into it, spin or Left goes
-  back. While it is open the game stands still.
+  column on the left, the chosen page on the right. Every page is rows in
+  the Achievements page's style with the original page's title and contents
+  (PAUSED: the course, its star and the counters; Star Map: courses, mini
+  courses, Storyline, Bowser and the castle's secret stars and Star Coins,
+  each row with its Shine Sprites and Star Coins and, for courses, the coin
+  record; Fludd: the nozzles; Options: Mute Music, the Flash settings
+  unavailable; Exit: Exit Level unavailable (no Castle Grounds in the port),
+  Quit Game). Up / Down move in the column, jump or Right opens the page and
+  steps into its rows, Up / Down move through the rows that can be chosen
+  (lists scroll), spin or Left goes back. While it is open the game stands
+  still.
 * `source/platform/course_render.c`: draws the menu (`draw_pause`), the
   Achievements page and the card (`draw_achievement_card`).
 * `source/game/save_data.c`, `source/platform/save_io.c`: the save file.
@@ -133,8 +141,9 @@ Notes on the checks against the original:
 | | GameCube | Classic | Wii Remote (sideways) |
 |---|---|---|---|
 | Open / close | START | + | + and − together |
-| Move (column / page items) | D-pad | D-pad | Control Pad |
+| Move (column / page rows) | D-pad Up / Down | D-pad Up / Down | Control Pad Up / Down |
 | Open a page / step into it | A or Right | b or Right | 2 or Right |
+| Choose a row (wear a nozzle, Mute Music, Quit Game) | A | b | 2 |
 | Back to the column / PAUSED / close | B or Left | y or Left | 1 or Left |
 
 ## Save format

@@ -47,9 +47,24 @@ nested frame.
   plus the clip's extra gravity, 16-frame landing lock (`xspeed *= 0.8` for 8).
 - Hover dive recovery ends at frame 7 (`Slide (Hover).xml`), others at 9.
 
+## Idle with FLUDD (a port addition)
+
+The original plays Idle (1050) and Tired (1067), ending in Sleep (1450), only
+from Mario (None) Walk (`count >= 92`); its FLUDD walk clips have no idle.
+On request (2026-11-08) the port plays them with FLUDD on too.
+`tools/idle_fludd.py` places the original's FLUDD pieces on each pose the way
+the original's own clips do on those same poses (Mario Talk, Hurt 3, Boss
+Cinema, Start Course Animation, Overworld Mario - 1): Fludd Side behind and
+Fludd Side Front (the nozzle) in front on side poses, Fludd Front Code behind
+a pose facing the camera, Fludd Backwards in front of one facing away. Poses
+the original never draws with FLUDD (Fixing Hat, Thinking, Planning, Tired,
+lying flat) take the nearest paired pose aligned onto their body. The FLUDD
+sprites go into the SWF sprites and FFDec renders each FLUDD state
+(`export_object_art.py` MARIO_IDLE_k / TIRED_k / SLEEP_k). Holding the FLUDD
+button counts as moving, so the idle never covers a spray.
+
 ## Not reproduced yet
 
-- Idle and tired animations after standing still (`Walk.xml` `count >= 92`).
 - Rocket blasts from a dive or frontflip, using `DiveRot` (nested rocket water
   clips), and Hover's 5-degree body tilt while moving.
 - Ground-angle rotation of a grounded slide.

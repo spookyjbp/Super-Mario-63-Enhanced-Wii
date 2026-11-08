@@ -14,23 +14,24 @@
    (scale 25 -> 100, alpha 0 -> 100 over 20 frames), then pulses (alpha
    75 + 30 sin, 0.03 a frame); pressed, it grows 5 % a frame while
    TitleScreenTransition (2137, 20 frames) plays over everything, and the
-   menu follows. */
+   menu follows.
+   Main menu (9535): the port goes from START straight to its Story page, the
+   file select (user request 2026-11-08); the Start page with Options and
+   Extras is left out. BACK there (or spin) goes back to the title. */
 #include "game.h"
 #include <stdbool.h>
 
 typedef enum { FE_OPENING, FE_TITLE, FE_MENU, FE_PLAY } FrontState;
 
-/* The main menu (9535): pages, and the items the port moves as their scripts do. */
-typedef enum { MP_START, MP_STORY, MP_EXTRAS, MP_OPTIONS, MP_CREDITS, MP_ACHIEVEMENTS, MP_PAGES } MenuPage;
+/* The main menu's Story page (9535 frame 2): the items the port moves as their scripts do. */
+#define FE_MENU_PAGE_STORY 0   /* the menu_page clip's only frame: 9535 frame 2 (tools/export_front_end.py) */
 typedef enum {
-    MI_STORY, MI_OPTIONS, MI_EXTRAS,                       /* Start */
-    MI_FILE_A, MI_FILE_B, MI_FILE_C, MI_FILE_D, MI_TOPBACK, /* Story (BACK: the file menu's 'bach') */
-    MI_PLAY, MI_COPY, MI_ERASE, MI_FILEBACK,               /* the file's side buttons */
-    MI_ACHIEVEMENTS, MI_CREDITS, MI_BACK,                  /* Extras (Achievements in Level Designer's place) */
-    MI_MUTE,                                               /* Options */
-    MI_LIST,                                               /* Achievements page */
+    MI_FILE_A, MI_FILE_B, MI_FILE_C, MI_FILE_D, MI_TOPBACK, /* the files and BACK (the file menu's 'bach') */
+    MI_PLAY, MI_COPY, MI_ERASE, MI_FILEBACK,               /* the open file's side buttons */
     MI_COUNT
 } MenuItem;
+/* D-pad directions for front_menu_link */
+enum { FE_UP, FE_DOWN, FE_LEFT, FE_RIGHT };
 enum { FM_NONE, FM_COPYING, FM_DELETING };
 #define FE_MESSAGES 3
 #define FE_FILES 4
@@ -41,8 +42,6 @@ typedef struct { float scale, r, ywave, rwave, rspeed, scalespeed; bool cl; unsi
 typedef struct { bool on; float y, speed; int count; bool green; char text[48]; } MenuMessage;
 
 typedef struct {
-    unsigned char page;
-    int trans_y; bool trans_on, trans_swapped; unsigned char trans_to;   /* MenuTransition (2108) */
     signed char focus;
     FloatItem item[MI_COUNT];
     int hl;                         /* filem.HL: the file chosen, -1 none */
@@ -56,8 +55,6 @@ typedef struct {
     /* MenuBlackTrans (2128): Play */
     bool black_on; float black_alpha;
     MenuMessage msg[FE_MESSAGES];
-    float credits_scroll, credits_max;
-    unsigned char ach_file, ach_top, ach_sel;
     /* the backdrop's scrolling layers (9373) */
     float far_x, mid_x, tree_x[3]; unsigned char tree_frame[3], tree_last[2];
     unsigned rnd;
@@ -68,7 +65,6 @@ typedef struct {
    saves when `changed` is set). */
 typedef struct {
     unsigned shines[FE_FILES];      /* TotalStars of each file */
-    bool muted;
     bool changed;
     int copy_from, copy_to;         /* a copy to make (-1 none) */
     int erase;                      /* a file to erase (-1 none) */
@@ -98,11 +94,17 @@ typedef struct {
 } FrontEnd;
 
 void front_init(FrontEnd *f);
-/* Straight to the main menu's Start page (Quit Game in the pause menu goes back to the title instead). */
+/* Back to the title screen (Quit Game in the pause menu, BACK in the menu). */
 void front_to_title(FrontEnd *f);
-/* Item positions (9535 px) on the current page, for drawing and navigation. */
+/* Item positions (9535 px), for drawing. */
 bool front_item_pos(const FrontEnd *f, MenuItem item, float *x, float *y);
 bool front_item_shown(const FrontEnd *f, MenuItem item);
+/* Can the item be chosen now? */
+bool front_item_live(const FrontEnd *f, MenuItem item);
+/* The item the D-pad moves to from `item` (FE_UP...), or -1: the menu's
+   fixed links (the files' 2 x 2 grid, BACK above it on the right, the open
+   file's column of buttons), skipping items that cannot be chosen now. */
+int front_menu_link(const FrontEnd *f, MenuItem item, unsigned dir);
 void front_step(FrontEnd *f, const GameInput *in);
 /* The title's frame (0-based) at its music position. */
 unsigned front_title_frame(const FrontEnd *f);

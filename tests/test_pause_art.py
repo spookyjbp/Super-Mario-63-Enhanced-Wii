@@ -49,10 +49,26 @@ class PauseArtTests(unittest.TestCase):
         h = (GEN / 'pause_layout.h').read_text()
         parts = re.findall(r'\{"(\w+)", \d+, \d+, \d+, \d+', h)
         for name in ('btn_achievements', 'btn_back', 'title_achievements', 'exit_quit', 'exit_exitlevel', 'opt_mute',
-                     'noz_none', 'noz_hover_locked', 'mute_on_4', 'mute_off_4', 'coin_16'):
+                     'noz_none', 'noz_hover_locked', 'mute_on_4', 'mute_off_4', 'coin_16',
+                     # the row-style pages: each page's original title, the Star Map's icons
+                     'title_paused', 'title_starmap', 'title_fludd', 'title_options', 'title_exit',
+                     'shine_off', 'shine_on', 'shine_all', 'scoin_off', 'scoin_on'):
             self.assertIn(name, parts)
         rows = re.findall(r'\{\{PP_(\w+), [-\d.]+f, [-\d.]+f\}, \{PP_(\w+)[^/]*/\* (\w+) \*/', h)
         self.assertEqual([r[-1] for r in rows], ['default', 'starmap', 'fludd', 'options', 'exit', 'refresh'])
+
+
+    def test_parts_fit_their_memory(self):
+        """course_render.c uploads PauseParts into PAUSE_PARTS_BYTES (RGB5A3)."""
+        src = (ROOT / 'source/platform/course_render.c').read_text()
+        a, b = map(int, re.search(r'#define PAUSE_PARTS_BYTES \((\d+)u \* (\d+)\)', src).groups())
+        import sys
+        sys.path.insert(0, str(ROOT / 'tools'))
+        art = (GEN / 'course_8e1_art.bin').read_bytes()
+        at = art.find(b'PauseParts')
+        self.assertGreater(at, 0)
+        w, h = struct.unpack_from('>II', art, at + len('PauseParts') + 16)
+        self.assertLessEqual(w * h * 2, a * b)
 
 
 if __name__ == '__main__':

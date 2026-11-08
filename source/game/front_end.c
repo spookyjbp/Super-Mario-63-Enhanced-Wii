@@ -12,7 +12,7 @@
 #define TITLE_LOOP_FRAME 81               /* 'repeat' (frame 82) */
 #define FE_TITLE_OUT_TOTAL 40
 
-static void menu_enter(FrontEnd *f, unsigned page);
+static void menu_enter(FrontEnd *f);
 void front_init(FrontEnd *f)
 {
     memset(f, 0, sizeof *f);
@@ -20,15 +20,12 @@ void front_init(FrontEnd *f)
     f->play_slot = -1;
     f->files.copy_from = f->files.copy_to = f->files.erase = -1;
     f->menu.rnd = 0x2545F491u;
-    f->menu.credits_max = 0;
 }
 void front_to_title(FrontEnd *f)
 {
     const MenuFiles files = f->files;
-    const float credits = f->menu.credits_max;
     front_init(f);
     f->files = files; f->files.changed = false;
-    f->menu.credits_max = credits;
     f->state = FE_TITLE;                    /* ReturnToTitle(): the title screen again */
     sfx_music(MUS_TITLE_INTRO, MUS_TITLE_LOOP);
 }
@@ -82,7 +79,7 @@ static void source_frame(FrontEnd *f)
         if (f->out_frame && ++f->out_frame > FE_TITLE_OUT_FRAMES) {   /* 2137 frame 20: gotoAndStop("File Select") */
             f->state = FE_MENU;
             sfx_music(MUS_FILE_SELECT_INTRO, MUS_FILE_SELECT_REPEAT);
-            menu_enter(f, MP_START);
+            menu_enter(f);   /* the port: the Story page (the file select) at once */
         }
         break;
     case FE_MENU:
@@ -114,34 +111,23 @@ static unsigned file_of(int item) { return (unsigned)(item - MI_FILE_A); }
 bool front_item_shown(const FrontEnd *f, MenuItem item)
 {
     const MenuState *m = &f->menu;
-    switch (m->page) {
-    case MP_START: return item == MI_STORY || item == MI_OPTIONS || item == MI_EXTRAS;
-    case MP_STORY:
-        if (is_file(item) || item == MI_TOPBACK) return true;
-        if (item == MI_PLAY || item == MI_COPY || item == MI_ERASE || item == MI_FILEBACK)
-            return FE_SLIDE_PLAY[0][0] < 1e8f ? true : m->filem > 1;
-        return false;
-    case MP_EXTRAS: return item == MI_ACHIEVEMENTS || item == MI_CREDITS || item == MI_BACK;
-    case MP_OPTIONS: return item == MI_MUTE || item == MI_BACK;
-    case MP_CREDITS: return item == MI_BACK;
-    case MP_ACHIEVEMENTS: return item == MI_LIST || item == MI_BACK;
-    default: return false;
-    }
+    if (is_file(item) || item == MI_TOPBACK) return true;
+    if (item >= MI_PLAY && item <= MI_FILEBACK) return m->filem > 1;
+    return false;
 }
 /* Can the item be chosen now (the original's frame / mode checks)? */
-static bool item_live(const FrontEnd *f, int item)
+bool front_item_live(const FrontEnd *f, MenuItem item)
 {
     const MenuState *m = &f->menu;
-    if (!front_item_shown(f, (MenuItem)item)) return false;
-    if (m->page == MP_STORY) {
-        if (m->mode == FM_DELETING || m->red_on) return false;
-        if (item == MI_PLAY || item == MI_COPY || item == MI_ERASE) return m->hl >= 0 && m->filem >= 20 && m->mode != FM_COPYING;
-        if (item == MI_FILEBACK) return m->hl >= 0 && m->filem >= 22;
-        if (item == MI_TOPBACK) return m->hl < 0 && m->filem < 2;   /* bach.StopCoding() while a file is open */
-        if (is_file(item)) return m->hl < 0 ? m->filem < 2 : m->mode == FM_COPYING;
-    }
-    return true;
+    if (!front_item_shown(f, item)) return false;
+    if (m->mode == FM_DELETING || m->red_on) return false;
+    if (item == MI_PLAY || item == MI_COPY || item == MI_ERASE) return m->hl >= 0 && m->filem >= 20 && m->mode != FM_COPYING;
+    if (item == MI_FILEBACK) return m->hl >= 0 && m->filem >= 22 && m->mode != FM_COPYING;
+    if (item == MI_TOPBACK) return m->hl < 0 && m->filem < 2;   /* bach.StopCoding() while a file is open */
+    if (is_file(item)) return m->hl < 0 ? m->filem < 2 : m->mode == FM_COPYING;
+    return false;
 }
+static bool item_live(const FrontEnd *f, int item) { return item >= 0 && item < MI_COUNT && front_item_live(f, (MenuItem)item); }
 static void slide_pos(const float (*t)[2], unsigned frame, float *x, float *y)
 {
     unsigned i = frame ? frame - 1 : 0;
@@ -154,9 +140,6 @@ bool front_item_pos(const FrontEnd *f, MenuItem item, float *x, float *y)
     const float fx = FE_AT_FILEM[4], fy = FE_AT_FILEM[5];
     *x = *y = 0;
     switch (item) {
-    case MI_STORY: *x = FE_AT_STORY[4]; *y = FE_AT_STORY[5]; break;
-    case MI_OPTIONS: *x = FE_AT_OPTIONS[4]; *y = FE_AT_OPTIONS[5]; break;
-    case MI_EXTRAS: *x = FE_AT_EXTRAS[4]; *y = FE_AT_EXTRAS[5]; break;
     case MI_FILE_A: *x = fx + FE_AT_FILE_A[4]; *y = fy + FE_AT_FILE_A[5]; break;
     case MI_FILE_B: *x = fx + FE_AT_FILE_B[4]; *y = fy + FE_AT_FILE_B[5]; break;
     case MI_FILE_C: *x = fx + FE_AT_FILE_C[4]; *y = fy + FE_AT_FILE_C[5]; break;
@@ -166,32 +149,52 @@ bool front_item_pos(const FrontEnd *f, MenuItem item, float *x, float *y)
     case MI_COPY: slide_pos(FE_SLIDE_COPY, m->filem, x, y); *x += fx; *y += fy; break;
     case MI_ERASE: slide_pos(FE_SLIDE_ERASE, m->filem, x, y); *x += fx; *y += fy; break;
     case MI_FILEBACK: slide_pos(FE_SLIDE_FILEBACK, m->filem, x, y); *x += fx; *y += fy; break;
-    case MI_ACHIEVEMENTS: *x = FE_AT_LEVELDESIGNER[4]; *y = FE_AT_LEVELDESIGNER[5]; break;
-    case MI_CREDITS: *x = FE_AT_CREDITS[4]; *y = FE_AT_CREDITS[5]; break;
-    case MI_BACK: *x = FE_AT_BACK[4]; *y = FE_AT_BACK[5]; break;
-    case MI_MUTE: *x = FE_AT_OPT_MUTE[4]; *y = FE_AT_OPT_MUTE[5]; break;
-    case MI_LIST: *x = 0; *y = 0; break;
     default: return false;
     }
     return *x < 1e8f;
 }
-static int first_item(const FrontEnd *f)
+/* The D-pad's links (FE_UP, FE_DOWN, FE_LEFT, FE_RIGHT), in the order tried:
+   the files' grid (A B / C D), BACK above B, the open file's buttons
+   (PLAY, COPY, DELETE, CANCEL) top to bottom. */
+static const signed char links[MI_COUNT][4][3] = {
+    [MI_FILE_A] = {{MI_TOPBACK, -1, -1}, {MI_FILE_C, -1, -1}, {-1, -1, -1}, {MI_FILE_B, -1, -1}},
+    [MI_FILE_B] = {{MI_TOPBACK, -1, -1}, {MI_FILE_D, -1, -1}, {MI_FILE_A, -1, -1}, {MI_TOPBACK, -1, -1}},
+    [MI_FILE_C] = {{MI_FILE_A, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {MI_FILE_D, -1, -1}},
+    [MI_FILE_D] = {{MI_FILE_B, -1, -1}, {-1, -1, -1}, {MI_FILE_C, -1, -1}, {-1, -1, -1}},
+    [MI_TOPBACK] = {{-1, -1, -1}, {MI_FILE_B, MI_FILE_A, -1}, {MI_FILE_B, MI_FILE_A, -1}, {-1, -1, -1}},
+    [MI_PLAY] = {{-1, -1, -1}, {MI_COPY, MI_ERASE, MI_FILEBACK}, {-1, -1, -1}, {-1, -1, -1}},
+    [MI_COPY] = {{MI_PLAY, -1, -1}, {MI_ERASE, MI_FILEBACK, -1}, {-1, -1, -1}, {-1, -1, -1}},
+    [MI_ERASE] = {{MI_COPY, MI_PLAY, -1}, {MI_FILEBACK, -1, -1}, {-1, -1, -1}, {-1, -1, -1}},
+    [MI_FILEBACK] = {{MI_ERASE, MI_COPY, MI_PLAY}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}},
+};
+int front_menu_link(const FrontEnd *f, MenuItem item, unsigned dir)
 {
-    static const MenuItem order[] = {MI_STORY, MI_FILE_A, MI_ACHIEVEMENTS, MI_MUTE, MI_LIST, MI_BACK};
-    for (unsigned i = 0; i < sizeof order / sizeof order[0]; ++i)
-        if (item_live(f, order[i])) return order[i];
+    if ((unsigned)item >= MI_COUNT || dir > FE_RIGHT) return -1;
+    for (unsigned i = 0; i < 3; ++i) {
+        const int to = links[item][dir][i];
+        if (to >= 0 && item_live(f, to)) return to;
+    }
     return -1;
 }
-static void menu_enter(FrontEnd *f, unsigned page)
+/* Where the focus goes when it has nowhere live to be: the open file's PLAY,
+   the file being copied from's neighbour, else the first file. */
+static int first_item(const FrontEnd *f)
+{
+    const MenuState *m = &f->menu;
+    if (m->hl >= 0 && m->mode != FM_COPYING) {
+        for (int i = MI_PLAY; i <= MI_FILEBACK; ++i) if (item_live(f, i)) return i;
+        return MI_PLAY;   /* still sliding in */
+    }
+    if (m->hl >= 0) return MI_FILE_A + (m->hl == 0 ? 1 : 0);
+    return MI_FILE_A;
+}
+static void menu_enter(FrontEnd *f)
 {
     MenuState *m = &f->menu;
-    m->page = (unsigned char)page;
     for (unsigned i = 0; i < MI_COUNT; ++i) float_init(m, &m->item[i]);
     m->hl = -1; m->filem = 1; m->mode = FM_NONE;
-    m->credits_scroll = 0;
-    m->focus = (signed char)first_item(f);
-    if (page == MP_START && m->tree_frame[0] == 0)   /* the backdrop's first placement */
-        for (unsigned k = 0; k < 3; ++k) { m->tree_frame[k] = (unsigned char)(rnd(m, 20) + 1); m->tree_x[k] = 0; }
+    m->focus = MI_FILE_A;
+    for (unsigned k = 0; k < 3; ++k) { m->tree_frame[k] = (unsigned char)(rnd(m, 20) + 1); m->tree_x[k] = 0; }   /* the backdrop */
 }
 static void message(FrontEnd *f, const char *text, bool green)
 {
@@ -203,12 +206,6 @@ static void message(FrontEnd *f, const char *text, bool green)
             snprintf(g->text, sizeof g->text, "%s", text);
             return;
         }
-}
-static void go_page(FrontEnd *f, unsigned page)   /* TransitionF(page): MenuTransition */
-{
-    MenuState *m = &f->menu;
-    if (m->trans_on) return;
-    m->trans_on = true; m->trans_swapped = false; m->trans_y = 200; m->trans_to = (unsigned char)page;
 }
 /* The float script, one frame. */
 static void float_frame(FloatItem *it, bool hl, float norm, float large, float rdiv)
@@ -255,7 +252,7 @@ static void menu_frame(FrontEnd *f)
     }
     for (int i = 0; i < MI_COUNT; ++i) {
         if (!front_item_shown(f, (MenuItem)i)) continue;
-        const bool hl = i == m->focus && !m->trans_on;
+        const bool hl = i == m->focus;
         if (is_file(i)) {
             float n, l; file_scales(m, i, &n, &l);
             float_frame(&m->item[i], hl && item_live(f, i), n, l, 15);
@@ -263,15 +260,9 @@ static void menu_frame(FrontEnd *f)
             float_frame(&m->item[i], hl, 100, 125, 10);
         }
     }
-    if (m->page == MP_STORY) {   /* the file menu slides its buttons in while a file is open */
-        if (m->hl >= 0 && m->filem < FE_FILEM_FRAMES) ++m->filem;
-        else if (m->hl < 0 && m->filem > 1) --m->filem;
-    }
-    if (m->trans_on) {   /* MenuTransition: up 70 px a frame; the page changes past -150 */
-        m->trans_y -= 70;
-        if (m->trans_y <= -150 && !m->trans_swapped) { m->trans_swapped = true; menu_enter(f, m->trans_to); }
-        if (m->trans_y < -500) m->trans_on = false;
-    }
+    /* the file menu slides its buttons in while a file is open */
+    if (m->hl >= 0 && m->filem < FE_FILEM_FRAMES) ++m->filem;
+    else if (m->hl < 0 && m->filem > 1) --m->filem;
     for (unsigned i = 0; i < FE_MESSAGES; ++i) {
         MenuMessage *g = &m->msg[i];
         if (!g->on) continue;
@@ -297,7 +288,7 @@ static void menu_frame(FrontEnd *f)
         if (!m->erase[k]) continue;
         if (++m->erase[k] == 34) {
             f->files.erase = (int)k; f->files.shines[k] = 0; f->files.changed = true;
-            m->mode = FM_NONE; m->hl = -1;
+            m->mode = FM_NONE; m->hl = -1; m->focus = (signed char)(MI_FILE_A + k);
         }
         if (m->erase[k] >= 35) m->erase[k] = 0;
     }
@@ -320,39 +311,13 @@ static void menu_frame(FrontEnd *f)
         }
     }
 }
-/* The nearest live item in direction (dx, dy) (along the way more than across it). */
-static int neighbour(const FrontEnd *f, int dx, int dy)
-{
-    const MenuState *m = &f->menu;
-    float fx, fy;
-    if (m->focus < 0 || !front_item_pos(f, (MenuItem)m->focus, &fx, &fy)) return -1;
-    int best = -1; float best_d = 1e9f;
-    for (int i = 0; i < MI_COUNT; ++i) {
-        float x, y;
-        if (i == m->focus || i == MI_LIST || !item_live(f, i) || !front_item_pos(f, (MenuItem)i, &x, &y)) continue;
-        const float along = (x - fx) * dx + (y - fy) * dy, across = fabsf((x - fx) * dy) + fabsf((y - fy) * dx);
-        if (along <= 4) continue;
-        const float d = along + 2 * across;
-        if (d < best_d) { best_d = d; best = i; }
-    }
-    return best;
-}
 static void click(FrontEnd *f, int item)
 {
     MenuState *m = &f->menu;
-    FloatItem *it = &m->item[item];
     switch (item) {
-    case MI_STORY: case MI_OPTIONS: case MI_EXTRAS: case MI_CREDITS: case MI_ACHIEVEMENTS: {
-        it->cl = true; it->rspeed = 0; it->scalespeed = 8;
-        static const unsigned char to[MI_COUNT] = {[MI_STORY] = MP_STORY, [MI_OPTIONS] = MP_OPTIONS,
-            [MI_EXTRAS] = MP_EXTRAS, [MI_CREDITS] = MP_CREDITS, [MI_ACHIEVEMENTS] = MP_ACHIEVEMENTS};
-        go_page(f, to[item]);
-        break;
-    }
-    case MI_BACK: case MI_TOPBACK:
-        it->cl = true; it->rspeed = 0; it->scalespeed = 8;
-        go_page(f, m->page == MP_CREDITS || m->page == MP_ACHIEVEMENTS ? MP_EXTRAS : MP_START);
-        break;
+    case MI_TOPBACK:   /* the port: no Start page, so back to the title */
+        front_to_title(f);
+        return;
     case MI_FILE_A: case MI_FILE_B: case MI_FILE_C: case MI_FILE_D: {
         const int file = (int)file_of(item);
         if (m->mode == FM_COPYING) {
@@ -388,10 +353,6 @@ static void click(FrontEnd *f, int item)
     case MI_FILEBACK:
         m->focus = (signed char)(MI_FILE_A + m->hl); m->hl = -1;
         break;
-    case MI_MUTE:   /* 773: Mute Music on <-> off (_root.MuteBGMusic) */
-        f->files.muted = !f->files.muted; f->files.changed = true;
-        sfx_set_music_muted(f->files.muted);
-        break;
     default:
         break;
     }
@@ -399,13 +360,13 @@ static void click(FrontEnd *f, int item)
 static void menu_input(FrontEnd *f, const GameInput *in)
 {
     MenuState *m = &f->menu;
-    if (m->trans_on || m->black_on || m->green_on) return;
+    if (m->black_on || m->green_on) return;
     const int dx = in->horizontal > 0.5f ? 1 : in->horizontal < -0.5f ? -1 : 0;
     const int dy = in->vertical > 0.5f ? 1 : in->vertical < -0.5f ? -1 : 0;
-    bool fire = false;
+    bool fire = false;   /* a press moves once; held, it repeats after 0.4 s every 0.1 s */
     if (dx != m->held_dx || dy != m->held_dy) { m->held_dx = (signed char)dx; m->held_dy = (signed char)dy; m->repeat = 24; fire = dx || dy; }
     else if ((dx || dy) && --m->repeat == 0) { m->repeat = 6; fire = true; }
-    if (m->red_on) {   /* Delete File? Yes / No */
+    if (m->red_on) {   /* Delete File? Yes / No (Left / Right); spin: No */
         if (m->red_frame != 10) return;
         if (fire && dx) m->red_choice = dx < 0 ? 0 : 1;
         if (in->confirm_pressed || in->cancel_pressed) {
@@ -413,36 +374,27 @@ static void menu_input(FrontEnd *f, const GameInput *in)
             m->red_yes = yes;
             m->red_frame = yes ? 11 : 40;
             if (yes) m->erase[m->red_file] = 1;   /* SpecialDeleteFile: the box's erase plays */
-            else { m->mode = FM_NONE; }
+            else m->mode = FM_NONE;
         }
         return;
     }
-    if (m->page == MP_CREDITS && dy && in->vertical) {   /* the arrows: scroll */
-        m->credits_scroll = fmaxf(0, fminf(m->credits_max, m->credits_scroll + dy * 2.5f));
-    }
-    if (m->page == MP_ACHIEVEMENTS) {
-        if (fire && dx) m->ach_file = (unsigned char)((m->ach_file + FE_FILES + dx) % FE_FILES);
-        if (fire && dy && m->focus == MI_LIST) {
-            int sel = m->ach_sel + dy;
-            if (sel < 0) sel = 0;
-            if (sel > 63) { m->focus = MI_BACK; sel = 63; }
-            m->ach_sel = (unsigned char)sel;
-            if (m->ach_sel < m->ach_top) m->ach_top = m->ach_sel;
-            if (m->ach_sel >= m->ach_top + 5) m->ach_top = (unsigned char)(m->ach_sel - 4);
-            fire = false;
-        } else if (fire && dy < 0 && m->focus == MI_BACK) { m->focus = MI_LIST; fire = false; }
-    }
-    if (fire && m->page != MP_CREDITS) {
-        const int n = neighbour(f, dx, dy);
+    if (m->mode == FM_DELETING) return;   /* the erase is playing */
+    /* the focus stays in the group of buttons in use (it may wait on one still
+       sliding in or out): the open file's buttons, else the files and BACK */
+    const bool side = m->hl >= 0 && m->mode != FM_COPYING;
+    if (m->focus < 0 || m->focus >= MI_COUNT || side != (m->focus >= MI_PLAY) ||
+        (m->mode == FM_COPYING && m->focus == MI_TOPBACK))
+        m->focus = (signed char)first_item(f);
+    if (fire) {   /* one direction at a time: up / down before left / right */
+        const unsigned dir = dy < 0 ? FE_UP : dy > 0 ? FE_DOWN : dx < 0 ? FE_LEFT : FE_RIGHT;
+        const int n = front_menu_link(f, (MenuItem)m->focus, dir);
         if (n >= 0) m->focus = (signed char)n;
     }
-    /* the focus may wait on an item still sliding in; choosing needs it ready */
-    if (m->focus < 0 || !front_item_shown(f, (MenuItem)m->focus)) m->focus = (signed char)first_item(f);
-    if (in->confirm_pressed && m->focus >= 0 && m->focus != MI_LIST && item_live(f, m->focus)) click(f, m->focus);
-    else if (in->cancel_pressed) {   /* B: the page's way back */
-        if (m->page == MP_STORY && m->mode == FM_COPYING) m->mode = FM_NONE;
-        else if (m->page == MP_STORY && m->hl >= 0) click(f, MI_FILEBACK);
-        else if (m->page != MP_START) go_page(f, m->page == MP_CREDITS || m->page == MP_ACHIEVEMENTS ? MP_EXTRAS : MP_START);
+    if (in->confirm_pressed && item_live(f, m->focus)) click(f, m->focus);
+    else if (in->cancel_pressed) {   /* spin: the way back */
+        if (m->mode == FM_COPYING) { m->mode = FM_NONE; m->focus = MI_COPY; }
+        else if (m->hl >= 0) click(f, MI_FILEBACK);
+        else front_to_title(f);
     }
 }
 

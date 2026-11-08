@@ -73,8 +73,6 @@ int main(void)
         if (in_front) {   /* the menu's view of the save files */
             for (unsigned k = 0; k < FE_FILES; ++k)
                 front.files.shines[k] = save.slot[k].used ? ach_popcount(save.slot[k].progress.shines) : 0;
-            front.files.muted = sfx_music_muted();
-            if (!front.menu.credits_max) front.menu.credits_max = front_render_credits_height();
         }
         const u64 now = gettime();
         double elapsed = ticks_to_microsecs(now - previous) / 1000000.0;
@@ -94,11 +92,10 @@ int main(void)
         /* Bound catch-up after a stall; never replace fixed ticks with a large dt.
            PAL 50 Hz renders normally execute one or two 60 Hz simulation ticks. */
         if (steps == 8 && accumulator >= GAME_DT) accumulator = 0;
-        if (in_front && front.files.changed) {   /* the menu copied or erased a file, or muted the music */
+        if (in_front && front.files.changed) {   /* the menu copied or erased a file */
             if (front.files.copy_from >= 0 && front.files.copy_to >= 0)
                 save.slot[front.files.copy_to] = save.slot[front.files.copy_from];   /* _root.CopyFile */
             if (front.files.erase >= 0) memset(&save.slot[front.files.erase], 0, sizeof save.slot[0]);   /* DeleteFile */
-            save.music_muted = front.files.muted;
             save_io_write(&save);
             front.files.changed = false; front.files.copy_from = front.files.copy_to = front.files.erase = -1;
         }

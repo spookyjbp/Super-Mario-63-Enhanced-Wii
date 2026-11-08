@@ -10,6 +10,4 @@ bool front_render_init(const SaveData *save);
 void front_render(const FrontEnd *f);
 /* The course is about to use its memory again. */
 void front_render_release(void);
-/* How far the credits text scrolls (stage px), once the menu was drawn. */
-float front_render_credits_height(void);
 #endif

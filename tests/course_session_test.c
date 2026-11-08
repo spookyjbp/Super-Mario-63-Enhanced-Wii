@@ -445,7 +445,8 @@ static void test_idle_and_sleep(void)
        shows Idle (Idle Animation, 978 frames: "Lets go" at 385 ... "Yawn" at
        908), which ends in Sleep; Sleep stops on frame 11 snoring until a key,
        then plays to 31. At CharHP <= 3: Idle2 (Tired Animation, 37 frames, 12
-       loops of 4..37). With FLUDD: no idle. */
+       loops of 4..37). The original has no idle with FLUDD (its FLUDD walk
+       clips); the port plays the same idle with FLUDD on (user request). */
     Player *p = tutorial_mario(300);
     p->has_fludd = false;
     ticks((GameInput){.horizontal = 1}, 20);
@@ -470,11 +471,22 @@ static void test_idle_and_sleep(void)
     s.progress.hp = 3;
     ticks((GameInput){0}, 4);
     assert(p->idle_kind == 2);
-    /* with FLUDD: never */
+    /* with FLUDD: the same idle, and it still ends in Sleep */
     p = tutorial_mario(300);
     p->has_fludd = true;
-    ticks((GameInput){0}, 60 * 5);
-    assert(p->idle_kind == 0 && !p->sleeping);
+    p->nozzle = NOZZLE_HOVER;
+    ticks((GameInput){.horizontal = 1}, 20);
+    ticks((GameInput){0}, 40);
+    assert(p->grounded && p->idle_kind == 0);
+    ticks((GameInput){0}, 60 * 3);
+    assert(p->idle_kind == 1 && p->has_fludd);
+    ticks((GameInput){.nozzle_held = true}, 2);                /* FLUDD held: like moving */
+    assert(p->idle_kind == 0);
+    ticks((GameInput){0}, 60 * 4);
+    assert(p->grounded && p->idle_kind == 1);
+    while (!p->sleeping) ticks((GameInput){0}, 1);
+    assert(p->has_fludd && p->sleep_frame == 0);
+    s.progress.hp = 8;
 }
 static void test_drowning(void)
 {
@@ -795,13 +807,37 @@ static void test_pause_menu(void)
     assert(s.pause.muted && sfx_music_muted());
     ticks(jump, 1);
     assert(!s.pause.muted && !sfx_music_muted());
-    /* Star Map has nothing to choose: jump shows it and the column keeps the focus */
+    /* Star Map: its rows are a list; Down scrolls it, the list starts at its top */
     GameInput spin = {0}; spin.spin_pressed = spin.cancel_pressed = true;
     ticks(spin, 1);
     assert(s.pause.focus == PI_OPTIONS);
     s.pause.focus = PI_STARMAP; s.pause.column = PI_STARMAP;
     ticks(jump, 1); ticks((GameInput){0}, 30);
-    assert(s.pause.page == PAUSE_STARMAP && s.pause.focus == PI_STARMAP);
+    assert(s.pause.page == PAUSE_STARMAP && s.pause.focus == PI_LIST && s.pause.list_sel == 0);
+    for (int i = 0; i < 40; ++i) { ticks(d, 1); ticks((GameInput){0}, 1); }
+    assert(s.pause.list_sel == PAUSE_STARMAP_ROWS - 1 && s.pause.list_top == PAUSE_STARMAP_ROWS - PAUSE_LIST_ROWS);
+    ticks(l, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_STARMAP);
+    /* Fludd (only Hover owned): the rows go None, Hover; the locked ones are skipped */
+    s.game.player.nozzles = 1u << NOZZLE_HOVER;
+    ticks(d, 1); ticks((GameInput){0}, 1); ticks(jump, 1); ticks((GameInput){0}, 30);
+    assert(s.pause.page == PAUSE_FLUDD && s.pause.focus == PI_NOZ_NONE);
+    ticks(d, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_NOZ_HOVER);
+    ticks(d, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_NOZ_HOVER);
+    ticks(u, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_NOZ_NONE);
+    ticks(spin, 1);
+    assert(s.pause.focus == PI_FLUDD);
+    /* Exit: Exit Level cannot be chosen (no Castle Grounds in the port): Quit Game first */
+    s.pause.focus = PI_EXIT; s.pause.column = PI_EXIT;
+    ticks(r, 1); ticks((GameInput){0}, 30);
+    assert(s.pause.page == PAUSE_EXIT && s.pause.focus == PI_QUIT);
+    ticks(u, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_QUIT);
+    ticks(spin, 1);
+    assert(s.pause.focus == PI_EXIT);
     /* spin in the column: back to PAUSED; again: closes (795 backwards), then the game runs */
     ticks(spin, 1); ticks((GameInput){0}, 30);
     assert(s.pause.page == PAUSE_DEFAULT);

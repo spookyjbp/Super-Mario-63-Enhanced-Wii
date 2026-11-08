@@ -11,21 +11,15 @@ changes on frame 8) plays. Every page has four buttons (box + label sprites):
 the page's own button is replaced by Back (666) in its place; a hovered button
 eases to 120 % scale, a clicked one to 140 %.
 
-Out of the pages (each a picture layer "Pause@<page>", 794 coordinates):
-  * buttons, the Fludd page's nozzle icons, the Options items and the Exit
-    page's items are left out and drawn by the port from "PauseParts";
-  * the PAUSED page's text fields show what the tutorial shows: Starnamenum 0
-    -> level "Castle Grounds", star "No Star Selected", desc StarDescArray[0];
-  * its counters (_root.Coins, TotalStars, TotalStarCoins: Arial 16, white
-    over 50 % black 2 px down-right) are drawn by the port; the red coin /
-    silver star counters (232) show their empty frame 4 (the tutorial has
-    neither) and the lives counter (237) its empty frame 2 (TotalStars 0);
-  * the Star Map's record-coin fields are empty (no records); its shines are
-    lit per group (737) and no group can be complete in the tutorial, so the
-    page is still.
-The port adds a sixth button between the four, "Achievements", in the
-buttons' style (a box and a bevelled label), and a page for it on the empty
-panel ('refresh') with a title in the page-title style.
+The port draws its pages as rows in the Achievements page's style
+(pause_menu.h) from the original's pieces in "PauseParts": the column's
+buttons, each page's title (643 PAUSED, 640 Star Map, 632 Fludd, 636
+Options, 646 Exit), the nozzle icons (owned / locked), the Options items and
+Mute Music's On / Off, the Exit items, the spinning coin, and the Star Map's
+Shine Sprite (686: not collected, collected, its group complete) and Star
+Coin (735: missing, got).
+The port adds a sixth button, "Achievements", in the buttons' style (a box
+and a bevelled label), and its page title in the page-title style.
 """
 import re, struct
 import numpy as np
@@ -52,6 +46,12 @@ RED_SILVER, LIVES = 232, 237
 LEVEL, STAR, DESC = 648, 650, 651
 TUTORIAL = {LEVEL: 'Castle Grounds', STAR: 'No Star Selected', DESC: 'You are within the Castle Grounds'}
 RECORD_FIELDS_SPRITE = 737
+# The port's pages are rows in the Achievements page's style (pause_menu.h),
+# with the original's own pieces: each page's title, and the Star Map's
+# icons: a Shine Sprite (Pause New STA, 686: frame 2 not collected, 3
+# collected, 4 its group complete) and a Star Coin (SMSC Clip, 735: 1 no, 2 yes).
+TITLES = {'paused': 643, 'starmap': 640, 'fludd': 632, 'options': 636, 'exit': 646}
+SHINE_ICON, STAR_COIN_ICON = 686, 735
 ACH_COLOUR = ((70, 90, 255), (205, 215, 255))   # the port's button: blue, like the platinum cup
 
 
@@ -181,25 +181,9 @@ def build(work, jar, swf):
     texts.update({c: '' for c in COUNTERS})
     texts.update({c: '' for c in sprite_texts(swf, RECORD_FIELDS_SPRITE)})
     patched = set_texts(swf, texts)
-    hidden = set(BUTTONS.values()) | set(NOZZLES.values()) | set(OPTION_ITEMS.values()) | \
-        set(EXIT_ITEMS.values()) | {TRANSITION, RED_SILVER, LIVES, COIN, PANEL}
-    pages_swf = work / 'pause-pages.swf'
-    pages_swf.write_bytes(ui_art.hide(patched, {CLIP: hidden}))
-    pages = render(jar, work, pages_swf, CLIP, list(range(2, 8)), 'pages')
-    base = 225, 150   # 795 at the stage centre
+    # the page pictures (Pause@<page>) are no longer drawn: the port's pages are
+    # rows of the original's pieces (pause_menu.h)
     variants = []
-    for k, name in enumerate(PAGES):
-        im, ox, oy = pages[k + 2]
-        # only the stage shows: 795's pull-down cloud (above the panel on
-        # 'default') sits wholly above the screen once 794 is in place
-        L, T = round((-base[0] - ox) * ZOOM), round((-base[1] - oy) * ZOOM)
-        l, t = max(0, L), max(0, T)
-        r, btm = min(im.width, L + round(450 * ZOOM)), min(im.height, T + round(300 * ZOOM))
-        im = im.crop((l, t, max(l + 4, r), max(t + 4, btm)))
-        bb = im.getchannel('A').getbbox()      # the page's content alone (the panel is drawn by the port)
-        if bb:
-            im = im.crop(bb); l += bb[0]; t += bb[1]
-        variants.append((f'Pause@{name}', im, base[0] + ox + l / ZOOM, base[1] + oy + t / ZOOM))
     # the parts
     parts_swf = work / 'pause-parts.swf'
     parts_swf.write_bytes(ui_art.hide(patched, {OPTION_ITEMS['mute']: {MUTE_ON, MUTE_OFF}}))
@@ -221,6 +205,12 @@ def build(work, jar, swf):
     for f in (2, 3, 4):
         add(f'mute_on_{f}', MUTE_ON, f)
         add(f'mute_off_{f}', MUTE_OFF, f)
+    for n, i in TITLES.items():
+        add(f'title_{n}', i)
+    for f, n in ((2, 'shine_off'), (3, 'shine_on'), (4, 'shine_all')):
+        add(n, SHINE_ICON, f)
+    for f, n in ((1, 'scoin_off'), (2, 'scoin_on')):
+        add(n, STAR_COIN_ICON, f)
     coin = render(jar, work, parts_swf, COIN, list(range(1, 17)), 'part-coin')
     for f, (im, ox, oy) in coin.items():
         parts[f'coin_{f}'], origin[f'coin_{f}'] = im, (ox, oy)

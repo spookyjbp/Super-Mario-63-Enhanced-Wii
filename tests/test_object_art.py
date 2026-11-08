@@ -58,26 +58,69 @@ class ObjectArtTests(unittest.TestCase):
         (31); the water pie (9), WaterBubble (39 shown), Med-Splash (9 shown).
         Mario stands on his registration point (feet at y 0 within a few px)."""
         table, zoom = ids()
-        want = {'MARIO_IDLE': 978, 'MARIO_TIRED': 37, 'MARIO_SLEEP': 31, 'HUD_WATER_PIE': 9, 'WATER_BUBBLE': 39,
-                'MED_SPLASH': 9}
+        want = {'HUD_WATER_PIE': 9, 'WATER_BUBBLE': 39, 'MED_SPLASH': 9}
         for k in range(4):
             want[f'MARIO_EJUMP_{k}'] = 21
             want[f'MARIO_DROWN_{k}'] = 88
+            want[f'MARIO_IDLE_{k}'] = 978
+            want[f'MARIO_TIRED_{k}'] = 37
+            want[f'MARIO_SLEEP_{k}'] = 31
         for name, count in want.items():
             clip, pack = table[name]
             self.assertEqual(len(frames(pack, clip)), count, name)
         for name in ('MARIO_IDLE', 'MARIO_TIRED'):
-            clip, pack = table[name]
-            x, y, w, h, ox, oy, duration, _ = frames(pack, clip)[0]
-            self.assertAlmostEqual(oy / 20 + h / zoom, 0, delta=4, msg=name)   # feet on the floor
-            self.assertAlmostEqual(ox / 20 + w / zoom / 2, 0, delta=6, msg=name)
+            for k in range(4):
+                clip, pack = table[f'{name}_{k}']
+                x, y, w, h, ox, oy, duration, _ = frames(pack, clip)[0]
+                self.assertAlmostEqual(oy / 20 + h / zoom, 0, delta=4, msg=f'{name}_{k}')   # feet on the floor
+                if k == 0:
+                    self.assertAlmostEqual(ox / 20 + w / zoom / 2, 0, delta=6, msg=name)
+
+    def test_fludd_states_share_a_place(self):
+        """Every FLUDD state of a clip is placed from its own registration: the
+        canvas FFDec gives a sprite changed with the FLUDD state, so states drawn
+        from the no-state origin sat up to 8 px off (and the Hover nozzle was cut
+        off). Mario's feet sit at the same height in all four."""
+        table, zoom = ids()
+        for name, frame in (('MARIO_EJUMP', 0), ('MARIO_DROWN', 0), ('MARIO_IDLE', 0), ('MARIO_TIRED', 5)):
+            feet = []
+            for k in range(4):
+                clip, pack = table[f'{name}_{k}']
+                x, y, w, h, ox, oy, duration, _ = frames(pack, clip)[frame]
+                feet.append(oy / 20 + h / zoom)
+            self.assertLess(max(feet) - min(feet), 1.5, f'{name}: {feet}')
+
+    def test_idle_with_fludd(self):
+        """The port's idle with FLUDD (tools/idle_fludd.py): the FLUDD states
+        carry FLUDD on Mario's back (wider and taller frames); without FLUDD it
+        is the original's."""
+        table, zoom = ids()
+        for name in ('MARIO_IDLE', 'MARIO_TIRED', 'MARIO_SLEEP'):
+            plain = frames(*reversed(table[f'{name}_0']))
+            for k in (1, 2, 3):
+                withf = frames(*reversed(table[f'{name}_{k}']))
+                bigger = sum(b[2] * b[3] > a[2] * a[3] * 1.2 for a, b in zip(plain, withf))
+                self.assertGreater(bigger, len(plain) * 0.9, f'{name}_{k}')
+
+    def test_packs_fit_their_memory(self):
+        """course_render.c decodes every pack into OBJECT_BYTES of MEM2."""
+        src = (ROOT / 'source/platform/course_render.c').read_text()
+        a, b, c = map(int, re.search(r'#define OBJECT_BYTES \((\d+)u \* (\d+) \* (\d+)\)', src).groups())
+        packs = int(re.search(r'#define OBJECT_ART_PACKS (\d+)', (GEN / 'object_art_ids.h').read_text()).group(1))
+        used = 0
+        for p in range(packs):
+            data = (GEN / f'objects_8e1_{p}.bin').read_bytes()
+            w, h = struct.unpack_from('>II', data, 12)
+            used += (w * h * 2 + 31) // 32 * 32
+        self.assertLessEqual(used, a * b * c)
+        self.assertIn(f'objects_8e1_{packs - 1}_bin,', src)
 
     def test_idle_has_no_wings(self):
         """Idle Animation places Wing Code (1003), whose frame 1 is the Wing Cap's
         wings (frame 2, none, without the cap): they must not be in the frames.
         With them the tops reach 41.6 px above the feet; Mario alone ~35."""
         table, zoom = ids()
-        clip, pack = table['MARIO_IDLE']
+        clip, pack = table['MARIO_IDLE_0']
         self.assertGreater(min(oy / 20 for *_, ox, oy, d, f in frames(pack, clip)), -36)
 
     def test_prompts_per_controller(self):

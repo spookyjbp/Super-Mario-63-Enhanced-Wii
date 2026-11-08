@@ -23,10 +23,13 @@ class FrontEndTests(unittest.TestCase):
 
     def test_clips(self):
         pages, bakes, clips, frames = T.read_pack(self.data)
-        want = {'opening': 341, 'title': 340, 'title_out': 40, 'menu_page': 5, 'btn_box': 92, 'mbg_tree': 20,
-                'erase': 35, 'red_trans': 51, 'file_A': 1, 'credits_txt': 1}
+        want = {'opening': 341, 'title': 340, 'title_out': 40, 'menu_page': 1, 'btn_box': 92, 'mbg_tree': 20,
+                'erase': 35, 'red_trans': 51, 'file_A': 1, 'lbl_play': 2}
         for name, n in want.items():
             self.assertEqual(clips[name][1], n, name)
+        # START goes to the file select: no Start, Options or Extras pieces
+        for gone in ('lbl_story', 'lbl_options', 'lbl_extras', 'opt_mute', 'credits_txt', 'trans', 'sound_test'):
+            self.assertNotIn(gone, clips)
         # the header's clip numbers follow the pack's order
         order = list(clips)
         named = re.findall(r'#define FE_CLIP_(\w+) (\d+)\n', self.layout)

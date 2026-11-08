@@ -125,11 +125,13 @@ void player_animation_step(Player *p,GameInput in)
     if(p->ejump) ejump_step(p); else p->ejump_frame=0;
     if(family==CLIP_WALK) {
         /* count++ while |xspeed| < 1 (NaN stays NaN), else 0; from 92 (or NaN)
-           the clip shows Idle / Idle2 instead of the walk (without FLUDD only:
-           the FLUDD walk clips have no idle). */
-        if(fabsf(xspeed)<1) {if(!p->walk_count_nan) ++p->walk_count;}
+           the clip shows Idle / Idle2 instead of the walk. The original's FLUDD
+           walk clips have no idle; the port plays it with FLUDD too (user
+           request 2026-11-08; the art: tools/idle_fludd.py). */
+        /* (port: holding FLUDD counts as moving, so the idle never covers a spray) */
+        if(fabsf(xspeed)<1 && !(p->has_fludd && in.nozzle_held)) {if(!p->walk_count_nan) ++p->walk_count;}
         else {p->walk_count=0;p->walk_count_nan=false;}
-        const bool idle=!p->has_fludd && (p->walk_count_nan || p->walk_count>=92);
+        const bool idle=p->walk_count_nan || p->walk_count>=92;
         const unsigned kind=idle ? (p->low_hp ? 2u : 1u) : 0u;
         if(kind!=p->idle_kind) {p->idle_kind=kind;p->idle_frame=0;p->tired_count=0;}
         else if(kind==1) {++p->idle_frame;idle_frame_script(p);}

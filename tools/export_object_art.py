@@ -95,13 +95,14 @@ SPEC = [
     # 'Drown' (1692, to its frame 88 LifeLost()), per FLUDD state like the faint;
     # Mario (None) Walk's 'Idle' (Idle Animation 1050, after 92 still frames) and
     # 'Idle2' (Tired Animation 1067, at CharHP <= 3), and Main 'Sleep' (1450, which
-    # both end in): only without FLUDD (the FLUDD walk clips have no idle). Placed
-    # as in Mario Main (Walk 1068 at (0.35, -12.65)) plus Char's -3 px.
+    # both end in), per FLUDD state: the original has them only without FLUDD; the
+    # port adds FLUDD to them (tools/idle_fludd.py). Placed as in Mario Main
+    # (Walk 1068 at (0.35, -12.65)) plus Char's -3 px.
     *[(f'MARIO_EJUMP_{k}', 1445, None, 1, (1.35, -14.45, 1, 1), ()) for k in range(4)],
     *[(f'MARIO_DROWN_{k}', 1692, list(range(0, 88)), 1, (0.35, -3.0, 1, 1), ()) for k in range(4)],
-    ('MARIO_IDLE', 1050, None, 1, (2.35, -17.7, 1, 1), ()),
-    ('MARIO_TIRED', 1067, None, 1, (2.35, -17.8, 1, 1), ()),
-    ('MARIO_SLEEP', 1450, None, 1, (0.0, -14.2, 1, 1), ()),
+    *[(f'MARIO_IDLE_{k}', 1050, None, 1, (2.35, -17.7, 1, 1), ()) for k in range(4)],
+    *[(f'MARIO_TIRED_{k}', 1067, None, 1, (2.35, -17.8, 1, 1), ()) for k in range(4)],
+    *[(f'MARIO_SLEEP_{k}', 1450, None, 1, (0.0, -14.2, 1, 1), ()) for k in range(4)],
     # Drowning: the Stats clip's water meter (113 in 114, frame = WaterHP + 1) and
     # the WaterBubble (2589) CharCode attaches in FrontGFX; the splash on falling
     # into water (Med-Splash 2609, removed on its frame 10) and the Turbo's
@@ -119,7 +120,70 @@ SPEC = [
 
 
 # Clips rendered once per FLUDD state (their Fluddpow sprites set per variant).
-VARIANT_SPRITES = [1411, 1430, 1445, 1692]
+VARIANT_SPRITES = [1411, 1430, 1445, 1692, 1050, 1067, 1450]
+VARIANT_NAME = re.compile(r'MARIO_(?:FAINT\d|EJUMP|DROWN|IDLE|TIRED|SLEEP)_(\d)$')
+# FFDec sizes a sprite's canvas from its content, and once the FLUDD sprites are
+# frozen per state that canvas changed from state to state (and the Hover nozzle
+# fell outside it, cut off). Each variant sprite gets an invisible box (course
+# px, x0 y0 x1 y1) its canvas always covers, and each state its own origin.
+VARIANT_BOX = (-64, -80, 64, 48)
+BOX_SHAPE = 64999
+
+
+def boxed(swf, idents, box=VARIANT_BOX):
+    """The SWF with an invisible rectangle (DefineShape3, alpha 0) placed under
+    everything in sprites `idents`."""
+    from idle_fludd import _Bits, _tag
+    x0, y0, x1, y1 = (round(v * 20) for v in box)
+    w = _Bits()
+    n = max(abs(v) for v in (x0, y0, x1, y1)).bit_length() + 1
+    w.put(n, 5)
+    for v in (x0, x1, y0, y1):
+        w.put(v & (1 << n) - 1, n)
+    rect = w.data()
+    w = _Bits()
+    w.put(1, 4); w.put(0, 4)                                   # NumFillBits 1, NumLineBits 0
+    w.put(0b000101, 6); w.put(n, 5); w.put(x0 & (1 << n) - 1, n); w.put(y0 & (1 << n) - 1, n); w.put(1, 1)
+    for dx, dy in ((x1 - x0, 0), (0, y1 - y0), (x0 - x1, 0), (0, y0 - y1)):
+        v = dx or dy
+        m = max(abs(v).bit_length() + 1, 2)
+        w.put(1, 1); w.put(1, 1); w.put(m - 2, 4); w.put(0, 1); w.put(1 if dy else 0, 1); w.put(v & (1 << m) - 1, m)
+    w.put(0, 6)
+    shape = struct.pack('<H', BOX_SHAPE) + rect + bytes([1, 0x00, 0, 0, 0, 0, 0]) + w.data()
+    raw, start = S.body(swf)
+    out, done = bytearray(raw[:start]), False
+    for code, pos, length in S.tags(raw, start, len(raw)):
+        data = raw[pos:pos + length]
+        if code == 39 and struct.unpack_from('<H', data)[0] in idents:
+            if not done:
+                out += _tag(32, shape); done = True
+            ident, count = struct.unpack_from('<HH', data)
+            place = _tag(26, struct.pack('<BHH', 0x02, 16000, BOX_SHAPE))   # invisible: any free depth
+            data = struct.pack('<HH', ident, count) + place + data[4:]
+        out += _tag(code, data)
+    if not done:
+        raise ValueError('variant sprites not found')
+    return b'FWS' + swf[3:4] + struct.pack('<I', len(out) + 8) + bytes(out)
+
+
+def svg_origin(svg_dir, ident, png_dir):
+    """Course px of the canvas (0,0) in the sprite (A.origin), moved by half
+    the padding FFDec adds around filters to the PNG canvas."""
+    import xml.etree.ElementTree as ET
+    path = C.sprite_dir(svg_dir, ident) / '1.svg'
+    g = ET.parse(path).getroot().find('{http://www.w3.org/2000/svg}g')
+    t = [float(v) for v in re.findall(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?', g.get('transform'))]
+    if t[:4] != [1, 0, 0, 1]:
+        raise ValueError('Unexpected registration')
+    ox, oy = -t[4], -t[5]
+    text = path.read_text()[:2000]
+    sw = float(re.search(r'width="([\d.]+)px"', text).group(1))
+    sh = float(re.search(r'height="([\d.]+)px"', text).group(1))
+    with Image.open(C.sprite_dir(png_dir, ident) / '1.png') as im0:
+        mx, my = (im0.width / ZOOM - sw) / 2, (im0.height / ZOOM - sh) / 2
+    if mx > 1 or my > 1:
+        ox, oy = ox - mx, oy - my
+    return ox, oy
 
 
 def child_matrix(sprites, parent, child):
@@ -309,7 +373,9 @@ def export(source, jar, out_dir):
     strip = {}
     for name, ident, frames, step, place, depths in SPEC:
         if depths: strip.setdefault(ident, set()).update(depths)
-    patched = swf_bitmap_fix.fix_body(strip_blanks(raw, start, strip), start)  # FFDec half-texel offset
+    import idle_fludd
+    injected = idle_fludd.inject(raw, start, source)   # FLUDD on the idle clips
+    patched = swf_bitmap_fix.fix_body(strip_blanks(injected, start, strip), start)  # FFDec half-texel offset
     swf_path = work / 'objects.swf'
     swf_path.write_bytes(b'FWS' + swf[3:4] + struct.pack('<I', len(patched) + 8) + bytes(patched))
     ids = sorted({s[1] for s in SPEC})
@@ -322,38 +388,40 @@ def export(source, jar, out_dir):
         subprocess.run(cmd + ['-onerror', 'abort', '-selectid', ','.join(map(str, ids)), '-select',
                               ','.join(f'{i}:1' for i in ids), '-format', 'sprite:svg', '-export', 'sprite',
                               str(work / 'svg'), str(swf_path)], check=True, stdout=log, stderr=log)
-    # The faint clips per FLUDD state (export_movement_clips' Fluddpow choices).
+    # The Mario clips per FLUDD state (export_movement_clips' Fluddpow choices),
+    # each in its box, with its own registration.
     import export_movement_clips as M
-    choice = M.fludd_frames(sprites, raw, start, VARIANT_SPRITES)
+    vbase = boxed(swf_path.read_bytes(), set(VARIANT_SPRITES))
+    vraw, vstart = S.body(vbase)
+    choice = M.fludd_frames(S.sprites(vbase), vraw, vstart, VARIANT_SPRITES)
+    sel = ','.join(map(str, VARIANT_SPRITES))
     for k, v in enumerate(M.VARIANTS):
         vswf = work / f'objects-fludd{k}.swf'
-        vswf.write_bytes(M.patched_swf(swf_path.read_bytes(), choice, v))
+        vswf.write_bytes(M.patched_swf(vbase, choice, v))
         with (work / 'export.log').open('a') as log:
             subprocess.run(cmd + swf_bitmap_fix.FFDEC_RENDER + ['-zoom', str(ZOOM), '-onerror', 'abort', '-selectid',
-                                  ','.join(map(str, VARIANT_SPRITES)), '-export', 'sprite', str(work / f'png-fludd{k}'), str(vswf)],
+                                  sel, '-export', 'sprite', str(work / f'png-fludd{k}'), str(vswf)],
+                           check=True, stdout=log, stderr=log)
+            subprocess.run(cmd + ['-onerror', 'abort', '-selectid', sel, '-select', ','.join(f'{i}:1' for i in VARIANT_SPRITES),
+                                  '-format', 'sprite:svg', '-export', 'sprite', str(work / f'svg-fludd{k}'), str(vswf)],
                            check=True, stdout=log, stderr=log)
     clips, report = [], []
     for cid, (name, ident, frames, step, place, depths) in enumerate(SPEC):
         tx, ty, sx, sy = place if place else placement(sprites, ident)
         if sx <= 0 or sy <= 0:
             raise ValueError(f'{name}: mirrored placement {sx},{sy}')
-        ox, oy = A.origin(work, ident)  # course px of the canvas (0,0) in the sprite
-        # FFDec pads the PNG canvas around filters (Toad's head, the Stats clip):
-        # the SVG is the unpadded frame, so move the origin by half the difference.
-        svg_text = (C.sprite_dir(work / 'svg', ident) / '1.svg').read_text()[:2000]
-        sw = float(re.search(r'width="([\d.]+)px"', svg_text).group(1))
-        sh = float(re.search(r'height="([\d.]+)px"', svg_text).group(1))
-        with Image.open(C.sprite_dir(work / 'png', ident) / '1.png') as im0:
-            mx, my = (im0.width / ZOOM - sw) / 2, (im0.height / ZOOM - sh) / 2
-        if mx > 1 or my > 1:
-            ox, oy = ox - mx, oy - my
+        # course px of the canvas (0,0) in the sprite; FFDec pads the PNG canvas
+        # around filters (Toad's head, the Stats clip): the SVG is the unpadded
+        # frame, so the origin moves by half the difference
+        fl = VARIANT_NAME.match(name)
+        png_dir = work / (f'png-fludd{fl.group(1)}' if fl else 'png')
+        ox, oy = svg_origin(work / (f'svg-fludd{fl.group(1)}' if fl else 'svg'), ident, png_dir)
         count = sprites[ident]['frames']
         picks = list(frames) if frames is not None else list(range(count))
         picks = picks[::step]
         out, repaired_px = [], 0
         for k in picks:
-            fl = re.match(r'MARIO_(?:FAINT\d|EJUMP|DROWN)_(\d)$', name)
-            png = C.sprite_dir(work / (f'png-fludd{fl.group(1)}' if fl else 'png'), ident) / f'{k + 1}.png'
+            png = C.sprite_dir(png_dir, ident) / f'{k + 1}.png'
             # FFDec cracks (e.g. the transparent column inside the sign board): art_repair.py
             fixed, changed = art_repair.repair(np.asarray(Image.open(png).convert('RGBA')))
             repaired_px += changed

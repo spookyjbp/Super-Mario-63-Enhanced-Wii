@@ -2,7 +2,7 @@
 #ifndef SM63_OBJECT_ART_IDS_H
 #define SM63_OBJECT_ART_IDS_H
 #define OBJECT_ART_ZOOM 1.6f
-#define OBJECT_ART_PACKS 4
+#define OBJECT_ART_PACKS 5
 enum {
     OBJ_COIN_SPIN = 0, /* pack 0 */
     OBJ_COIN_COLLECT = 1, /* pack 0 */
@@ -70,30 +70,39 @@ enum {
     OBJ_MARIO_DROWN_1 = 63, /* pack 2 */
     OBJ_MARIO_DROWN_2 = 64, /* pack 2 */
     OBJ_MARIO_DROWN_3 = 65, /* pack 3 */
-    OBJ_MARIO_IDLE = 66, /* pack 3 */
-    OBJ_MARIO_TIRED = 67, /* pack 3 */
-    OBJ_MARIO_SLEEP = 68, /* pack 3 */
-    OBJ_HUD_WATER_PIE = 69, /* pack 3 */
-    OBJ_WATER_BUBBLE = 70, /* pack 3 */
-    OBJ_MED_SPLASH = 71, /* pack 3 */
-    OBJ_RUN_SPLASH1 = 72, /* pack 3 */
-    OBJ_RUN_SPLASH2 = 73, /* pack 3 */
-    OBJ_HUD_TALK_BOX = 74, /* pack 3 */
-    OBJ_HUD_TALK_Z = 75, /* pack 3 */
-    OBJ_SIGN_Z_0 = 76, /* pack 3 */
-    OBJ_SIGN_Z_1 = 77, /* pack 3 */
-    OBJ_SIGN_Z_2 = 78, /* pack 3 */
-    OBJ_TOAD_BZ_0 = 79, /* pack 3 */
-    OBJ_TOAD_BZ_1 = 80, /* pack 3 */
-    OBJ_TOAD_BZ_2 = 81, /* pack 3 */
-    OBJ_HUD_DIGITS = 82, /* pack 3 */
-    OBJ_CLIP_COUNT = 83
+    OBJ_MARIO_IDLE_0 = 66, /* pack 3 */
+    OBJ_MARIO_IDLE_1 = 67, /* pack 3 */
+    OBJ_MARIO_IDLE_2 = 68, /* pack 3 */
+    OBJ_MARIO_IDLE_3 = 69, /* pack 3 */
+    OBJ_MARIO_TIRED_0 = 70, /* pack 3 */
+    OBJ_MARIO_TIRED_1 = 71, /* pack 3 */
+    OBJ_MARIO_TIRED_2 = 72, /* pack 4 */
+    OBJ_MARIO_TIRED_3 = 73, /* pack 4 */
+    OBJ_MARIO_SLEEP_0 = 74, /* pack 4 */
+    OBJ_MARIO_SLEEP_1 = 75, /* pack 4 */
+    OBJ_MARIO_SLEEP_2 = 76, /* pack 4 */
+    OBJ_MARIO_SLEEP_3 = 77, /* pack 4 */
+    OBJ_HUD_WATER_PIE = 78, /* pack 4 */
+    OBJ_WATER_BUBBLE = 79, /* pack 4 */
+    OBJ_MED_SPLASH = 80, /* pack 4 */
+    OBJ_RUN_SPLASH1 = 81, /* pack 4 */
+    OBJ_RUN_SPLASH2 = 82, /* pack 4 */
+    OBJ_HUD_TALK_BOX = 83, /* pack 4 */
+    OBJ_HUD_TALK_Z = 84, /* pack 4 */
+    OBJ_SIGN_Z_0 = 85, /* pack 4 */
+    OBJ_SIGN_Z_1 = 86, /* pack 4 */
+    OBJ_SIGN_Z_2 = 87, /* pack 4 */
+    OBJ_TOAD_BZ_0 = 88, /* pack 4 */
+    OBJ_TOAD_BZ_1 = 89, /* pack 4 */
+    OBJ_TOAD_BZ_2 = 90, /* pack 4 */
+    OBJ_HUD_DIGITS = 91, /* pack 4 */
+    OBJ_CLIP_COUNT = 92
 };
 /* Toad head (2498) registration per TOAD_IDLE / TOAD_WALK frame, course px from
    the Toad Main Clip origin (the body placement plus the head matrix in it). */
 static const float toad_head_idle[][2] = {{-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}};
 static const float toad_head_walk[][2] = {{0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}};
 static const unsigned char object_art_pack_of[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
 };
 #endif

@@ -17,7 +17,16 @@
 #include <stdio.h>
 #include <string.h>
 
-#define K 1.6f                       /* screen px per stage px */
+/* Full screen (user request 2026-11-08): the opening, the title and the
+   menu's backdrop fill the screen: the 450 x 300 stage as wide as the screen
+   (854 px at 16:9: 1.9 screen px a stage px), the rows that are then too many
+   cut around a height that keeps the screen's content in view (FOCUS_*,
+   stage px). The menu's own items (the files, the buttons, the question)
+   need the stage's whole height: they stay at 1.6 x, the stage's height,
+   in the middle. */
+#define FOCUS_OPENING 150.0f
+#define FOCUS_TITLE 144.5f           /* the logo's top (19) to START's foot (270) */
+#define MENU_K 1.6f                  /* screen px per stage px for the menu's items: 300 rows in 480 */
 static TimelinePack pack;
 static GXTexObj page_tex[TL_MAX_PAGES];
 static bool page_ready[TL_MAX_PAGES];
@@ -40,8 +49,17 @@ static Mat rotate_scale(float deg, float s)
     const float r = deg * 3.14159265f / 180, c = cosf(r) * s, sn = sinf(r) * s;
     return (Mat){c, sn, -sn, c, 0, 0};
 }
-/* stage px -> screen px: the 450 x 300 stage centred on the screen */
-static Mat stage(float width) { return (Mat){K, 0, 0, K, width / 2 - 225 * K, 0}; }
+/* stage px -> screen px: k screen px a stage px, centred across, `focus`
+   (stage y) at the screen's middle as far as the stage reaches */
+static float cover_k(float width) { return width / 450; }
+static Mat stage_at(float width, float k, float focus)
+{
+    const float h = 300 * k;
+    float ty = h <= 480 ? (480 - h) / 2 : 240 - focus * k;
+    if (h > 480) ty = fminf(0, fmaxf(480 - h, ty));
+    return (Mat){k, 0, 0, k, (width - 450 * k) / 2, ty};
+}
+static Mat stage(float width, float focus) { return stage_at(width, cover_k(width), focus); }
 
 bool front_render_init(const SaveData *s)
 {
@@ -125,11 +143,9 @@ static unsigned clip_frames(unsigned clip) { return clip < pack.clips ? pack.cli
 static const float *box_of(MenuItem i)
 {
     switch (i) {
-    case MI_STORY: return FE_AT_STORY_BOX; case MI_OPTIONS: return FE_AT_OPTIONS_BOX;
-    case MI_EXTRAS: return FE_AT_EXTRAS_BOX; case MI_BACK: case MI_TOPBACK: return FE_AT_BACK_BOX;
+    case MI_TOPBACK: return FE_AT_BACK_BOX;
     case MI_PLAY: return FE_AT_PLAY_BOX; case MI_COPY: return FE_AT_COPY_BOX; case MI_ERASE: return FE_AT_ERASE_BOX;
-    case MI_FILEBACK: return FE_AT_FILEBACK_BOX; case MI_CREDITS: return FE_AT_CREDITS_BOX;
-    case MI_ACHIEVEMENTS: return FE_AT_LEVELDESIGNER_BOX;
+    case MI_FILEBACK: return FE_AT_FILEBACK_BOX;
     default: return FE_AT_FILEBOX_BOX;
     }
 }
@@ -137,15 +153,11 @@ static void label_of(MenuItem i, int *clip, const float **m)
 {
     *clip = -1; *m = NULL;
     switch (i) {
-    case MI_STORY: *clip = FE_CLIP_LBL_STORY; *m = FE_AT_STORY_LBL; break;
-    case MI_OPTIONS: *clip = FE_CLIP_LBL_OPTIONS; *m = FE_AT_OPTIONS_LBL; break;
-    case MI_EXTRAS: *clip = FE_CLIP_LBL_EXTRAS; *m = FE_AT_EXTRAS_LBL; break;
-    case MI_BACK: case MI_TOPBACK: *clip = FE_CLIP_LBL_BACK; *m = FE_AT_BACK_LBL; break;
+    case MI_TOPBACK: *clip = FE_CLIP_LBL_BACK; *m = FE_AT_BACK_LBL; break;
     case MI_PLAY: *clip = FE_CLIP_LBL_PLAY; *m = FE_AT_PLAY_LBL; break;
     case MI_COPY: *clip = FE_CLIP_LBL_COPY; *m = FE_AT_COPY_LBL; break;
     case MI_ERASE: *clip = FE_CLIP_LBL_ERASE; *m = FE_AT_ERASE_LBL; break;
     case MI_FILEBACK: *clip = FE_CLIP_LBL_FILEBACK; *m = FE_AT_FILEBACK_LBL; break;
-    case MI_CREDITS: *clip = FE_CLIP_LBL_CREDITS; *m = FE_AT_CREDITS_LBL; break;
     default: break;
     }
 }
@@ -198,118 +210,32 @@ static void draw_files(const FrontEnd *f, Mat menu, float a)
             draw_clip(FE_CLIP_ERASE, m->erase[k] - 1, mul(t, mat(FE_AT_FILEBOX_EM)), a, NULL, 1);
     }
 }
-static void draw_options(const FrontEnd *f, Mat menu, float a)
-{
-    const bool hov = f->menu.focus == MI_MUTE;
-    const unsigned char half = (unsigned char)(255 * a * 0.5f);
-    (void)half;
-    draw_clip(FE_CLIP_OPT_QUALITY, 0, mul(menu, mul(mat(FE_AT_OPT_QUALITY), rotate_scale(0, 0.75f))), a * 0.5f, NULL, 1);
-    draw_clip(FE_CLIP_OPT_SPEED, 0, mul(menu, mul(mat(FE_AT_OPT_SPEED), rotate_scale(0, 0.75f))), a * 0.5f, NULL, 1);
-    const Mat mm = mul(menu, mul(mat(FE_AT_OPT_MUTE), rotate_scale(0, hov ? 1.0f : 0.75f)));
-    const float ma = hov ? a : a * 0.5f;
-    draw_clip(FE_CLIP_OPT_MUTE, 0, mm, ma, NULL, 1);
-    const unsigned on = f->files.muted ? 3 : hov ? 2 : 1, off = !f->files.muted ? 3 : hov ? 2 : 1;   /* frames 2 / 3 / 4 */
-    draw_clip(FE_CLIP_MUTE_ON, on, mul(mm, mat(FE_AT_MUTE_ON)), ma, NULL, 1);
-    draw_clip(FE_CLIP_MUTE_OFF, off, mul(mm, mat(FE_AT_MUTE_OFF)), ma, NULL, 1);
-}
-static void draw_credits(const FrontEnd *f, Mat menu, float a, float width)
-{
-    const Mat outer = mul(menu, mat(FE_AT_CREDITS_BOX));
-    draw_clip(FE_CLIP_CREDITS_FRAME, 0, outer, a, NULL, 1);   /* 9526's box (9517), then 9525's pieces */
-    const Mat box = mul(outer, mat(FE_AT_CREDITS_INNER));
-    draw_clip(FE_CLIP_CREDITS_BG, 0, box, a, NULL, 1);
-    /* the text, scrolled, inside the mask (9519) */
-    const float *mk = FE_AT_CREDITS_MASK;   /* w, 0, 0, h, x, y */
-    const float sx = box.a * mk[4] + box.tx, sy = box.d * mk[5] + box.ty;
-    graphics_scissor(sx, sy, mk[0] * box.a, mk[3] * box.d);
-    draw_clip(FE_CLIP_CREDITS_TXT, 0, mul(box, mul(mat(FE_AT_CREDITS_TXT), translate(0, -f->menu.credits_scroll))), a,
-              NULL, 1);
-    graphics_scissor_off();
-    draw_clip(FE_CLIP_CREDITS_TOP, 0, box, a, NULL, 1);
-    draw_clip(FE_CLIP_CREDITS_ARROW, 0, mul(box, mat(FE_AT_CREDITS_ARROW8)), a, NULL, 1);
-    draw_clip(FE_CLIP_CREDITS_ARROW, 0, mul(box, mul(mat(FE_AT_CREDITS_ARROW10), rotate_scale(180, 1))), a, NULL, 1);
-    (void)width;
-}
-static void draw_achievements(const FrontEnd *f, float width, float a)
-{
-    const MenuState *m = &f->menu;
-    const unsigned char al = (unsigned char)(255 * a);
-    const AchProgress *p = save && save->slot[m->ach_file].used ? &save->slot[m->ach_file].progress : NULL;
-    unsigned total = 0;
-    for (unsigned i = 0; i < ACH_COUNT; ++i) total += p && (p->unlocked >> i & 1);
-    char line[96];
-    snprintf(line, sizeof line, "Achievements - File %c   %u / %u (%u%%)", 'A' + m->ach_file, total, ACH_COUNT,
-             total * 100 / ACH_COUNT);
-    const float x0 = width / 2 - 300, x1 = width / 2 + 300;
-    course_render_text(FONT_SIGN, line, x0 - 40, x1 - 120, 30, (GXColor){255, 255, 255, al}, ALIGN_LEFT, true);
-    course_render_text(FONT_HINT, "Left / Right: file", x0 - 40, x1 - 120, 66, (GXColor){255, 255, 255, al}, ALIGN_LEFT, true);
-    for (unsigned r = 0; r < 5; ++r) {
-        const unsigned i = m->ach_top + r;
-        if (i >= ACH_COUNT) break;
-        const AchDef *d = &ach_defs[i];
-        const bool lit = p && (p->unlocked >> i & 1), sel = m->focus == MI_LIST && i == m->ach_sel;
-        const float y = 120 + r * 58, h = 53;
-        graphics_rect(x0, y, x1 - x0, h, sel ? (GXColor){30, 60, 120, (unsigned char)(200 * a)}
-                                             : (GXColor){0, 0, 0, (unsigned char)(130 * a)});
-        if (sel) graphics_rect(x0, y, x1 - x0, 2, (GXColor){120, 180, 255, al});
-        course_render_trophy(d->tier, x0 + 4, y + 3, h - 6, lit, a);
-        const GXColor c = lit ? (GXColor){255, 255, 255, al} : (GXColor){170, 175, 185, al};
-        snprintf(line, sizeof line, "%u. %s", d->id, d->name);
-        course_render_text(FONT_TALK, line, x0 + h + 8, x1 - 70, y + 1, c, ALIGN_LEFT, false);
-        course_render_text(FONT_HINT, ach_tier_name(d->tier), x0 + h + 8, x1 - 8, y + 4, c, ALIGN_RIGHT, false);
-        course_render_text(FONT_HINT, d->description, x0 + h + 8, x1 - 8, y + 29, c, ALIGN_LEFT, false);
-    }
-}
 static void draw_menu(const FrontEnd *f, float width)
 {
     const MenuState *m = &f->menu;
-    const Mat menu = mul(stage(width), translate(225.15f, 150));   /* 9535 on the main timeline */
+    /* 9535 on the main timeline: its items at MENU_K, its backdrop over the screen */
+    const Mat menu = mul(stage_at(width, MENU_K, 150), translate(225.15f, 150));
+    const Mat back = mul(stage(width, FOCUS_TITLE), translate(225.15f, 150));
     /* the backdrop (9373) */
-    draw_clip(FE_CLIP_MBG_SKY, 0, mul(menu, mat(FE_AT_MBG_SKY)), 1, NULL, 1);
+    draw_clip(FE_CLIP_MBG_SKY, 0, mul(back, mat(FE_AT_MBG_SKY)), 1, NULL, 1);
     {   /* 9349: _xscale 75, scrolling 0.375 a frame */
-        Mat far = mul(menu, mat(FE_AT_MBG_FAR));
+        Mat far = mul(back, mat(FE_AT_MBG_FAR));
         far = mul(far, translate(m->far_x / 0.75f, 0));
         draw_clip(FE_CLIP_MBG_FAR, 0, mul(far, rotate_scale(0, 0.75f)), 1, NULL, 1);
     }
-    draw_clip(FE_CLIP_MBG_MID, 0, mul(menu, mul(translate(m->mid_x, 0), mat(FE_AT_MBG_MID))), 1, NULL, 1);
+    draw_clip(FE_CLIP_MBG_MID, 0, mul(back, mul(translate(m->mid_x, 0), mat(FE_AT_MBG_MID))), 1, NULL, 1);
     const float *trees[3] = {FE_AT_MBG_TREE14, FE_AT_MBG_TREE29, FE_AT_MBG_TREE44};
     for (unsigned k = 0; k < 3; ++k)
         draw_clip(FE_CLIP_MBG_TREE, m->tree_frame[k] ? m->tree_frame[k] - 1u : 0,
-                  mul(menu, mul(translate(m->tree_x[k], 0), mat(trees[k]))), 1, NULL, 1);
-    draw_clip(FE_CLIP_MBG_FRONT, 0, mul(menu, mat(FE_AT_MBG_FRONT)), 1, NULL, 1);
+                  mul(back, mul(translate(m->tree_x[k], 0), mat(trees[k]))), 1, NULL, 1);
+    draw_clip(FE_CLIP_MBG_FRONT, 0, mul(back, mat(FE_AT_MBG_FRONT)), 1, NULL, 1);
     const bool blank = m->red_on && m->red_frame >= 1 && m->red_frame <= 10;   /* 'Refresh' under the question */
     if (!blank) {
-        if (m->page <= MP_CREDITS) draw_clip(FE_CLIP_MENU_PAGE, m->page, menu, 1, NULL, 1);
-        switch (m->page) {
-        case MP_START:
-            draw_button(f, MI_STORY, menu, 1, -1); draw_button(f, MI_OPTIONS, menu, 1, -1);
-            draw_button(f, MI_EXTRAS, menu, 1, -1);
-            break;
-        case MP_STORY:
-            draw_files(f, menu, 1);
-            draw_button(f, MI_TOPBACK, menu, m->hl < 0 ? 1 : 0.5f, -1);
-            if (m->filem > 1)
-                for (int i = MI_PLAY; i <= MI_FILEBACK; ++i) draw_button(f, (MenuItem)i, menu, 1, -1);
-            break;
-        case MP_EXTRAS: {
-            /* the port's Achievements in Level Designer's place; Share levels and the Sound Test shown, unavailable */
-            draw_button(f, MI_ACHIEVEMENTS, menu, 1, FE_CLIP_BTN_BOX2);
-            float x, y;
-            front_item_pos(f, MI_ACHIEVEMENTS, &x, &y);
-            text_at(menu, x, y - 9, "Achievements", (GXColor){255, 255, 255, 255}, FONT_SIGN, ALIGN_CENTRE);
-            draw_button(f, MI_CREDITS, menu, 1, FE_CLIP_BTN_BOX2);
-            draw_clip(FE_CLIP_BTN_BOX3, 0, mul(menu, mul(mat(FE_AT_SHARE), mat(FE_AT_SHARE_BOX))), 0.4f, NULL, 1);
-            draw_clip(FE_CLIP_LBL_SHARE, 0, mul(menu, mul(mat(FE_AT_SHARE), mat(FE_AT_SHARE_LBL))), 0.4f, NULL, 1);
-            draw_clip(FE_CLIP_SHARE_ANIM, 0, mul(menu, mat(FE_AT_SHARE_ANIM)), 0.4f, NULL, 1);
-            draw_clip(FE_CLIP_SOUND_TEST, 0, mul(menu, mat(FE_AT_SOUND_TEST)), 0.4f, NULL, 1);
-            draw_button(f, MI_BACK, menu, 1, -1);
-            break;
-        }
-        case MP_OPTIONS: draw_options(f, menu, 1); draw_button(f, MI_BACK, menu, 1, -1); break;
-        case MP_CREDITS: draw_credits(f, menu, 1, width); draw_button(f, MI_BACK, menu, 1, -1); break;
-        case MP_ACHIEVEMENTS: draw_achievements(f, width, 1); draw_button(f, MI_BACK, menu, 1, -1); break;
-        default: break;
-        }
+        draw_clip(FE_CLIP_MENU_PAGE, FE_MENU_PAGE_STORY, menu, 1, NULL, 1);   /* the Story page */
+        draw_files(f, menu, 1);
+        draw_button(f, MI_TOPBACK, menu, m->hl < 0 ? 1 : 0.5f, -1);
+        if (m->filem > 1)
+            for (int i = MI_PLAY; i <= MI_FILEBACK; ++i) draw_button(f, (MenuItem)i, menu, 1, -1);
     }
     for (unsigned i = 0; i < FE_MESSAGES; ++i)   /* MenuMessage, attached at (0, 200) in 9535 */
         if (m->msg[i].on)
@@ -317,7 +243,7 @@ static void draw_menu(const FrontEnd *f, float width)
                     m->msg[i].green ? (GXColor){80, 255, 80, 255} : (GXColor){255, 60, 60, 255}, FONT_SIGN, ALIGN_CENTRE);
     if (m->red_on) {   /* MenuRedTrans and its question */
         const float a = m->red_alpha / 100;
-        draw_clip(FE_CLIP_RED_TRANS, m->red_frame ? m->red_frame - 1u : 0, menu, a, NULL, 1);
+        draw_clip(FE_CLIP_RED_TRANS, m->red_frame ? m->red_frame - 1u : 0, back, a, NULL, 1);   /* over the screen */
         if (m->red_frame >= 1 && m->red_frame <= 10) {
             /* txtt in the question's field (2123): "Are you sure you want to Delete File X?" */
             char q[64];
@@ -332,10 +258,6 @@ static void draw_menu(const FrontEnd *f, float width)
                       a, NULL, 1);
         }
     }
-    if (m->trans_on) draw_clip(FE_CLIP_TRANS, 0, mul(menu, translate(0, (float)m->trans_y)), 1, NULL, 1);
-    /* the stage only, as the title (the backdrop and its frame end at its edges) */
-    const float edge = width / 2 - 225 * K;
-    if (edge > 0) { graphics_rect(0, 0, edge, 480, (GXColor){0, 0, 0, 255}); graphics_rect(width - edge, 0, edge, 480, (GXColor){0, 0, 0, 255}); }
     if (m->green_on)
         graphics_rect(0, 0, width, 480, (GXColor){60, 200, 60, (unsigned char)(255 * m->green_alpha / 100)});
     if (m->black_on)
@@ -348,7 +270,8 @@ void front_render(const FrontEnd *f)
     graphics_set_zoom(1);
     graphics_rect(0, 0, width, 480, (GXColor){0, 0, 0, 255});
     if (!ready) return;
-    const Mat root = mul(stage(width), translate(225, 150));   /* the clips sit at the stage centre */
+    /* the clips sit at the stage centre */
+    const Mat root = mul(stage(width, f->state == FE_OPENING ? FOCUS_OPENING : FOCUS_TITLE), translate(225, 150));
     switch (f->state) {
     case FE_OPENING:
         if (!load_set(1, 1ull << FE_GROUP_OPENING)) return;
@@ -373,26 +296,3 @@ void front_render(const FrontEnd *f)
     }
 }
 void front_render_release(void) { loaded_set = 0; }
-float front_render_credits_height(void)
-{
-    /* the credits text's height over the mask's: how far it scrolls */
-    if (!ready) return 0;
-    unsigned n;
-    const uint8_t *at = NULL;
-    (void)at; (void)n;
-    float top = 1e9f, bottom = -1e9f;
-    const TlClip *c = &pack.clip[FE_CLIP_CREDITS_TXT];
-    (void)c;
-    if (!pack.draws) return 0;
-    at = timeline_frame(&pack, FE_CLIP_CREDITS_TXT, 0, &n);
-    for (unsigned i = 0; i < n && at; ++i) {
-        TlDraw d;
-        at = timeline_next(at, &d);
-        const TlBake b = timeline_bake(&pack, d.bake);
-        const float y0 = d.m[5] + b.oy, y1 = y0 + b.h * b.px;
-        if (y0 < top) top = y0;
-        if (y1 > bottom) bottom = y1;
-    }
-    const float h = bottom - top - FE_AT_CREDITS_MASK[3];
-    return h > 0 ? h : 0;
-}

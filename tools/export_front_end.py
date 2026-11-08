@@ -24,20 +24,19 @@ TITLE_START_DEPTH = 1470
 
 
 # The main menu (9535) is replayed in pieces the port moves itself, as the
-# original's scripts do: the backdrop's scrolling layers (9373), the page
-# titles and logo (9535's frames without their buttons), each button as the
-# shared box (2116, 92 frames) and its label, the file boxes' letters, the
-# erase animation (9403), the Options items, the credits text, and the
-# MenuTransition / MenuRedTrans clips.
+# original's scripts do: the backdrop's scrolling layers (9373), the Story
+# page's title (9535's frame 2 without its buttons: the port goes from START
+# to the file select, without the Start, Extras and Options pages), each
+# button as the shared box (2116, 92 frames) and its label, the file boxes'
+# letters, the erase animation (9403) and MenuRedTrans.
 BUTTONS = {   # name: (button sprite, label sprite)
-    'story': (9376, 9375), 'options': (9379, 9378), 'extras': (9382, 9381), 'back': (9417, 9416),
+    'back': (9417, 9416),
     'play': (9421, 9420), 'copy': (9426, 9425), 'erase': (9429, 9428), 'fileback': (9432, 9431),
-    'credits': (9481, 9480), 'leveldesigner': (9478, 9477), 'share': (9486, 9485),
 }
+MENU_PAGE_STORY = 1   # 9535's frame (0-based) the port shows
 FILE_LETTERS = [9405, 9407, 9409, 9411]   # 9414 frames 2-5: A, B, C, D
 PAGE_SKIP = {9373, 9376, 9379, 9382, 9433, 9417, 9478, 9481, 9486, 9469, 9493, 769, 773, 784, 9526, 9383, 9434,
              9435, 9516}
-MUTE_ON, MUTE_OFF = 766, 762
 
 
 def clips(tl):
@@ -45,22 +44,12 @@ def clips(tl):
         ('opening', 9280, range(341), None, None),
         ('title', 9339, range(340), None, {TITLE_START_DEPTH: 1}),
         ('title_out', 2137, range(len(tl[2137]['frames'])), None, None),
-        ('menu_page', 9535, range(5), None, None, PAGE_SKIP),
+        ('menu_page', 9535, range(MENU_PAGE_STORY, MENU_PAGE_STORY + 1), None, None, PAGE_SKIP),
         ('mbg_sky', 9348, range(1), None, None), ('mbg_far', 9349, range(1), None, None),
         ('mbg_mid', 9350, range(1), None, None), ('mbg_tree', 9371, range(20), None, None),
         ('mbg_front', 9372, range(1), None, None),
         ('btn_box', 2116, range(92), None, None),
-        ('btn_box2', 9475, range(len(tl[9475]['frames'])) if tl[9475]['kind'] == 'sprite' else range(1), None, None),
-        ('btn_box3', 9483, range(len(tl[9483]['frames'])) if tl[9483]['kind'] == 'sprite' else range(1), None, None),
         ('erase', 9403, range(35), None, None),
-        ('sound_test', 9469, range(1), None, None), ('share_anim', 9493, range(80), None, None),
-        ('opt_quality', 769, range(1), None, None), ('opt_mute', 773, range(1), None, None, {MUTE_ON, MUTE_OFF}),
-        ('opt_speed', 784, range(1), None, None),
-        ('mute_on', MUTE_ON, range(4), None, None), ('mute_off', MUTE_OFF, range(4), None, None),
-        ('credits_bg', 9518, range(1), None, None), ('credits_txt', 9521, range(1), None, None, (), 'whole'),
-        ('credits_arrow', 9524, range(len(tl[9524]['frames'])), None, None), ('credits_top', 9522, range(1), None, None),
-        ('credits_frame', 9517, range(1), None, None),
-        ('trans', 2108, range(1), None, None),
         ('red_trans', 2127, range(51), None, None, {'yes', 'no'} | text_fields(tl, 2127)),
         ('red_yes', 2119, range(1), None, None), ('red_no', 2122, range(1), None, None),
     ]
@@ -103,15 +92,9 @@ def placements(tl):
     def put(name, m):
         rows[name] = m
     page = tl[9535]['frames']
-    for f, names in ((0, {9376: 'story', 9379: 'options', 9382: 'extras', 9383: None}),
-                     (1, {9433: 'filem'}),
-                     (2, {9417: 'back', 9478: 'leveldesigner', 9481: 'credits', 9486: 'share', 9469: 'sound_test',
-                          9493: 'share_anim'}),
-                     (3, {769: 'opt_quality', 773: 'opt_mute', 784: 'opt_speed'}),
-                     (4, {9526: 'credits_box'})):
-        for d, e in page[f].items():
-            if names.get(e['id']):
-                put(names[e['id']], e['matrix'])
+    for d, e in page[MENU_PAGE_STORY].items():
+        if e['id'] == 9433:
+            put('filem', e['matrix'])
     for name, (button, label) in BUTTONS.items():
         fr = tl[button]['frames'][0]
         for d, e in fr.items():
@@ -137,28 +120,14 @@ def placements(tl):
             put('filebox_copy', e['matrix'])
     for d, e in tl[9373]['frames'][0].items():
         put({9348: 'mbg_sky', 9349: 'mbg_far', 9350: 'mbg_mid', 9372: 'mbg_front'}.get(e['id'], f'mbg_tree{d}'), e['matrix'])
-    for d, e in tl[9525]['frames'][0].items():
-        if e['id'] == 9524:
-            put(f'credits_arrow{d}', e['matrix'])
-        if e.get('name') == 'txt':
-            put('credits_txt', e['matrix'])
-        if e['clip']:
-            x0, y0, x1, y1 = tl[e['id']]['bounds']
-            put('credits_mask', (x1 - x0, 0, 0, y1 - y0, x0 + e['matrix'][4], y0 + e['matrix'][5]))
     for d, e in tl[2127]['frames'][9].items():
         if e.get('name') in ('yes', 'no'):
             put(f'red_{e["name"]}', e['matrix'])
-    for d, e in tl[9526]['frames'][0].items():
-        if e['id'] == 9525:
-            put('credits_inner', e['matrix'])
     for d, e in tl[2127]['frames'][9].items():   # the question's field (2123 in 2124), its box
         if e['id'] == 2124:
             for dd, ee in tl[2124]['frames'][0].items():
                 if ee['id'] == 2123:
                     put('red_field', (308, 0, 0, 203, e['matrix'][4] + ee['matrix'][4] - 2, e['matrix'][5] + ee['matrix'][5] - 2))
-    for d, e in tl[773]['frames'][0].items():
-        if e['id'] in (MUTE_ON, MUTE_OFF):
-            put('mute_on' if e['id'] == MUTE_ON else 'mute_off', e['matrix'])
     # the side buttons sliding in over 9433's frames 1-23
     side = {9421: 'play', 9426: 'copy', 9429: 'erase', 9432: 'fileback', 9423: 'fileinfo'}
     slide = {n: [] for n in side.values()}
@@ -188,7 +157,7 @@ def main():
         lines.append(f'#define FE_CLIP_{spec[0].upper()} {k}')
     lines += [f'#define FE_GROUP_OPENING {GROUP_OPENING}', f'#define FE_GROUP_TITLE {GROUP_TITLE}',
               f'#define FE_GROUP_TITLE_OUT {GROUP_TITLE_OUT}', f'#define FE_GROUP_MENU {GROUP_MENU}']
-    lines += [f'#define FE_CLIPS {len(clips(tl))}', f'#define FE_TITLE_LOOP_FIRST {TITLE_LOOP[0]}',
+    lines += [f'#define FE_CLIPS {len(clips(tl))}', '/* the menu_page clip shows 9535 frame 2, the Story page */', f'#define FE_TITLE_LOOP_FIRST {TITLE_LOOP[0]}',
               f'#define FE_TITLE_LOOP_LAST {TITLE_LOOP[1]}',
               '/* where the original places the menu pieces: a b c d tx ty */']
     for name, m in sorted(rows.items()):
