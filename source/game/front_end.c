@@ -128,44 +128,46 @@ bool front_item_live(const FrontEnd *f, MenuItem item)
     return false;
 }
 static bool item_live(const FrontEnd *f, int item) { return item >= 0 && item < MI_COUNT && front_item_live(f, (MenuItem)item); }
-static void slide_pos(const float (*t)[2], unsigned frame, float *x, float *y)
+/* The open file's buttons slide in from the right one after another (the
+   original's file menu slides them in over its frames 1-23). */
+static float slide_in(const MenuState *m, unsigned order)
 {
-    unsigned i = frame ? frame - 1 : 0;
-    if (i >= FE_FILEM_FRAMES) i = FE_FILEM_FRAMES - 1;
-    *x = t[i][0]; *y = t[i][1];
+    float t = ((float)m->filem - 1 - 2.0f * order) / 16.0f;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const float u = 1 - t;
+    return u * u * u * 320;   /* px still to go */
 }
 bool front_item_pos(const FrontEnd *f, MenuItem item, float *x, float *y)
 {
     const MenuState *m = &f->menu;
-    const float fx = FE_AT_FILEM[4], fy = FE_AT_FILEM[5];
     *x = *y = 0;
     switch (item) {
-    case MI_FILE_A: *x = fx + FE_AT_FILE_A[4]; *y = fy + FE_AT_FILE_A[5]; break;
-    case MI_FILE_B: *x = fx + FE_AT_FILE_B[4]; *y = fy + FE_AT_FILE_B[5]; break;
-    case MI_FILE_C: *x = fx + FE_AT_FILE_C[4]; *y = fy + FE_AT_FILE_C[5]; break;
-    case MI_FILE_D: *x = fx + FE_AT_FILE_D[4]; *y = fy + FE_AT_FILE_D[5]; break;
-    case MI_TOPBACK: *x = fx + FE_AT_FILEBACK_TOP[4]; *y = fy + FE_AT_FILEBACK_TOP[5]; break;
-    case MI_PLAY: slide_pos(FE_SLIDE_PLAY, m->filem, x, y); *x += fx; *y += fy; break;
-    case MI_COPY: slide_pos(FE_SLIDE_COPY, m->filem, x, y); *x += fx; *y += fy; break;
-    case MI_ERASE: slide_pos(FE_SLIDE_ERASE, m->filem, x, y); *x += fx; *y += fy; break;
-    case MI_FILEBACK: slide_pos(FE_SLIDE_FILEBACK, m->filem, x, y); *x += fx; *y += fy; break;
+    case MI_FILE_A: *x = FE_GRID_X0; *y = FE_GRID_Y0; break;
+    case MI_FILE_B: *x = FE_GRID_X1; *y = FE_GRID_Y0; break;
+    case MI_FILE_C: *x = FE_GRID_X0; *y = FE_GRID_Y1; break;
+    case MI_FILE_D: *x = FE_GRID_X1; *y = FE_GRID_Y1; break;
+    case MI_TOPBACK: *x = FE_BACK_X; *y = FE_BACK_Y; break;
+    case MI_PLAY: *x = FE_BUTTON_X0 + slide_in(m, 0); *y = FE_BUTTON_Y0; break;
+    case MI_COPY: *x = FE_BUTTON_X1 + slide_in(m, 1); *y = FE_BUTTON_Y0; break;
+    case MI_ERASE: *x = FE_BUTTON_X0 + slide_in(m, 2); *y = FE_BUTTON_Y1; break;
+    case MI_FILEBACK: *x = FE_BUTTON_X1 + slide_in(m, 3); *y = FE_BUTTON_Y1; break;
     default: return false;
     }
-    return *x < 1e8f;
+    return true;
 }
 /* The D-pad's links (FE_UP, FE_DOWN, FE_LEFT, FE_RIGHT), in the order tried:
-   the files' grid (A B / C D), BACK above B, the open file's buttons
-   (PLAY, COPY, DELETE, CANCEL) top to bottom. */
+   the files' grid (A B / C D) with BACK under it, the open file's buttons
+   PLAY COPY / DELETE CANCEL. */
 static const signed char links[MI_COUNT][4][3] = {
-    [MI_FILE_A] = {{MI_TOPBACK, -1, -1}, {MI_FILE_C, -1, -1}, {-1, -1, -1}, {MI_FILE_B, -1, -1}},
-    [MI_FILE_B] = {{MI_TOPBACK, -1, -1}, {MI_FILE_D, -1, -1}, {MI_FILE_A, -1, -1}, {MI_TOPBACK, -1, -1}},
-    [MI_FILE_C] = {{MI_FILE_A, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {MI_FILE_D, -1, -1}},
-    [MI_FILE_D] = {{MI_FILE_B, -1, -1}, {-1, -1, -1}, {MI_FILE_C, -1, -1}, {-1, -1, -1}},
-    [MI_TOPBACK] = {{-1, -1, -1}, {MI_FILE_B, MI_FILE_A, -1}, {MI_FILE_B, MI_FILE_A, -1}, {-1, -1, -1}},
-    [MI_PLAY] = {{-1, -1, -1}, {MI_COPY, MI_ERASE, MI_FILEBACK}, {-1, -1, -1}, {-1, -1, -1}},
-    [MI_COPY] = {{MI_PLAY, -1, -1}, {MI_ERASE, MI_FILEBACK, -1}, {-1, -1, -1}, {-1, -1, -1}},
-    [MI_ERASE] = {{MI_COPY, MI_PLAY, -1}, {MI_FILEBACK, -1, -1}, {-1, -1, -1}, {-1, -1, -1}},
-    [MI_FILEBACK] = {{MI_ERASE, MI_COPY, MI_PLAY}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}},
+    [MI_FILE_A] = {{-1, -1, -1}, {MI_FILE_C, -1, -1}, {-1, -1, -1}, {MI_FILE_B, -1, -1}},
+    [MI_FILE_B] = {{-1, -1, -1}, {MI_FILE_D, -1, -1}, {MI_FILE_A, -1, -1}, {-1, -1, -1}},
+    [MI_FILE_C] = {{MI_FILE_A, -1, -1}, {MI_TOPBACK, -1, -1}, {-1, -1, -1}, {MI_FILE_D, -1, -1}},
+    [MI_FILE_D] = {{MI_FILE_B, -1, -1}, {MI_TOPBACK, -1, -1}, {MI_FILE_C, -1, -1}, {-1, -1, -1}},
+    [MI_TOPBACK] = {{MI_FILE_C, MI_FILE_D, -1}, {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}},
+    [MI_PLAY] = {{-1, -1, -1}, {MI_ERASE, -1, -1}, {-1, -1, -1}, {MI_COPY, -1, -1}},
+    [MI_COPY] = {{-1, -1, -1}, {MI_FILEBACK, -1, -1}, {MI_PLAY, -1, -1}, {-1, -1, -1}},
+    [MI_ERASE] = {{MI_PLAY, -1, -1}, {-1, -1, -1}, {-1, -1, -1}, {MI_FILEBACK, -1, -1}},
+    [MI_FILEBACK] = {{MI_COPY, -1, -1}, {-1, -1, -1}, {MI_ERASE, -1, -1}, {-1, -1, -1}},
 };
 int front_menu_link(const FrontEnd *f, MenuItem item, unsigned dir)
 {
@@ -288,6 +290,8 @@ static void menu_frame(FrontEnd *f)
         if (!m->erase[k]) continue;
         if (++m->erase[k] == 34) {
             f->files.erase = (int)k; f->files.shines[k] = 0; f->files.changed = true;
+            f->files.star_coins[k] = f->files.achievements[k] = 0;
+            for (unsigned t = 0; t < 4; ++t) f->files.trophies[k][t] = 0;
             m->mode = FM_NONE; m->hl = -1; m->focus = (signed char)(MI_FILE_A + k);
         }
         if (m->erase[k] >= 35) m->erase[k] = 0;
@@ -299,6 +303,9 @@ static void menu_frame(FrontEnd *f)
                 m->green_back = true;
                 f->files.copy_from = m->copy_from; f->files.copy_to = m->copy_to;
                 f->files.shines[m->copy_to] = f->files.shines[m->copy_from]; f->files.changed = true;
+                f->files.star_coins[m->copy_to] = f->files.star_coins[m->copy_from];
+                f->files.achievements[m->copy_to] = f->files.achievements[m->copy_from];
+                for (unsigned t = 0; t < 4; ++t) f->files.trophies[m->copy_to][t] = f->files.trophies[m->copy_from][t];
             }
         } else if ((m->green_alpha -= 10) <= 0) { m->green_on = false; m->green_alpha = 0; }
     }
@@ -360,6 +367,7 @@ static void click(FrontEnd *f, int item)
 static void menu_input(FrontEnd *f, const GameInput *in)
 {
     MenuState *m = &f->menu;
+    f->controller = in->controller;
     if (m->black_on || m->green_on) return;
     const int dx = in->horizontal > 0.5f ? 1 : in->horizontal < -0.5f ? -1 : 0;
     const int dy = in->vertical > 0.5f ? 1 : in->vertical < -0.5f ? -1 : 0;
@@ -390,6 +398,9 @@ static void menu_input(FrontEnd *f, const GameInput *in)
         const int n = front_menu_link(f, (MenuItem)m->focus, dir);
         if (n >= 0) m->focus = (signed char)n;
     }
+    /* the panel shows the open file, else the file under the cursor (on BACK: the last one) */
+    if (m->hl >= 0 && m->mode != FM_COPYING) m->panel_file = (unsigned char)m->hl;
+    else if (is_file(m->focus)) m->panel_file = (unsigned char)(m->focus - MI_FILE_A);
     if (in->confirm_pressed && item_live(f, m->focus)) click(f, m->focus);
     else if (in->cancel_pressed) {   /* spin: the way back */
         if (m->mode == FM_COPYING) { m->mode = FM_NONE; m->focus = MI_COPY; }

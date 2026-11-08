@@ -55,20 +55,29 @@ alone; the replay is under 5 MB for everything.
   or START presses it. TitleScreenTransition (2137) plays 40 frames, the file
   select appearing on its frame 20.
 * The file select (9535's Story page): the scrolling backdrop (9373's layers
-  and their scripts), the buttons' float script (bob, sway, grow when chosen,
-  spin and bounce when pressed), the file menu (9433) sliding its PLAY! /
-  COPY / DELETE / CANCEL in, Copy into an empty file (MenuGreenTrans), Delete
-  with the original question (MenuRedTrans) and the erase animation (9403),
-  the red messages (MenuMessage), Play's fade to black (MenuBlackTrans). Four
-  files, A-D, as the original.
+  and their scripts, its sky with the original's white stripes), the
+  buttons' float script (bob, sway, grow when chosen, spin and bounce when
+  pressed), PLAY! / COPY / DELETE / CANCEL sliding in, Copy into an empty file
+  (MenuGreenTrans), Delete with the original question (MenuRedTrans) and the
+  erase animation (9403), the red messages (MenuMessage), Play's fade to
+  black (MenuBlackTrans). Four files, A-D, as the original.
 
 ## What the port changes
 
+* The file select's layout (user request 2026-11-08, `FE_GRID_*` /
+  `FE_PANEL_*` in front_end.h): the original file boxes in a 2 x 2 grid on
+  the left under STORY, BACK under them; on the right a detail panel in the
+  pause menu's row style: the file's own label (9414's "File A"), its Shine
+  Sprites, Star Coins and achievements (of 64) and its trophies by tier (or
+  "Empty file"; while copying, "Copy File A to File B"), and under them the
+  original PLAY! / COPY / DELETE / CANCEL buttons (2 x 2), sliding in from
+  the right one after another when the file is chosen. The panel shows the
+  file under the cursor (the chosen one once open).
 * Controller (jump chooses, spin goes back): the D-pad follows fixed links
-  (`front_menu_link`): the files' 2 x 2 grid (A B / C D), BACK above B (Up
-  from A or B), the open file's buttons PLAY / COPY / DELETE / CANCEL top to
-  bottom; buttons that cannot be chosen yet are skipped, and the cursor waits
-  on a button still sliding in. Holding a direction repeats after 0.4 s every
+  (`front_menu_link`): the files' 2 x 2 grid (A B / C D), BACK under it (Down
+  from C or D), the open file's buttons PLAY COPY / DELETE CANCEL; buttons
+  that cannot be chosen yet are skipped, and the cursor waits on a button
+  still sliding in. Holding a direction repeats after 0.4 s every
   0.1 s. Spin: stops copying, closes the open file, else back to the title.
   Delete's question: Left / Right Yes / No, spin is No.
 * No Start, Options or Extras pages (user request): Level Designer, Share

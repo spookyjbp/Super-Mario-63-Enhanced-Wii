@@ -4,6 +4,7 @@
    backdrop's layers) moved by the port. Textures live in the course
    renderer's MEM2 area while no course is shown. */
 #include "front_render.h"
+#include "achievements.h"
 #include "course_render.h"
 #include "font_metrics.h"
 #include "front_end_layout.h"
@@ -12,6 +13,7 @@
 #include "text_layout.h"
 #include "timeline.h"
 #include "lz4_block.h"
+#include "pause_layout.h"
 #include <gccore.h>
 #include <math.h>
 #include <stdio.h>
@@ -210,6 +212,82 @@ static void draw_files(const FrontEnd *f, Mat menu, float a)
             draw_clip(FE_CLIP_ERASE, m->erase[k] - 1, mul(t, mat(FE_AT_FILEBOX_EM)), a, NULL, 1);
     }
 }
+/* 9535 px -> screen px through the menu's matrix (no rotation) */
+static float sx_of(Mat m, float x) { return m.a * x + m.tx; }
+static float sy_of(Mat m, float y) { return m.d * y + m.ty; }
+static const char *choose_name(unsigned controller)
+{
+    return controller == CONTROLLER_CLASSIC ? "b" : controller == CONTROLLER_WIIMOTE ? "2" : "A";
+}
+static const char *back_name(unsigned controller)
+{
+    return controller == CONTROLLER_CLASSIC ? "y" : controller == CONTROLLER_WIIMOTE ? "1" : "B";
+}
+/* The detail panel (the port's): the file's original label, then rows in the
+   pause menu's style - its Shine Sprites, Star Coins, achievements and
+   trophies - and under them the file's buttons (or how to choose it). */
+static void draw_panel(const FrontEnd *f, Mat menu)
+{
+    const MenuState *m = &f->menu;
+    const MenuFiles *fl = &f->files;
+    const unsigned k = m->panel_file < FE_FILES ? m->panel_file : 0;
+    const float x0 = sx_of(menu, FE_PANEL_X0), x1 = sx_of(menu, FE_PANEL_X1);
+    const GXColor white = {255, 255, 255, 255}, grey = {200, 205, 215, 255}, gold = {255, 214, 70, 255};
+    /* the file's own label (9414's 'File A'...), larger */
+    const Mat lm = mul(menu, mul(translate((FE_PANEL_X0 + FE_PANEL_X1) / 2, FE_PANEL_TITLE_Y), rotate_scale(0, 1.35f)));
+    draw_clip(FE_CLIP_FILE_A + k, 0, mul(lm, mat(FE_AT_FILEBOX_LBL)), 1, NULL, 1);
+    const float rh = FE_PANEL_ROW_H * menu.d, band = rh - 5;
+    const float icon = band - 10;
+    char line[64];
+    float ry = sy_of(menu, FE_PANEL_ROWS_Y);
+    if (m->mode == FM_COPYING) {
+        course_render_row(x0, ry, x1, band, true, 1);
+        const int from = m->hl >= 0 ? m->hl : 0;
+        if ((int)k != from) snprintf(line, sizeof line, "Copy File %c to File %c", 'A' + from, 'A' + k);
+        else snprintf(line, sizeof line, "Copy File %c", 'A' + from);
+        course_render_text(FONT_TALK, line, x0 + 12, x1 - 8, ry + 2, white, ALIGN_LEFT, false);
+        course_render_text(FONT_HINT, (int)k != from && fl->shines[k] ? "That file is not empty" : "Choose an empty file for it",
+                           x0 + 12, x1 - 8, ry + 27, (int)k != from && fl->shines[k] ? (GXColor){255, 120, 120, 255} : grey,
+                           ALIGN_LEFT, false);
+    } else if (fl->shines[k] == 0) {   /* the original's empty file: TotalStars 0 */
+        course_render_row(x0, ry, x1, band, false, 1);
+        course_render_pause_part(PP_SHINE_OFF, x0 + 6, ry + 5, icon, icon, 255);
+        course_render_text(FONT_TALK, "Empty file", x0 + icon + 16, x1 - 8, ry + 2, white, ALIGN_LEFT, false);
+        course_render_text(FONT_HINT, "PLAY starts a new game", x0 + icon + 16, x1 - 8, ry + 27, grey, ALIGN_LEFT, false);
+    } else {
+        const struct { unsigned part; int tier; const char *name; unsigned n, of; } rows[3] = {
+            {PP_SHINE_ON, -1, "Shine Sprites", fl->shines[k], 64},
+            {PP_SCOIN_ON, -1, "Star Coins", fl->star_coins[k], 64},
+            {0, 0, "Achievements", fl->achievements[k], 64}};
+        for (unsigned i = 0; i < 3; ++i, ry += rh) {
+            course_render_row(x0, ry, x1, band, false, 1);
+            if (rows[i].tier < 0) course_render_pause_part(rows[i].part, x0 + 6, ry + 5, icon, icon, 255);
+            else course_render_trophy(ACH_GOLD, x0 + 6, ry + 5, icon, rows[i].n > 0, 1);
+            course_render_text(FONT_TALK, rows[i].name, x0 + icon + 16, x1 - 8, ry + 9, white, ALIGN_LEFT, false);
+            snprintf(line, sizeof line, "%u / %u", rows[i].n, rows[i].of);
+            course_render_text(FONT_TALK, line, x0, x1 - 12, ry + 9, gold, ALIGN_RIGHT, false);
+        }
+        /* the trophies by tier */
+        course_render_row(x0, ry, x1, band, false, 1);
+        const float cell = (x1 - x0 - 12) / 4;
+        for (unsigned t = 0; t < 4; ++t) {
+            const float tx = x0 + 6 + cell * t;
+            course_render_trophy(t, tx, ry + 5, icon, fl->trophies[k][t] > 0, 1);
+            snprintf(line, sizeof line, "%u", fl->trophies[k][t]);
+            course_render_text(FONT_TALK, line, tx + icon + 6, tx + cell, ry + 9, white, ALIGN_LEFT, false);
+        }
+    }
+    /* before a file is chosen: how to choose it, where its buttons come */
+    if (m->hl < 0 && m->filem <= 1) {
+        const float hy = sy_of(menu, (FE_BUTTON_Y0 + FE_BUTTON_Y1) / 2) - 12;
+        if (m->focus == MI_TOPBACK)
+            snprintf(line, sizeof line, "%s: back to the title", choose_name(f->controller));
+        else
+            snprintf(line, sizeof line, "%s: choose File %c      %s: back", choose_name(f->controller), 'A' + k,
+                     back_name(f->controller));
+        course_render_text(FONT_HINT, line, x0, x1, hy, white, ALIGN_CENTRE, true);
+    }
+}
 static void draw_menu(const FrontEnd *f, float width)
 {
     const MenuState *m = &f->menu;
@@ -232,6 +310,7 @@ static void draw_menu(const FrontEnd *f, float width)
     const bool blank = m->red_on && m->red_frame >= 1 && m->red_frame <= 10;   /* 'Refresh' under the question */
     if (!blank) {
         draw_clip(FE_CLIP_MENU_PAGE, FE_MENU_PAGE_STORY, menu, 1, NULL, 1);   /* the Story page */
+        draw_panel(f, menu);
         draw_files(f, menu, 1);
         draw_button(f, MI_TOPBACK, menu, m->hl < 0 ? 1 : 0.5f, -1);
         if (m->filem > 1)

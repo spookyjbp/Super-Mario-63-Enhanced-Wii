@@ -78,16 +78,17 @@ static void test_opening_and_title(void)
 static void test_menu_flows(void)
 {
     f.files.shines[0] = 12; f.files.shines[1] = 0; f.files.shines[2] = 3; f.files.shines[3] = 0;
-    /* the D-pad: the files' 2 x 2 grid, BACK above it on the right */
-    assert(f.menu.focus == MI_FILE_A);
-    dpad(1, 0); assert(f.menu.focus == MI_FILE_B);
-    dpad(0, 1); assert(f.menu.focus == MI_FILE_D);
+    /* the D-pad: the files' 2 x 2 grid, BACK under it; the panel shows the file under the cursor */
+    assert(f.menu.focus == MI_FILE_A && f.menu.panel_file == 0);
+    dpad(1, 0); assert(f.menu.focus == MI_FILE_B && f.menu.panel_file == 1);
+    dpad(0, 1); assert(f.menu.focus == MI_FILE_D && f.menu.panel_file == 3);
     dpad(-1, 0); assert(f.menu.focus == MI_FILE_C);
     dpad(-1, 0); assert(f.menu.focus == MI_FILE_C);   /* the edge: stays */
+    dpad(0, 1); assert(f.menu.focus == MI_TOPBACK && f.menu.panel_file == 2);   /* BACK: the panel keeps C */
+    dpad(1, 0); assert(f.menu.focus == MI_TOPBACK);
+    dpad(0, -1); assert(f.menu.focus == MI_FILE_C);
     dpad(0, -1); assert(f.menu.focus == MI_FILE_A);
-    dpad(0, -1); assert(f.menu.focus == MI_TOPBACK);
-    dpad(0, 1); assert(f.menu.focus == MI_FILE_B);
-    dpad(-1, 0); assert(f.menu.focus == MI_FILE_A);
+    dpad(0, -1); assert(f.menu.focus == MI_FILE_A);
     /* holding a direction repeats after 0.4 s */
     {
         GameInput in = {0}; in.horizontal = 1;
@@ -107,13 +108,15 @@ static void test_menu_flows(void)
     assert(!f.menu.black_on);
     tick(45);
     assert(f.menu.filem == FE_FILEM_FRAMES);
-    /* the open file's buttons: a column, Up / Down; the files cannot be reached */
-    dpad(0, 1); assert(f.menu.focus == MI_COPY);
+    /* the open file's buttons: PLAY COPY / DELETE CANCEL; the files cannot be reached */
+    assert(f.menu.panel_file == 0);
+    dpad(1, 0); assert(f.menu.focus == MI_COPY);
+    dpad(0, 1); assert(f.menu.focus == MI_FILEBACK);
+    dpad(-1, 0); assert(f.menu.focus == MI_ERASE);
+    dpad(-1, 0); assert(f.menu.focus == MI_ERASE);
     dpad(0, 1); assert(f.menu.focus == MI_ERASE);
-    dpad(0, 1); assert(f.menu.focus == MI_FILEBACK);
-    dpad(0, 1); assert(f.menu.focus == MI_FILEBACK);
-    dpad(-1, 0); assert(f.menu.focus == MI_FILEBACK);
-    dpad(0, -1); dpad(0, -1); dpad(0, -1); assert(f.menu.focus == MI_PLAY);
+    dpad(0, -1); assert(f.menu.focus == MI_PLAY);
+    dpad(0, -1); assert(f.menu.focus == MI_PLAY);
     /* Copy, then spin: copying stops, back on COPY */
     choose(MI_COPY);
     assert(f.menu.mode == FM_COPYING && f.menu.focus == MI_FILE_B);
@@ -172,7 +175,7 @@ static void test_menu_flows(void)
     while (!f.start_placed) tick(1);
     press('A');
     while (f.state != FE_MENU) tick(1);
-    dpad(0, -1); assert(f.menu.focus == MI_TOPBACK);
+    dpad(0, 1); dpad(0, 1); assert(f.menu.focus == MI_TOPBACK);
     press('A');
     assert(f.state == FE_TITLE);
 }

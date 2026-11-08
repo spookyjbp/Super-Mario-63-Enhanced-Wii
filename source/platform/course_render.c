@@ -521,16 +521,20 @@ static PageBox page_box(const PauseView *v, unsigned title, const char *left, co
     b.rows_y = b.top + 28;
     return b;
 }
+void course_render_row(float x0, float y, float x1, float h, bool sel, float a)
+{
+    graphics_rect(x0, y, x1 - x0, h, sel ? (GXColor){30, 60, 120, (unsigned char)(200 * a)}
+                                         : (GXColor){0, 0, 0, (unsigned char)(120 * a)});
+    if (sel) {
+        graphics_rect(x0, y, x1 - x0, 2, (GXColor){120, 180, 255, (unsigned char)(255 * a)});
+        graphics_rect(x0, y + h - 2, x1 - x0, 2, (GXColor){120, 180, 255, (unsigned char)(255 * a)});
+    }
+}
 /* Row r's band: dark; the chosen one blue with light edges. Returns its top. */
 static float row_band(const PageBox *b, unsigned r, bool sel)
 {
-    const float ry = b->rows_y + r * ROW_H, rh = ROW_H - 5;
-    graphics_rect(b->x0, ry, b->x1 - b->x0, rh, sel ? (GXColor){30, 60, 120, (unsigned char)(200 * b->a)}
-                                                   : (GXColor){0, 0, 0, (unsigned char)(120 * b->a)});
-    if (sel) {
-        graphics_rect(b->x0, ry, b->x1 - b->x0, 2, (GXColor){120, 180, 255, b->al});
-        graphics_rect(b->x0, ry + rh - 2, b->x1 - b->x0, 2, (GXColor){120, 180, 255, b->al});
-    }
+    const float ry = b->rows_y + r * ROW_H;
+    course_render_row(b->x0, ry, b->x1, ROW_H - 5, sel, b->a);
     return ry;
 }
 /* A part fitted into a screen box (kept in proportion, centred). */
@@ -542,6 +546,12 @@ static void part_fit(unsigned id, float x, float y, float w, float h, unsigned c
     const float k = fminf(w / pw, h / ph);
     const float left = x + (w - pw * k) / 2, top = y + (h - ph * k) / 2;
     part_screen(id, left - pp->ox * k, top - pp->oy * k, k, alpha);
+}
+bool course_render_pause_part(unsigned id, float x, float y, float w, float h, unsigned char alpha)
+{
+    if (!load_parts()) return false;
+    part_fit(id, x, y, w, h, alpha);
+    return true;
 }
 /* The row's words: a name, a note on the right, a line under it. */
 static void row_words(const PageBox *b, float tx, float ry, const char *name, const char *right, GXColor rc,

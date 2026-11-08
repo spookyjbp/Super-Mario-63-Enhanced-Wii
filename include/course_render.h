@@ -13,4 +13,8 @@ unsigned char *course_render_scratch(size_t *size);
 void course_render_text(unsigned font, const char *text, float x0, float x1, float y, GXColor colour, int align,
                         bool glow);
 void course_render_trophy(unsigned tier, float x, float y, float size, bool lit, float alpha);
+/* The pause menu's row band (dark; chosen: blue with light edges), screen px. */
+void course_render_row(float x0, float y, float x1, float h, bool sel, float alpha);
+/* A pause menu piece (pause_layout.h PP_*) fitted into a screen box. */
+bool course_render_pause_part(unsigned id, float x, float y, float w, float h, unsigned char alpha);
 #endif

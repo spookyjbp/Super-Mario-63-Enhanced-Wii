@@ -70,9 +70,17 @@ int main(void)
     double accumulator = 0;
     while (!exit_requested && !power_requested && SYS_MainLoop()) {
         if (!tutorial && lab.quit) break;
-        if (in_front) {   /* the menu's view of the save files */
-            for (unsigned k = 0; k < FE_FILES; ++k)
-                front.files.shines[k] = save.slot[k].used ? ach_popcount(save.slot[k].progress.shines) : 0;
+        if (in_front) {   /* the menu's view of the save files: the grid's and the detail panel's */
+            for (unsigned k = 0; k < FE_FILES; ++k) {
+                const SaveSlot *sl = &save.slot[k];
+                Achievements a;
+                ach_init(&a, &sl->progress);
+                const AchSummary sum = ach_summary(&a);
+                front.files.shines[k] = sl->used ? ach_popcount(sl->progress.shines) : 0;
+                front.files.star_coins[k] = sl->used ? ach_popcount(sl->progress.star_coins) : 0;
+                front.files.achievements[k] = sl->used ? sum.total : 0;
+                for (unsigned t = 0; t < 4; ++t) front.files.trophies[k][t] = sl->used ? sum.per_tier[t] : 0;
+            }
         }
         const u64 now = gettime();
         double elapsed = ticks_to_microsecs(now - previous) / 1000000.0;

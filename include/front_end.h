@@ -17,7 +17,8 @@
    menu follows.
    Main menu (9535): the port goes from START straight to its Story page, the
    file select (user request 2026-11-08); the Start page with Options and
-   Extras is left out. BACK there (or spin) goes back to the title. */
+   Extras is left out. BACK there (or spin) goes back to the title. The file
+   select is laid out as a grid of files and a detail panel (FE_GRID_* ...). */
 #include "game.h"
 #include <stdbool.h>
 
@@ -59,12 +60,16 @@ typedef struct {
     float far_x, mid_x, tree_x[3]; unsigned char tree_frame[3], tree_last[2];
     unsigned rnd;
     signed char held_dx, held_dy; unsigned char repeat;
+    unsigned char panel_file;       /* the file the detail panel shows (the last one the cursor was on) */
 } MenuState;
 
 /* What the menu needs from a save file, and changes it makes (the caller
    saves when `changed` is set). */
 typedef struct {
     unsigned shines[FE_FILES];      /* TotalStars of each file */
+    unsigned star_coins[FE_FILES];  /* TotalStarCoins */
+    unsigned achievements[FE_FILES];               /* unlocked, of 64 */
+    unsigned trophies[FE_FILES][4];                /* unlocked per tier: Bronze, Silver, Gold, Platinum */
     bool changed;
     int copy_from, copy_to;         /* a copy to make (-1 none) */
     int erase;                      /* a file to erase (-1 none) */
@@ -91,7 +96,30 @@ typedef struct {
     int play_slot;                    /* FE_PLAY: the save file chosen (0..3) */
     MenuState menu;
     MenuFiles files;
+    unsigned char controller;         /* the controller used last (for the button names shown) */
 } FrontEnd;
+
+/* The file select's layout (the port's, user request 2026-11-08), 9535 px
+   from the stage centre (the screen spans x +-267 at 16:9, y +-150): the
+   original's four file boxes in a 2 x 2 grid on the left under STORY, BACK
+   under them; on the right a panel with the file's details (rows in the
+   pause menu's style) and the original PLAY / COPY / DELETE / CANCEL buttons
+   (2 x 2) sliding in when a file is chosen. */
+#define FE_GRID_X0 (-185.0f)
+#define FE_GRID_X1 (-68.0f)
+#define FE_GRID_Y0 (-42.0f)
+#define FE_GRID_Y1 (30.0f)
+#define FE_BACK_X (-126.5f)
+#define FE_BACK_Y 102.0f
+#define FE_PANEL_X0 8.0f
+#define FE_PANEL_X1 258.0f
+#define FE_PANEL_TITLE_Y (-124.0f)
+#define FE_PANEL_ROWS_Y (-106.0f)        /* the first detail row's top */
+#define FE_PANEL_ROW_H 32.0f
+#define FE_BUTTON_X0 70.0f
+#define FE_BUTTON_X1 196.0f
+#define FE_BUTTON_Y0 58.0f
+#define FE_BUTTON_Y1 122.0f
 
 void front_init(FrontEnd *f);
 /* Back to the title screen (Quit Game in the pause menu, BACK in the menu). */
@@ -102,8 +130,9 @@ bool front_item_shown(const FrontEnd *f, MenuItem item);
 /* Can the item be chosen now? */
 bool front_item_live(const FrontEnd *f, MenuItem item);
 /* The item the D-pad moves to from `item` (FE_UP...), or -1: the menu's
-   fixed links (the files' 2 x 2 grid, BACK above it on the right, the open
-   file's column of buttons), skipping items that cannot be chosen now. */
+   fixed links (the files' 2 x 2 grid with BACK under it, the open file's
+   2 x 2 buttons PLAY COPY / DELETE CANCEL), skipping items that cannot be
+   chosen now. */
 int front_menu_link(const FrontEnd *f, MenuItem item, unsigned dir);
 void front_step(FrontEnd *f, const GameInput *in);
 /* The title's frame (0-based) at its music position. */
