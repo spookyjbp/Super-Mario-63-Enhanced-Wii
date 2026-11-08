@@ -46,6 +46,8 @@ OPTIONS_BOX = 634                     # the Options button's box shape (637 = 63
 COIN = 17                             # the spinning coin by _root.Coins (16 frames)
 COUNTERS = {652, 653, 654, 655, 656, 657}
 TRANSITION = 661
+PANEL = 629                           # 794's panel: three gradient bands over the 450 x 300 stage
+PANEL_SCALE = 0.25                    # smooth gradients: stored small, drawn stretched
 RED_SILVER, LIVES = 232, 237
 LEVEL, STAR, DESC = 648, 650, 651
 TUTORIAL = {LEVEL: 'Castle Grounds', STAR: 'No Star Selected', DESC: 'You are within the Castle Grounds'}
@@ -180,7 +182,7 @@ def build(work, jar, swf):
     texts.update({c: '' for c in sprite_texts(swf, RECORD_FIELDS_SPRITE)})
     patched = set_texts(swf, texts)
     hidden = set(BUTTONS.values()) | set(NOZZLES.values()) | set(OPTION_ITEMS.values()) | \
-        set(EXIT_ITEMS.values()) | {TRANSITION, RED_SILVER, LIVES, COIN}
+        set(EXIT_ITEMS.values()) | {TRANSITION, RED_SILVER, LIVES, COIN, PANEL}
     pages_swf = work / 'pause-pages.swf'
     pages_swf.write_bytes(ui_art.hide(patched, {CLIP: hidden}))
     pages = render(jar, work, pages_swf, CLIP, list(range(2, 8)), 'pages')
@@ -190,9 +192,13 @@ def build(work, jar, swf):
         im, ox, oy = pages[k + 2]
         # only the stage shows: 795's pull-down cloud (above the panel on
         # 'default') sits wholly above the screen once 794 is in place
-        l, t = round((-base[0] - ox) * ZOOM), round((-base[1] - oy) * ZOOM)
-        l, t = max(0, l), max(0, t)
-        im = im.crop((l, t, min(im.width, l + round(450 * ZOOM)), min(im.height, t + round(300 * ZOOM))))
+        L, T = round((-base[0] - ox) * ZOOM), round((-base[1] - oy) * ZOOM)
+        l, t = max(0, L), max(0, T)
+        r, btm = min(im.width, L + round(450 * ZOOM)), min(im.height, T + round(300 * ZOOM))
+        im = im.crop((l, t, max(l + 4, r), max(t + 4, btm)))
+        bb = im.getchannel('A').getbbox()      # the page's content alone (the panel is drawn by the port)
+        if bb:
+            im = im.crop(bb); l += bb[0]; t += bb[1]
         variants.append((f'Pause@{name}', im, base[0] + ox + l / ZOOM, base[1] + oy + t / ZOOM))
     # the parts
     parts_swf = work / 'pause-parts.swf'
@@ -233,6 +239,21 @@ def build(work, jar, swf):
     title = bevel_label('Achievements', round(28 * ZOOM), ACH_COLOUR[0], (255, 255, 255))
     parts['title_achievements'] = title
     origin['title_achievements'] = (-title.width / 2 / ZOOM, -title.height / 2 / ZOOM)
+    # the panel alone (its stage rectangle), small: the port stretches it over the 16:9 screen
+    import subprocess as sp_
+    with (work / 'export.log').open('a') as log:
+        sp_.run(['java', '-Xmx2g', '-Djava.awt.headless=true', f'-Duser.home={work.resolve()}/ffdec-home', '-jar',
+                 str(jar.resolve()), '-zoom', str(PANEL_SCALE), '-selectid', str(PANEL), '-format', 'shape:png',
+                 '-export', 'shape', str(work / 'panel'), str(parts_swf)], check=True, stdout=log, stderr=log)
+        sp_.run(['java', '-Xmx2g', '-Djava.awt.headless=true', f'-Duser.home={work.resolve()}/ffdec-home', '-jar',
+                 str(jar.resolve()), '-selectid', str(PANEL), '-format', 'shape:svg', '-export', 'shape',
+                 str(work / 'panel-svg'), str(parts_swf)], check=True, stdout=log, stderr=log)
+    svg = (work / 'panel-svg' / f'{PANEL}.svg').read_text()
+    tx, ty = (float(v) for v in re.search(r'matrix\(1\.0, 0\.0, 0\.0, 1\.0, ([-\d.]+), ([-\d.]+)\)', svg).groups())
+    pim = Image.open(work / 'panel' / f'{PANEL}.png').convert('RGBA')
+    l, t = round((tx - 225) * PANEL_SCALE), round((ty - 150) * PANEL_SCALE)
+    parts['panel'] = pim.crop((l, t, l + round(450 * PANEL_SCALE), t + round(300 * PANEL_SCALE)))
+    origin['panel'] = (-225.0, -150.0)
     atlas, place = pack(parts)
     variants.append(('PauseParts', atlas, 0, 0))
     # placements (794 coordinates)

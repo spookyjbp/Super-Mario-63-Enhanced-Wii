@@ -442,17 +442,36 @@ static bool load_parts(void)
     GX_InvalidateTexAll();
     return parts_ready = true;
 }
-/* A part with its registration point at 794 (x, y), scaled about it (%). */
-static void draw_part(unsigned id, float x, float y, float dy, float scale, unsigned char alpha, float width)
+/* A part with its registration point at screen (rx, ry), k screen px per 794 px. */
+static void part_screen(unsigned id, float rx, float ry, float k, unsigned char alpha)
 {
     if (id >= PAUSE_PARTS || !alpha) return;
     const PausePart *pp = &pause_parts[id];
-    const float k = scale / 100, sx = stage_x(225 + x, width), sy = (150 + y + dy) * HUD_K;
-    const float x0 = sx + pp->ox * k * HUD_K, y0 = sy + pp->oy * k * HUD_K;
-    const float w = pp->w / PAUSE_ZOOM * k * HUD_K, h = pp->h / PAUSE_ZOOM * k * HUD_K;
     const float aw = (float)parts_layer->width, ah = (float)parts_layer->height;
-    graphics_sprite_alpha(&parts_tex, x0, y0, w, h, pp->x / aw, pp->y / ah, (pp->x + pp->w) / aw, (pp->y + pp->h) / ah,
-                          alpha);
+    graphics_sprite_alpha(&parts_tex, rx + pp->ox * k, ry + pp->oy * k, pp->w / PAUSE_ZOOM * k, pp->h / PAUSE_ZOOM * k,
+                          pp->x / aw, pp->y / ah, (pp->x + pp->w) / aw, (pp->y + pp->h) / ah, alpha);
+}
+/* The port's pause layout over the 16:9 screen (pause_menu.h): the column of
+   buttons on the left, the page's content (794 px) scaled by PAGE_K to the
+   right of it. */
+#define PAGE_K 0.86f
+#define COLUMN_K 0.82f
+typedef struct { float margin, col_x, page_x, dy; } PauseView;
+static PauseView pause_view(float width, float dy)
+{
+    PauseView v;
+    v.margin = 0.05f * width;
+    v.col_x = v.margin + 121.25f * HUD_K * COLUMN_K / 2 + 4;     /* the buttons are 121 px wide */
+    const float left = v.col_x + 121.25f * HUD_K * COLUMN_K / 2 + 12;
+    v.page_x = (left + width - v.margin) / 2;
+    v.dy = dy * HUD_K;
+    return v;
+}
+static float page_sx(const PauseView *v, float x) { return v->page_x + x * HUD_K * PAGE_K; }
+static float page_sy(const PauseView *v, float y) { return (y + 150) * HUD_K * PAGE_K + 8 + v->dy; }
+static void draw_part(const PauseView *v, unsigned id, float x, float y, float scale, unsigned char alpha)
+{
+    part_screen(id, page_sx(v, x), page_sy(v, y), HUD_K * PAGE_K * scale / 100, alpha);
 }
 /* One trophy (tier) in a size x size screen box; locked ones dimmed. */
 static void draw_trophy(unsigned tier, float x, float y, float size, bool lit, float a)
@@ -473,33 +492,29 @@ static void menu_buttons(unsigned controller, const char **choose, const char **
     }
 }
 /* The port's Achievements page: the summary, then PAUSE_LIST_ROWS achievements. */
-static void draw_achievement_page(const CourseSession *s, float dy, float a, float width)
+static void draw_achievement_page(const CourseSession *s, const PauseView *v, float a, float width)
 {
     const Achievements *ach = s->ach;
     const PauseMenu *m = &s->pause;
     const unsigned char al = (unsigned char)(255 * a);
-    draw_part(PP_TITLE_ACHIEVEMENTS, 0, -124, dy, 100, al, width);
+    draw_part(v, PP_TITLE_ACHIEVEMENTS, 0, -124, 100, al);
     char line[96];
     const AchSummary sum = ach ? ach_summary(ach) : (AchSummary){0, {0}, 0};
-    const float x0 = stage_x(225 - 205, width), x1 = stage_x(225 + 205, width);
+    const float x1 = width - v->margin, x0 = 2 * v->page_x - x1;
     const GXColor wt = {255, 255, 255, al};
+    const float top = page_sy(v, -100);
     snprintf(line, sizeof line, "%u / %u unlocked (%u%%)", sum.total, ACH_COUNT, sum.percent);
-    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, (150 - 100 + dy) * HUD_K, wt, ALIGN_LEFT, ~0u);
+    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, top, wt, ALIGN_LEFT, ~0u);
     snprintf(line, sizeof line, "Bronze %u   Silver %u   Gold %u   Platinum %u", sum.per_tier[ACH_BRONZE],
              sum.per_tier[ACH_SILVER], sum.per_tier[ACH_GOLD], sum.per_tier[ACH_PLATINUM]);
-    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, (150 - 100 + dy) * HUD_K, wt, ALIGN_RIGHT, ~0u);
-    const char *choose, *back;
-    menu_buttons(s->controller, &choose, &back);
-    (void)choose;
-    snprintf(line, sizeof line, "%u of %u      D-pad: scroll      %s: back", m->list_sel + 1u, ACH_COUNT, back);
-    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, (150 + 32 + dy) * HUD_K, wt, ALIGN_CENTRE, ~0u);
-    const float row_h = 38, top = 150 - 84 + dy;
+    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, top, wt, ALIGN_RIGHT, ~0u);
+    const float row_h = 58, rows_y = top + 28;
     for (unsigned r = 0; r < PAUSE_LIST_ROWS; ++r) {
         const unsigned i = m->list_top + r;
         if (i >= ACH_COUNT) break;
         const AchDef *d = &ach_defs[i];
-        const bool lit = ach && ach_unlocked(ach, d->id), sel = s->pause.focus == PI_LIST && i == m->list_sel;
-        const float ry = (top + r * row_h) * HUD_K, rh = (row_h - 3) * HUD_K;
+        const bool lit = ach && ach_unlocked(ach, d->id), sel = m->focus == PI_LIST && i == m->list_sel;
+        const float ry = rows_y + r * row_h, rh = row_h - 5;
         graphics_rect(x0, ry, x1 - x0, rh, sel ? (GXColor){30, 60, 120, (unsigned char)(200 * a)}
                                                : (GXColor){0, 0, 0, (unsigned char)(120 * a)});
         if (sel) {
@@ -509,14 +524,19 @@ static void draw_achievement_page(const CourseSession *s, float dy, float a, flo
         const float icon = rh - 6;
         draw_trophy(d->tier, x0 + 4, ry + 3, icon, lit, a);
         const GXColor name = lit ? (GXColor){255, 255, 255, al} : (GXColor){170, 175, 185, al};
-        const float tx = x0 + icon + 14;
+        const float tx = x0 + icon + 12;
         snprintf(line, sizeof line, "%u. %s", d->id, d->name);
-        draw_text(FONT_TALK, line, strlen(line), tx, x1 - 8, ry + 2, name, ALIGN_LEFT, ~0u);
+        draw_text(FONT_TALK, line, strlen(line), tx, x1 - 70, ry + 1, name, ALIGN_LEFT, ~0u);
         const unsigned char *c = tier_rgb[d->tier];
         draw_cstring(FONT_HINT, ach_tier_name(d->tier), tx, x1 - 8, ry + 4,
                      (GXColor){c[0], c[1], c[2], lit ? al : (unsigned char)(al * 0.6f)}, ALIGN_RIGHT);
-        draw_text(FONT_HINT, d->description, strlen(d->description), tx, x1 - 8, ry + 30, name, ALIGN_LEFT, ~0u);
+        draw_text(FONT_HINT, d->description, strlen(d->description), tx, x1 - 8, ry + 29, name, ALIGN_LEFT, ~0u);
     }
+    const char *choose, *back;
+    menu_buttons(s->controller, &choose, &back);
+    (void)choose;
+    snprintf(line, sizeof line, "%u of %u      D-pad: scroll      %s: back", m->list_sel + 1u, ACH_COUNT, back);
+    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, rows_y + PAUSE_LIST_ROWS * row_h, wt, ALIGN_CENTRE, ~0u);
 }
 static void draw_pause(const CourseSession *s, float width)
 {
@@ -525,22 +545,26 @@ static void draw_pause(const CourseSession *s, float width)
     float dy, a;
     pause_clip_look(m, &dy, &a);
     const unsigned char al = (unsigned char)(255 * a);
+    const PauseView v = pause_view(width, dy);
+    {   /* 629, the panel's three gradient bands, over the whole screen */
+        const PausePart *pp = &pause_parts[PP_PANEL];
+        const float aw = (float)parts_layer->width, ah = (float)parts_layer->height;
+        graphics_sprite_alpha(&parts_tex, 0, v.dy, width, 480, (pp->x + 0.5f) / aw, (pp->y + 0.5f) / ah,
+                              (pp->x + pp->w - 0.5f) / aw, (pp->y + pp->h - 0.5f) / ah, al);
+    }
     static const char *const page_names[PAUSE_PAGES] = {"Pause@default", "Pause@starmap", "Pause@fludd", "Pause@options",
                                                         "Pause@exit", "Pause@refresh", "Pause@refresh"};
     const unsigned page = m->page < PAUSE_PAGES ? m->page : PAUSE_DEFAULT;
     const CourseArtLayer *pic = course_art_picture(&art, page_names[page], strlen(page_names[page]));
-    if (load_picture(pic))
-        graphics_sprite_alpha(&picture_tex, stage_x(pic->ox, width), (pic->oy + dy) * HUD_K, (float)pic->width,
-                              (float)pic->height, 0, 0, 1, 1, al);
-    if (page != PAUSE_REFRESH) {
-        /* the four buttons; the port's Achievements (Back on its page) between them */
-        const unsigned sp = page == PAUSE_ACHIEVEMENTS ? PAUSE_REFRESH : page;
-        for (unsigned i = 0; i < 4; ++i) {
-            const PauseSlot *sl = &pause_slots[sp][i];
-            draw_part((unsigned)sl->kind, sl->x, sl->y, dy, m->scale[PI_SLOT0 + i], al, width);
-        }
-        draw_part(page == PAUSE_ACHIEVEMENTS ? PP_BTN_BACK : PP_BTN_ACHIEVEMENTS, 0, 99, dy, m->scale[PI_CENTRE] * 0.8f,
-                  al, width);
+    if (load_picture(pic))   /* the page's own content (no panel); 794 px = stage px - (225, 150) */
+        graphics_sprite_alpha(&picture_tex, page_sx(&v, pic->ox - 225), page_sy(&v, pic->oy - 150),
+                              pic->width * PAGE_K, pic->height * PAGE_K, 0, 0, 1, 1, al);
+    /* the column: the original buttons, the port's Achievements among them */
+    static const unsigned char column[PI_COLUMN] = {PP_BTN_STARMAP, PP_BTN_FLUDD, PP_BTN_OPTIONS, PP_BTN_ACHIEVEMENTS,
+                                                    PP_BTN_EXIT};
+    for (unsigned i = 0; i < PI_COLUMN; ++i) {
+        const float y = 480 * 0.56f + ((float)i - 2) * 66 + v.dy;
+        part_screen(column[i], v.col_x, y, HUD_K * COLUMN_K * m->scale[i] / 100, al);
     }
     const Player *pl = &s->game.player;
     char num[16];
@@ -548,20 +572,19 @@ static void draw_pause(const CourseSession *s, float width)
     case PAUSE_DEFAULT: {   /* _root.Coins, TotalStars, TotalStarCoins (Arial 16, shadowed) and the spinning coin */
         const unsigned shines = s->ach ? ach_popcount(s->ach->p.shines) : 0;
         const unsigned coins = s->ach ? ach_popcount(s->ach->p.star_coins) : 0;
-        const unsigned v[3] = {s->progress.coins, shines, coins};
+        const unsigned vals[3] = {s->progress.coins, shines, coins};
         const float pos[3][2] = {{PAUSE_COUNT_COINS_X, PAUSE_COUNT_COINS_Y}, {PAUSE_COUNT_SHINES_X, PAUSE_COUNT_SHINES_Y},
                                  {PAUSE_COUNT_STAR_COINS_X, PAUSE_COUNT_STAR_COINS_Y}};
         for (unsigned i = 0; i < 3; ++i) {
-            snprintf(num, sizeof num, "%u", v[i]);
-            const float x = stage_x(225 + pos[i][0], width), y = (150 + pos[i][1] + dy) * HUD_K;
-            draw_cstring(FONT_SIGN, num, x + 2 * HUD_K, x + 200, y + 2 * HUD_K, (GXColor){0, 0, 0, (unsigned char)(al / 2)},
-                         ALIGN_LEFT);
+            snprintf(num, sizeof num, "%u", vals[i]);
+            const float x = page_sx(&v, pos[i][0]), y = page_sy(&v, pos[i][1]);
+            draw_cstring(FONT_SIGN, num, x + 2, x + 200, y + 2, (GXColor){0, 0, 0, (unsigned char)(al / 2)}, ALIGN_LEFT);
             draw_cstring(FONT_SIGN, num, x, x + 200, y, (GXColor){255, 255, 255, al}, ALIGN_LEFT);
         }
         static const unsigned char coin_order[16] = {PP_COIN_1, PP_COIN_2, PP_COIN_3, PP_COIN_4, PP_COIN_5, PP_COIN_6,
                                                      PP_COIN_7, PP_COIN_8, PP_COIN_9, PP_COIN_10, PP_COIN_11, PP_COIN_12,
                                                      PP_COIN_13, PP_COIN_14, PP_COIN_15, PP_COIN_16};
-        draw_part(coin_order[m->clock % 16], PAUSE_COIN_X, PAUSE_COIN_Y, dy, 100, al, width);
+        draw_part(&v, coin_order[m->clock % 16], PAUSE_COIN_X, PAUSE_COIN_Y, 100, al);
         break;
     }
     case PAUSE_FLUDD: {   /* Fludd page: owned nozzles (frame 1) or locked (frame 2) */
@@ -573,7 +596,7 @@ static void draw_pause(const CourseSession *s, float width)
             const bool own = noz[i].nozzle < 0 || (pl->nozzles >> noz[i].nozzle & 1);
             float x, y;
             pause_item_pos(page, noz[i].item, &x, &y);
-            draw_part(own ? noz[i].owned : noz[i].locked, x, y, dy, m->scale[noz[i].item], al, width);
+            draw_part(&v, own ? noz[i].owned : noz[i].locked, x, y, m->scale[noz[i].item], al);
         }
         break;
     }
@@ -584,14 +607,14 @@ static void draw_pause(const CourseSession *s, float width)
             float x, y;
             pause_item_pos(page, opt[i].item, &x, &y);
             const unsigned char ia = (unsigned char)(al * m->alpha[opt[i].item] / 100);
-            draw_part(opt[i].part, x, y, dy, m->scale[opt[i].item], ia, width);
+            draw_part(&v, opt[i].part, x, y, m->scale[opt[i].item], ia);
             if (opt[i].item == PI_MUTE) {   /* 773 frames: 2 plain, 3 hovered, 4 the setting */
                 const bool hov = m->focus == PI_MUTE;
                 const unsigned on = m->muted ? PP_MUTE_ON_4 : hov ? PP_MUTE_ON_3 : PP_MUTE_ON_2;
                 const unsigned off = !m->muted ? PP_MUTE_OFF_4 : hov ? PP_MUTE_OFF_3 : PP_MUTE_OFF_2;
                 const float k = m->scale[PI_MUTE] / 100;
-                draw_part(on, x + PAUSE_MUTE_ON_X * k, y + PAUSE_MUTE_ON_Y * k, dy, m->scale[PI_MUTE], ia, width);
-                draw_part(off, x + PAUSE_MUTE_OFF_X * k, y + PAUSE_MUTE_OFF_Y * k, dy, m->scale[PI_MUTE], ia, width);
+                draw_part(&v, on, x + PAUSE_MUTE_ON_X * k, y + PAUSE_MUTE_ON_Y * k, m->scale[PI_MUTE], ia);
+                draw_part(&v, off, x + PAUSE_MUTE_OFF_X * k, y + PAUSE_MUTE_OFF_Y * k, m->scale[PI_MUTE], ia);
             }
         }
         break;
@@ -600,19 +623,18 @@ static void draw_pause(const CourseSession *s, float width)
         const unsigned shines = s->ach ? ach_popcount(s->ach->p.shines) : 0;
         float x, y;
         pause_item_pos(page, PI_EXIT_LEVEL, &x, &y);
-        draw_part(PP_EXIT_EXITLEVEL, x, y, dy, m->scale[PI_EXIT_LEVEL], shines ? al : (unsigned char)(al * 3 / 4), width);
+        draw_part(&v, PP_EXIT_EXITLEVEL, x, y, m->scale[PI_EXIT_LEVEL], shines ? al : (unsigned char)(al * 3 / 4));
         pause_item_pos(page, PI_QUIT, &x, &y);
-        draw_part(PP_EXIT_QUIT, x, y, dy, m->scale[PI_QUIT], al, width);
+        draw_part(&v, PP_EXIT_QUIT, x, y, m->scale[PI_QUIT], al);
         break;
     }
-    case PAUSE_ACHIEVEMENTS: draw_achievement_page(s, dy, a, width); break;
+    case PAUSE_ACHIEVEMENTS: draw_achievement_page(s, &v, a, width); break;
     default: break;
     }
     unsigned char grey;
     const float ta = pause_trans_look(m, &grey);   /* 661 over the panel */
-    if (ta > 0 && pic)
-        graphics_rect(stage_x(pic->ox, width), (pic->oy + dy) * HUD_K, (float)pic->width, (float)pic->height,
-                      (GXColor){grey, grey, grey, (unsigned char)(255 * ta * a)});
+    if (ta > 0)
+        graphics_rect(0, v.dy, width, 480, (GXColor){grey, grey, grey, (unsigned char)(255 * ta * a)});
 }
 /* "Achievement Unlocked!": a dark card with a blue edge sliding in from the
    right edge at the top right (inside the safe area), over everything. */

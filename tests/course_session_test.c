@@ -763,29 +763,46 @@ static void test_pause_menu(void)
     /* the game stands still underneath, even with Mario's buttons held */
     ticks(right, 60);
     assert(p->x == x && p->y == y && p->previous_x == p->x);
-    /* D-pad: from Star Map (top-left) right to Options, down-left to the
-       centre Achievements button; jump opens its page through 661 */
-    assert(s.pause.focus != PI_SLOT0);   /* the held right moved the menu, not Mario */
-    ticks((GameInput){0}, 1); s.pause.focus = PI_SLOT0;
-    /* D-pad: right from Star Map (top-left) reaches the centre Achievements
-       button, right again Options; down from there Exit */
-    GameInput r = {0}; r.horizontal = 1; ticks(r, 1); ticks((GameInput){0}, 1);
-    assert(s.pause.focus == PI_CENTRE);
-    ticks(r, 1); ticks((GameInput){0}, 1);
-    assert(s.pause.focus == PI_SLOT1);
-    GameInput d = {0}; d.vertical = 1; ticks(d, 1); ticks((GameInput){0}, 1);
-    assert(s.pause.focus == PI_SLOT3);
-    s.pause.focus = PI_CENTRE;
+    ticks((GameInput){0}, 30);   /* (the held Right opened Star Map) */
+    /* the column: Down from Star Map to Fludd, Options, Achievements; Up wraps */
+    s.pause.focus = PI_STARMAP; s.pause.column = PI_STARMAP; s.pause.page = PAUSE_DEFAULT; s.pause.trans = 0;
+    GameInput d = {0}; d.vertical = 1;
+    GameInput u = {0}; u.vertical = -1;
+    GameInput r = {0}; r.horizontal = 1;
+    GameInput l = {0}; l.horizontal = -1;
+    ticks(u, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_EXIT);
+    ticks(d, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_STARMAP);
+    for (int i = 0; i < 3; ++i) { ticks(d, 1); ticks((GameInput){0}, 1); }
+    assert(s.pause.focus == PI_ACHIEVEMENTS && s.pause.page == PAUSE_DEFAULT);   /* moving does not change the page */
+    /* jump opens its page through 661 (the page changes on its frame 8) and steps into the list */
     GameInput jump = {0}; jump.jump_pressed = jump.confirm_pressed = true;
     ticks(jump, 1);
-    assert(s.pause.trans && s.pause.page == PAUSE_DEFAULT);   /* the page changes on 661's frame 8 */
+    assert(s.pause.trans && s.pause.page == PAUSE_DEFAULT);
     ticks((GameInput){0}, 30);
     assert(!s.pause.trans && s.pause.page == PAUSE_ACHIEVEMENTS && s.pause.focus == PI_LIST);
-    /* the list scrolls three rows at a time past its last row */
-    for (int i = 0; i < 4; ++i) { ticks(d, 1); ticks((GameInput){0}, 1); }
-    assert(s.pause.list_sel == 4 && s.pause.list_top == 2);
-    /* spin: back to PAUSED; again: closes (795 backwards), then the game runs */
+    /* five rows: the list scrolls past its last row */
+    for (int i = 0; i < 6; ++i) { ticks(d, 1); ticks((GameInput){0}, 1); }
+    assert(s.pause.list_sel == 6 && s.pause.list_top == 2);
+    /* Left: back to the column (the page stays); Up to Options, Right opens it at Mute Music */
+    ticks(l, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_ACHIEVEMENTS && s.pause.page == PAUSE_ACHIEVEMENTS);
+    ticks(u, 1); ticks((GameInput){0}, 1); ticks(r, 1); ticks((GameInput){0}, 30);
+    assert(s.pause.page == PAUSE_OPTIONS && s.pause.focus == PI_MUTE && s.pause.column == PI_OPTIONS);
+    /* jump on Mute Music: muted, the music stops (no song requested) */
+    ticks(jump, 1);
+    assert(s.pause.muted && sfx_music_muted());
+    ticks(jump, 1);
+    assert(!s.pause.muted && !sfx_music_muted());
+    /* Star Map has nothing to choose: jump shows it and the column keeps the focus */
     GameInput spin = {0}; spin.spin_pressed = spin.cancel_pressed = true;
+    ticks(spin, 1);
+    assert(s.pause.focus == PI_OPTIONS);
+    s.pause.focus = PI_STARMAP; s.pause.column = PI_STARMAP;
+    ticks(jump, 1); ticks((GameInput){0}, 30);
+    assert(s.pause.page == PAUSE_STARMAP && s.pause.focus == PI_STARMAP);
+    /* spin in the column: back to PAUSED; again: closes (795 backwards), then the game runs */
     ticks(spin, 1); ticks((GameInput){0}, 30);
     assert(s.pause.page == PAUSE_DEFAULT);
     ticks(spin, 1); ticks((GameInput){0}, 30);

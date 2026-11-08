@@ -111,8 +111,11 @@ Notes on the checks against the original:
   then the next queued one) and the sound, once per card.
 * `source/game/pause_menu.c`: the original pause menu 795 / 794 (open and
   close animation, button easing, page-change clip 661, pages default / Star
-  Map / Fludd / Options / Exit) driven by the controller, plus the port's
-  Achievements button and page. While it is open the game stands still.
+  Map / Fludd / Options / Exit), laid out for the TV and D-pad: the panel over
+  the 16:9 screen, the original buttons (and the port's Achievements) in a
+  column on the left, the chosen page on the right. Up / Down move in the
+  column, jump or Right opens the page and steps into it, spin or Left goes
+  back. While it is open the game stands still.
 * `source/platform/course_render.c`: draws the menu (`draw_pause`), the
   Achievements page and the card (`draw_achievement_card`).
 * `source/game/save_data.c`, `source/platform/save_io.c`: the save file.
@@ -128,9 +131,9 @@ Notes on the checks against the original:
 | | GameCube | Classic | Wii Remote (sideways) |
 |---|---|---|---|
 | Open / close | START | + | + and − together |
-| Move | D-pad | D-pad | Control Pad |
-| Choose | A | b | 2 |
-| Back | B | y | 1 |
+| Move (column / page items) | D-pad | D-pad | Control Pad |
+| Open a page / step into it | A or Right | b or Right | 2 or Right |
+| Back to the column / PAUSED / close | B or Left | y or Left | 1 or Left |
 
 ## Save format
 

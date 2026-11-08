@@ -11,10 +11,13 @@
    input until its frame 13. The original runs at 32 frames a second; this
    counts its own 32 Hz frames inside the 60 Hz tick.
 
-   Controller: the D-pad moves between the page's items (nearest in that
-   direction), jump chooses, spin goes Back (or closes from the PAUSED page).
-   The port adds an Achievements button in the middle of the four and a page
-   listing the 64 achievements. */
+   The port lays it out for the TV and the D-pad (the original places four
+   buttons for the mouse under each page): the panel spreads over the 16:9
+   screen, the original buttons stand in a column on the left (Star Map,
+   Fludd, Options, the port's Achievements, Exit) and the chosen page shows on
+   the right. Up / Down move in the column; jump or Right opens the page and
+   steps into its items; spin or Left goes back to the column; spin in the
+   column goes back to PAUSED, then closes. */
 #include "achievements.h"
 #include "game.h"
 #include <stdbool.h>
@@ -24,23 +27,22 @@ typedef enum {
     PAUSE_PAGES
 } PausePage;
 
-/* Items a page can have (not all on every page). */
+/* Items: the column's buttons, then the pages' own items. */
 typedef enum {
-    PI_SLOT0, PI_SLOT1, PI_SLOT2, PI_SLOT3,   /* the four buttons: top-left, top-right, bottom-left, bottom-right */
-    PI_CENTRE,                                /* Achievements (Back on the Achievements page) */
+    PI_STARMAP, PI_FLUDD, PI_OPTIONS, PI_ACHIEVEMENTS, PI_EXIT,   /* the column, top to bottom */
     PI_NOZ_NONE, PI_NOZ_HOVER, PI_NOZ_TURBO, PI_NOZ_ROCKET,
     PI_MUTE, PI_QUALITY, PI_SPEED,            /* quality / speed: Flash-only settings, shown, not selectable */
     PI_EXIT_LEVEL, PI_QUIT,
     PI_LIST,                                  /* the achievements list */
     PI_COUNT
 } PauseItem;
-
+#define PI_COLUMN 5
 typedef enum { PAUSE_ACT_NONE, PAUSE_ACT_QUIT, PAUSE_ACT_MUTE, PAUSE_ACT_NOZZLE } PauseAction;
 
 #define PAUSE_OPEN_FRAMES 15     /* 795 frames 1..15 */
 #define PAUSE_TRANS_FRAMES 13    /* 661 */
 #define PAUSE_TRANS_SWAP 8
-#define PAUSE_LIST_ROWS 3        /* achievements shown at once */
+#define PAUSE_LIST_ROWS 5        /* achievements shown at once */
 
 typedef struct {
     unsigned char frame;         /* 795's frame, 1 = closed */
@@ -48,6 +50,8 @@ typedef struct {
     unsigned char page, next;    /* PausePage */
     unsigned char trans;         /* 661's frame, 0 = not playing */
     signed char focus;           /* PauseItem, -1 none */
+    signed char column;          /* the column button last used (its page is shown) */
+    signed char next_focus;      /* focus once the page changes */
     float scale[PI_COUNT];       /* % */
     float alpha[PI_COUNT];       /* % (Options items) */
     unsigned char list_top, list_sel;   /* achievements list: first row shown, selected (0..63) */
@@ -73,8 +77,10 @@ void pause_step(PauseMenu *m, const GameInput *in, const PauseContext *ctx);
 PauseAction pause_take_action(PauseMenu *m, unsigned *arg);
 /* Which items the page has (for drawing and navigation). */
 bool pause_page_has(unsigned page, PauseItem item);
-/* 794 px position of an item on a page (the button slots per pause_layout.h). */
+/* 794 px position of a page item (the column is placed by the renderer). */
 void pause_item_pos(unsigned page, PauseItem item, float *x, float *y);
+/* The page a column button opens. */
+unsigned pause_column_page(PauseItem item);
 /* 795's look at its frame: 794's y offset (px) and alpha (0..1). */
 void pause_clip_look(const PauseMenu *m, float *dy, float *alpha);
 /* 661 over the panel at its frame: grey level 0..255 and alpha 0..1 (0: none). */
