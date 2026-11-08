@@ -243,6 +243,9 @@ def encode_layer(image, repair=True, true_colour=False):
     return W, H, tiles
 
 
+GENERATED = Path(__file__).resolve().parent.parent / 'assets/generated'   # the headers (the pack is a data file)
+
+
 def export(source, jar, output, areas):
     swf_file = source / 'Publish/Super_Mario_63_2010.swf'
     swf = swf_file.read_bytes()
@@ -252,7 +255,7 @@ def export(source, jar, output, areas):
     raw, start = S.body(swf)
     table, sprites = C.exports(raw, start), S.sprites(swf)
     tables = course_tables((source / 'Super_Mario_63_2010/DOMDocument.xml').read_text(encoding='utf-8'))
-    work = output.parent / 'rendered-course-art'
+    work = GENERATED / 'rendered-course-art'
     work.mkdir(parents=True, exist_ok=True)
     scripts = work / 'scripts'
     if not scripts.exists():
@@ -376,22 +379,22 @@ def export(source, jar, output, areas):
                 variants.append((f'{label}@{k}', page, x, y))
     # The message box and its controller prompts (ui_art.py); origins in stage px.
     ui_layers, ui_header = ui_art.build(work / 'ui', jar, pictures_swf.read_bytes(), sprites)
-    (output.parent / 'ui_layout.h').write_text(ui_header)
-    (output.parent / 'bg_water_places.h').write_text(bg_water_art.header(areas, tables, table, sprites, scripts / 'scripts'))
-    (output.parent / 'water_places.h').write_text(water_art.build(work, jar, swf_file, swf, areas, table, sprites,
+    (GENERATED / 'ui_layout.h').write_text(ui_header)
+    (GENERATED / 'bg_water_places.h').write_text(bg_water_art.header(areas, tables, table, sprites, scripts / 'scripts'))
+    (GENERATED / 'water_places.h').write_text(water_art.build(work, jar, swf_file, swf, areas, table, sprites,
                                                                   scripts / 'scripts'))
     # The 0 HP faint's screens (faint_art.py): star wipe out / in, the lives screen.
     faint_layers, faint_header = faint_art.build(work / 'faint', jar, pictures_swf.read_bytes(), sprites)
-    (output.parent / 'faint_layout.h').write_text(faint_header)
+    (GENERATED / 'faint_layout.h').write_text(faint_header)
     anims += [(n, fr, ox, oy, W, H, s) for n, fr, ox, oy, W, H, s in faint_layers]
     # The area name (AreaTextClip, area_text_art.py).
     area_layers, area_header = area_text_art.build(work / 'areatext', jar, swf)
-    (output.parent / 'area_text_layout.h').write_text(area_header)
+    (GENERATED / 'area_text_layout.h').write_text(area_header)
     anims += area_layers
     variants += list(ui_layers)
     # The original pause menu (pause_art.py): pages and parts; origins in stage px.
     pause_layers, pause_header = pause_art.build(work / 'pause', jar, pictures_swf.read_bytes())
-    (output.parent / 'pause_layout.h').write_text(pause_header)
+    (GENERATED / 'pause_layout.h').write_text(pause_header)
     variants += list(pause_layers)
     count = struct.unpack_from('>I', out, 12)[0]
     for label, im, ox, oy in variants:

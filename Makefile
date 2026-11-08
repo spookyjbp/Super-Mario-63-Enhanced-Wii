@@ -50,8 +50,9 @@ $(BUILD):
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 package: all
-	@mkdir -p dist/apps/$(APP)
+	@mkdir -p dist/apps/$(APP)/data
 	cp boot.dol packaging/meta.xml dist/apps/$(APP)/
+	cp assets/data/*.bin dist/apps/$(APP)/data/
 
 clean:
 	rm -rf $(BUILD) dist boot.dol boot.elf boot.elf.map

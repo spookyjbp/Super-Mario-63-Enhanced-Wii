@@ -14,7 +14,7 @@ The original's clips are replayed, not filmed: `tools/timeline_art.py`
 reads the Flash timelines and flattens every frame into a list of pieces
 (each shape, text or filtered clip baked once by FFDec) with the matrix and
 colour transform Flash would use. `tools/export_front_end.py` writes them to
-`assets/generated/front_end.bin` and the placements the port needs to
+`assets/data/front_end.bin` and the placements the port needs to
 `front_end_layout.h`. Whole frames would take about 19 MB for the opening
 alone; the replay is under 5 MB for everything.
 

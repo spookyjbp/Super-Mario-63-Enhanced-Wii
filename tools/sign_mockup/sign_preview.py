@@ -18,7 +18,7 @@ PROMPT_GAP, TEXT_GAP = 4.0, 6.0
 
 
 def layers():
-    d = (GEN / 'course_8e1_art.bin').read_bytes()
+    d = (ROOT / 'assets/data/course_8e1_art.bin').read_bytes()
     n = struct.unpack_from('>8sIIf', d)[2]; q = 20; out = {}
     def string():
         nonlocal q

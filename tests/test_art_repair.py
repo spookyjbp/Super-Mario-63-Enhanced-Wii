@@ -39,7 +39,7 @@ def rgba8(raw, w, h):
 
 
 def course_layers():
-    d = (GEN / 'course_8e1_art.bin').read_bytes()
+    d = (ROOT / 'assets/data/course_8e1_art.bin').read_bytes()
     _, _, n, _ = struct.unpack_from('>8sIIf', d)
     q = 20
 

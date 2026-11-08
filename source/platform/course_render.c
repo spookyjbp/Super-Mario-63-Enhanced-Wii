@@ -6,7 +6,6 @@
 #include "graphics.h"
 #include "lz4_block.h"
 #include "user_art.h"
-#include "course_8e1_art_bin.h"
 #include "art_pack.h"
 #include "object_art_ids.h"
 #include "object_select.h"
@@ -218,9 +217,26 @@ static void draw_hud(const CourseSession *s, float width)
 }
 static const CourseArtLayer *loaded_picture;
 
-bool course_render_init(void)
+static bool fonts_ready;
+/* The font atlas (in boot.dol): text works even when the data files are missing. */
+static bool init_fonts(void)
 {
-    if (!course_art_parse(course_8e1_art_bin, course_8e1_art_bin_size, &art)) return false;
+    if (fonts_ready) return true;
+    /* The original font 155 (tools/export_fonts.py): RGBA8 after a 32-byte header. */
+    size_t font_size;
+    const unsigned char *font_data = lz4w_open(font_atlas_bin, font_atlas_bin_size, &font_size);   /* MEM2 */
+    if (!font_data || font_size < 32 + FONT_ATLAS_W * FONT_ATLAS_H * 4) return false;
+    DCFlushRange((void *)font_data, font_size);
+    GX_InitTexObj(&font_tex, (void *)(font_data + 32), FONT_ATLAS_W, FONT_ATLAS_H, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP,
+                  GX_FALSE);
+    GX_InitTexObjLOD(&font_tex, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
+    return fonts_ready = true;
+}
+bool course_render_init_text(void) { return init_fonts(); }
+bool course_render_init(const uint8_t *art_data, size_t art_size)
+{
+    if (!init_fonts()) return false;
+    if (!art_data || !course_art_parse(art_data, art_size, &art)) return false;
     /* Reserve MEM2 for one area's textures plus a picture page, once. */
     unsigned char *lo = (unsigned char *)(((uintptr_t)SYS_GetArena2Lo() + 31) & ~(uintptr_t)31);
     if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES)) return false;
@@ -232,14 +248,6 @@ bool course_render_init(void)
     parts_mem = anim_mem + ANIM_BYTES;
     SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES + ANIM_BYTES + PAUSE_PARTS_BYTES);
     objects_ready = load_objects(lo + MEM2_RESERVE + PICTURE_BYTES, OBJECT_BYTES);
-    /* The original font 155 (tools/export_fonts.py): RGBA8 after a 32-byte header. */
-    size_t font_size;
-    const unsigned char *font_data = lz4w_open(font_atlas_bin, font_atlas_bin_size, &font_size);   /* MEM2 */
-    if (!font_data || font_size < 32 + FONT_ATLAS_W * FONT_ATLAS_H * 4) return false;
-    DCFlushRange((void *)font_data, font_size);
-    GX_InitTexObj(&font_tex, (void *)(font_data + 32), FONT_ATLAS_W, FONT_ATLAS_H, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP,
-                  GX_FALSE);
-    GX_InitTexObjLOD(&font_tex, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
     /* The four trophies (tools/export_trophies.py): one RGBA8 strip, cells side by side. */
     {
         const unsigned cell = (unsigned)trophies_bin[8] << 24 | (unsigned)trophies_bin[9] << 16 |

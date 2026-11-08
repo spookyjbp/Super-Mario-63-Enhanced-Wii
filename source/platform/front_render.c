@@ -8,7 +8,6 @@
 #include "course_render.h"
 #include "font_metrics.h"
 #include "front_end_layout.h"
-#include "front_end_bin.h"
 #include "graphics.h"
 #include "text_layout.h"
 #include "timeline.h"
@@ -63,10 +62,10 @@ static Mat stage_at(float width, float k, float focus)
 }
 static Mat stage(float width, float focus) { return stage_at(width, cover_k(width), focus); }
 
-bool front_render_init(const SaveData *s)
+bool front_render_init(const SaveData *s, const uint8_t *data, size_t size)
 {
     save = s;
-    if (!timeline_parse(front_end_bin, front_end_bin_size, &pack)) return false;
+    if (!data || !timeline_parse(data, size, &pack)) return false;
     ready = true;
     return true;
 }

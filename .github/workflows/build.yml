@@ -46,6 +46,8 @@ jobs:
           test -s boot.dol
           test -s dist/apps/super-mario-63-enhanced-wii/boot.dol
           test -s dist/apps/super-mario-63-enhanced-wii/meta.xml
+          test -s dist/apps/super-mario-63-enhanced-wii/data/front_end.bin
+          test -s dist/apps/super-mario-63-enhanced-wii/data/course_8e1_art.bin
           /opt/devkitpro/devkitPPC/bin/powerpc-eabi-readelf -h boot.elf
       - name: MEM1 budget
         run: |

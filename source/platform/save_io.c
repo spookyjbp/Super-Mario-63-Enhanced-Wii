@@ -1,4 +1,5 @@
 #include "save_io.h"
+#include "data_files.h"
 #include <fat.h>
 #include <stdio.h>
 #include <string.h>
@@ -16,13 +17,9 @@
 #define BACKUP_PATH DIR_PATH "/save.bak"
 #endif
 
-static bool mounted, tried, readonly;
+static bool readonly;
 
-static bool mount(void)
-{
-    if (!tried) { tried = true; mounted = fatInitDefault(); }
-    return mounted;
-}
+static bool mount(void) { return data_mount(); }   /* the one mount of the SD card (data_files.c) */
 static bool read_file(const char *path, SaveData *out)
 {
     FILE *f = fopen(path, "rb");

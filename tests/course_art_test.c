@@ -12,7 +12,7 @@
 static unsigned char blob[12 << 20], out[2 << 20];
 int main(void)
 {
-    FILE *f = fopen("../../assets/generated/course_8e1_art.bin", "rb"); assert(f);
+    FILE *f = fopen("../../assets/data/course_8e1_art.bin", "rb"); assert(f);
     const size_t n = fread(blob, 1, sizeof(blob), f); fclose(f);
     static CourseArtPack pack;
     assert(course_art_parse(blob, n, &pack) && pack.zoom == 1.6f);

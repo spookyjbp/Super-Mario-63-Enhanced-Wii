@@ -21,7 +21,7 @@ Artwork: `tools/export_course_art.py` renders each area's FarBackground,
 Background, CloseBackground, BackGFX (resting frame 3) and FrontGFX at 1.6
 screen px per course pixel with placed objects removed and the 0-star colour
 scripts applied, plus the picture-sign pages. Tiles are GX RGB5A3, LZ4-compressed
-(`assets/generated/course_8e1_art.bin`, 4.4 MB); one area is decompressed into a
+(`assets/data/course_8e1_art.bin`, 4.4 MB); one area is decompressed into a
 26 MB MEM2 reservation when entered.
 
 ## Not yet ported (see the reference for full lists)

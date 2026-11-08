@@ -64,7 +64,7 @@ class PauseArtTests(unittest.TestCase):
         a, b = map(int, re.search(r'#define PAUSE_PARTS_BYTES \((\d+)u \* (\d+)\)', src).groups())
         import sys
         sys.path.insert(0, str(ROOT / 'tools'))
-        art = (GEN / 'course_8e1_art.bin').read_bytes()
+        art = (ROOT / 'assets/data/course_8e1_art.bin').read_bytes()
         at = art.find(b'PauseParts')
         self.assertGreater(at, 0)
         w, h = struct.unpack_from('>II', art, at + len('PauseParts') + 16)

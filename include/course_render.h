@@ -2,7 +2,10 @@
 #define SM63_COURSE_RENDER_H
 #include "course_session.h"
 /* Wii renderer for original course areas (artwork from course_8e1_art.bin). */
-bool course_render_init(void);
+/* The course's art pack (a data file, data_files.h; it must stay loaded). */
+bool course_render_init(const uint8_t *art_data, size_t art_size);
+/* Only the text (course_render_text), for a message when the data files are missing. */
+bool course_render_init_text(void);
 void course_render(const CourseSession *session, float interpolation);
 /* For the front end (front_render.c), which runs while no course is shown:
    the course's MEM2 texture area (the course reloads its area afterwards),

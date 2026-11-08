@@ -8,6 +8,8 @@
 #include "save_io.h"
 #include "front_end.h"
 #include "front_render.h"
+#include "data_files.h"
+#include "font_metrics.h"
 #include <string.h>
 #include "sfx.h"
 
@@ -28,7 +30,29 @@ static void on_reset(u32 irq, void *context)
 static void on_power(void) { power_requested = true; }
 static void on_remote_power(s32 channel) { (void)channel; power_requested = true; }
 
-int main(void)
+/* The data files are missing: say where they belong, until START / reset. */
+static int missing_data(void)
+{
+    if (!course_render_init_text()) return EXIT_FAILURE;
+    while (!exit_requested && !power_requested && SYS_MainLoop()) {
+        const GameInput in = input_poll();
+        if (in.pause_pressed) break;
+        const float w = graphics_width();
+        graphics_rect(0, 0, w, 480, (GXColor){0, 0, 0, 255});
+        course_render_text(FONT_SIGN, "The game's data files were not found.", 40, w - 40, 150, (GXColor){255, 255, 255, 255},
+                           ALIGN_CENTRE, true);
+        course_render_text(FONT_HINT,
+                           "Copy the whole apps/" DATA_APP " folder, with its data folder,\rto the SD card, "
+                           "then start the game from the Homebrew Channel.\r\rPress START to leave.",
+                           40, w - 40, 220, (GXColor){220, 220, 220, 255}, ALIGN_CENTRE, true);
+        graphics_present();
+    }
+    graphics_shutdown();
+    input_shutdown();
+    return EXIT_SUCCESS;
+}
+
+int main(int argc, char **argv)
 {
     if (!graphics_init()) return EXIT_FAILURE;
     render_init();
@@ -43,7 +67,13 @@ int main(void)
        course data cannot be used. */
     static CoursePack pack;
     static CourseSession session;
-    const bool tutorial = course_pack_parse(course_8e1_bin, course_8e1_bin_size, &pack) && course_render_init();
+    /* The art packs are data files next to boot.dol (data_files.h). */
+    size_t art_size = 0, fe_size = 0;
+    const uint8_t *art_data = data_init(argc, argv) ? data_load("course_8e1_art.bin", &art_size) : NULL;
+    const uint8_t *fe_data = art_data ? data_load("front_end.bin", &fe_size) : NULL;
+    if (!art_data || !fe_data) return missing_data();
+    const bool tutorial = course_pack_parse(course_8e1_bin, course_8e1_bin_size, &pack) &&
+                          course_render_init(art_data, art_size);
     if (tutorial) audio_init(); /* after the course renderer's MEM2 reservation */
     /* The save file (SD card): the four files' progress and achievements, and
        Mute Music. A save from before achievements existed, or progress the
@@ -54,7 +84,7 @@ int main(void)
     sfx_set_music_muted(save.music_muted);
     static FrontEnd front;
     front_init(&front);
-    const bool menus = tutorial && front_render_init(&save);
+    const bool menus = tutorial && front_render_init(&save, fe_data, fe_size);
     bool in_front = menus, in_course = false;
     if (tutorial && !menus) {   /* no front end: straight into the tutorial with the last file */
         ach_init(&ach, save.slot[save.current].used ? &save.slot[save.current].progress : NULL);

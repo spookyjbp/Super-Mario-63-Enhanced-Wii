@@ -18,7 +18,7 @@ def reserve():
 class FrontEndTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.data = (GEN / 'front_end.bin').read_bytes()
+        cls.data = (ROOT / 'assets/data/front_end.bin').read_bytes()
         cls.layout = (GEN / 'front_end_layout.h').read_text()
 
     def test_clips(self):
