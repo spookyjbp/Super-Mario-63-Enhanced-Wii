@@ -7,6 +7,9 @@
 #include "bg_water.h"
 #include "course_objects.h"
 #include "hud.h"
+#include "achievements.h"
+#include "ach_notice.h"
+#include "pause_menu.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -87,6 +90,13 @@ typedef struct {
     unsigned fx_count;
     BgWave water_wave[6];
     float death_x, death_y;
+    /* Achievements of the save slot being played (owned by the caller; NULL in
+       tests that do not use them), the card on screen, and a request to write
+       the save file (at the original's _root.SaveFile() points). */
+    Achievements *ach;
+    AchNotice notice;
+    bool save_request;
+    PauseMenu pause;
 } CourseSession;
 bool course_session_start(CourseSession *s, const CoursePack *pack, const char *area, float cx, float cy, float view_width);
 void course_session_step(CourseSession *s, GameInput input);

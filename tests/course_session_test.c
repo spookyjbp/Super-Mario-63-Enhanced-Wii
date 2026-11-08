@@ -745,6 +745,83 @@ static void test_camera_starts_inside_walls(void)
     }
 }
 
+/* The original pause menu (795 / 794) and the achievement card */
+static void test_pause_menu(void)
+{
+    Player *p = tutorial_mario(300);
+    ticks((GameInput){0}, 30);
+    const float x = p->x, y = p->y;
+    GameInput start = {0}; start.pause_pressed = true;
+    GameInput right = {0}; right.horizontal = 1; right.jump_held = true;
+    ticks(start, 1);
+    assert(pause_active(&s.pause) && s.game.paused);
+    /* 795 frames 2..15 at 32 frames a second: open after about 25 ticks */
+    ticks((GameInput){0}, 26);
+    assert(s.pause.frame == PAUSE_OPEN_FRAMES);
+    float dy, al; pause_clip_look(&s.pause, &dy, &al);
+    assert(dy == 0 && al == 1);
+    /* the game stands still underneath, even with Mario's buttons held */
+    ticks(right, 60);
+    assert(p->x == x && p->y == y && p->previous_x == p->x);
+    /* D-pad: from Star Map (top-left) right to Options, down-left to the
+       centre Achievements button; jump opens its page through 661 */
+    assert(s.pause.focus != PI_SLOT0);   /* the held right moved the menu, not Mario */
+    ticks((GameInput){0}, 1); s.pause.focus = PI_SLOT0;
+    /* D-pad: right from Star Map (top-left) reaches the centre Achievements
+       button, right again Options; down from there Exit */
+    GameInput r = {0}; r.horizontal = 1; ticks(r, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_CENTRE);
+    ticks(r, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_SLOT1);
+    GameInput d = {0}; d.vertical = 1; ticks(d, 1); ticks((GameInput){0}, 1);
+    assert(s.pause.focus == PI_SLOT3);
+    s.pause.focus = PI_CENTRE;
+    GameInput jump = {0}; jump.jump_pressed = jump.confirm_pressed = true;
+    ticks(jump, 1);
+    assert(s.pause.trans && s.pause.page == PAUSE_DEFAULT);   /* the page changes on 661's frame 8 */
+    ticks((GameInput){0}, 30);
+    assert(!s.pause.trans && s.pause.page == PAUSE_ACHIEVEMENTS && s.pause.focus == PI_LIST);
+    /* the list scrolls three rows at a time past its last row */
+    for (int i = 0; i < 4; ++i) { ticks(d, 1); ticks((GameInput){0}, 1); }
+    assert(s.pause.list_sel == 4 && s.pause.list_top == 2);
+    /* spin: back to PAUSED; again: closes (795 backwards), then the game runs */
+    GameInput spin = {0}; spin.spin_pressed = spin.cancel_pressed = true;
+    ticks(spin, 1); ticks((GameInput){0}, 30);
+    assert(s.pause.page == PAUSE_DEFAULT);
+    ticks(spin, 1); ticks((GameInput){0}, 30);
+    assert(!pause_active(&s.pause) && !s.game.paused);
+    ticks(r, 20);
+    assert(p->x > x);
+    /* START during a death does not pause, and the old menu never sees it */
+    s.death = 5; ticks(start, 1); assert(!pause_active(&s.pause) && !s.game.paused); s.death = 0;
+}
+static void test_achievement_card(void)
+{
+    static Achievements a;
+    tutorial_mario(300);
+    ach_init(&a, NULL);
+    s.ach = &a;
+    SfxEvent ev[SFX_QUEUE]; sfx_drain(ev);
+    /* two at once (Star[39] and a forced one): one card after the other, the
+       ping once per card, never pausing the game */
+    ach_shine(&a, 39); ach_force(&a, 30);
+    ticks((GameInput){0}, 1);
+    assert(s.notice.id == 1 && !s.game.paused);
+    unsigned pings = 0, n = sfx_drain(ev);
+    for (unsigned i = 0; i < n; ++i) pings += ev[i].id == SFX_ACHIEVEMENT;
+    assert(pings == 1);
+    ticks((GameInput){0}, ACH_NOTICE_IN + ACH_NOTICE_HOLD / 2);
+    assert(ach_notice_slide(&s.notice) == 1);
+    ticks((GameInput){0}, ACH_NOTICE_TICKS);
+    assert(s.notice.id == 30);
+    n = sfx_drain(ev); pings = 0;
+    for (unsigned i = 0; i < n; ++i) pings += ev[i].id == SFX_ACHIEVEMENT;
+    assert(pings == 1);
+    ticks((GameInput){0}, ACH_NOTICE_TICKS);
+    assert(s.notice.id == 0 && ach_notice_slide(&s.notice) == 0);
+    s.ach = NULL;
+}
+
 int main(void)
 {
     FILE *f = fopen("../../assets/generated/course_8e1.bin", "rb"); assert(f);
@@ -755,5 +832,6 @@ int main(void)
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
     test_message_box_frames(); test_rocket_once_per_jump(); test_faint(); test_wipes_and_background_water();
     test_camera_starts_inside_walls(); test_level_water_splash(); test_idle_and_sleep(); test_drowning(); test_fludd_exact(); test_fall_sound();
-    puts("22 course session (fall sound, FLUDD frame by frame, idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_pause_menu(); test_achievement_card();
+    puts("24 course session (pause menu, achievement card, fall sound, FLUDD frame by frame, idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }

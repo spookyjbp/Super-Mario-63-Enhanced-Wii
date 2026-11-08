@@ -28,7 +28,30 @@ SOUNDS = [
     'mario-drown', 'sound - Drain', 'Goomba-Die', 'Mario - Letsgo', 'Mario - Mmmm', 'Mario - Hmm',
     'Mario - Imtired', 'Mario - Yawn', 'Mario - Snore1', 'Mario - Snore2',
     'PrincessPeachesCastle-Intro', 'PrincessPeachesCastle-Repeat',
+    '+achievement_ping',
 ]
+# '+' sounds are the project's own WAV files in assets/audio/ (the achievement
+# notification sound, chosen by the project owner): mono, resampled to
+# CUSTOM_RATE, peak set to -9 dBFS like the synthesised ones.
+AUDIO_DIR = Path(__file__).resolve().parent.parent / 'assets' / 'audio'
+
+
+def wav_sound(name):
+    import wave
+    with wave.open(str(AUDIO_DIR / f'{name}.wav')) as w:
+        ch, width, rate, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
+        raw = w.readframes(n)
+    if width != 2:
+        raise ValueError(f'{name}.wav: 16-bit PCM expected')
+    a = np.frombuffer(raw, '<i2').astype(np.float64).reshape(-1, ch).mean(1)
+    if rate != CUSTOM_RATE:   # linear resampling after a 2-tap average (rate 44100 -> 22050)
+        if rate == 2 * CUSTOM_RATE:
+            a = np.convolve(a, [0.25, 0.5, 0.25], 'same')[::2]
+        else:
+            t = np.arange(int(len(a) * CUSTOM_RATE / rate)) * rate / CUSTOM_RATE
+            a = np.interp(t, np.arange(len(a)), a)
+    peak = np.max(np.abs(a)) or 1
+    return (a / peak * (32767 * 10 ** (-9 / 20))).astype(np.int32)
 # '*' sounds are not in the original: the 2010 SWF's Rocket nozzle is silent
 # (Rocket Fludd Water 1340/1349/1370 attach no sound; Char's "fluddrepeat" loop
 # is Hover/Turbo only). They are synthesised here, deterministically, from
@@ -143,8 +166,8 @@ def export(source, out_dir):
     names, defined = linkage(raw, start), sounds(raw, start)
     entries, blobs = [], []
     for name in SOUNDS:
-        if name.startswith('*'):
-            pcm, rate = synth(name[1:]), CUSTOM_RATE
+        if name[0] in '+*':
+            pcm, rate = (wav_sound if name[0] == '+' else synth)(name[1:]), CUSTOM_RATE
             blob = adpcm(pcm)
             entries.append((rate, len(pcm), blob))
             continue

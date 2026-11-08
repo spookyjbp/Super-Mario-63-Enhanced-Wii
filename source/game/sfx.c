@@ -24,10 +24,20 @@ unsigned sfx_drain(SfxEvent out[SFX_QUEUE])
 void sfx_set_fludd_loop(bool on) { fludd_loop = on; }
 bool sfx_fludd_loop(void) { return fludd_loop; }
 void sfx_music(int intro, int repeat) { music_intro = intro; music_repeat = repeat; music_pending = true; }
+/* Pause menu Options "Mute Music": _root.MuteBGMusic = true calls StopBGsong();
+   false calls PlayMusicAndIntro(), the course song again from its intro. */
+static bool music_muted;
+void sfx_set_music_muted(bool muted)
+{
+    if (muted == music_muted) return;
+    music_muted = muted;
+    music_pending = true;   /* stop it, or start the current song over */
+}
+bool sfx_music_muted(void) { return music_muted; }
 bool sfx_music_take(int *intro, int *repeat)
 {
     if (!music_pending) return false;
-    *intro = music_intro; *repeat = music_repeat; music_pending = false;
+    *intro = music_muted ? -1 : music_intro; *repeat = music_muted ? -1 : music_repeat; music_pending = false;
     return true;
 }
 void sfx_at(SfxId id, float x, float y, float cam_x, float cam_y, float falloff)

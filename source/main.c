@@ -5,6 +5,8 @@
 #include "course_render.h"
 #include "course_8e1_bin.h"
 #include "audio.h"
+#include "save_io.h"
+#include "sfx.h"
 
 #include <ogc/lwp_watchdog.h>
 #include <stdlib.h>
@@ -39,6 +41,18 @@ int main(void)
     const bool tutorial = course_pack_parse(course_8e1_bin, course_8e1_bin_size, &pack) && course_render_init() &&
                           course_session_start(&session, &pack, "8-E1-1", 0, 0, graphics_width());
     if (tutorial) audio_init(); /* after the course renderer's MEM2 reservation */
+    /* The save file (SD card): achievements and progress of the slot played,
+       and the Mute Music option. A save from before achievements existed, or
+       progress the file already proves, is awarded on load (queued cards). */
+    static SaveData save;
+    static Achievements ach;
+    save_io_load(&save);
+    SaveSlot *slot = &save.slot[save.current];
+    ach_init(&ach, slot->used ? &slot->progress : NULL);
+    ach_evaluate_all(&ach);
+    sfx_set_music_muted(save.music_muted);
+    if (tutorial) { session.ach = &ach; pause_init(&session.pause, save.music_muted); }
+    unsigned since_write = 0;
     Game lab;
     if (!tutorial) game_init(&lab, &movement_world, graphics_width());
     Game *game = tutorial ? &session.game : &lab;
@@ -63,6 +77,14 @@ int main(void)
         /* Bound catch-up after a stall; never replace fixed ticks with a large dt.
            PAL 50 Hz renders normally execute one or two 60 Hz simulation ticks. */
         if (steps == 8 && accumulator >= GAME_DT) accumulator = 0;
+        /* Write at the game's save points, or soon after an unlock; never every frame. */
+        ++since_write;
+        if (tutorial && (session.save_request || (ach.dirty && since_write > 120))) {
+            slot->used = true; slot->progress = ach.p;
+            save.music_muted = sfx_music_muted();
+            if (save_io_write(&save)) ach.dirty = false;
+            session.save_request = false; since_write = 0;
+        }
         if (tutorial) audio_update(session.game.paused);
         if (tutorial) course_render(&session, (float)(accumulator / GAME_DT));
         else render_game(&lab, &movement_world, (float)(accumulator / GAME_DT));

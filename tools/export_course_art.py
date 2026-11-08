@@ -34,6 +34,7 @@ import faint_art
 import bg_water_art
 import water_art
 import area_text_art
+import pause_art
 
 
 def sign_animated(labels):
@@ -388,6 +389,10 @@ def export(source, jar, output, areas):
     (output.parent / 'area_text_layout.h').write_text(area_header)
     anims += area_layers
     variants += list(ui_layers)
+    # The original pause menu (pause_art.py): pages and parts; origins in stage px.
+    pause_layers, pause_header = pause_art.build(work / 'pause', jar, pictures_swf.read_bytes())
+    (output.parent / 'pause_layout.h').write_text(pause_header)
+    variants += list(pause_layers)
     count = struct.unpack_from('>I', out, 12)[0]
     for label, im, ox, oy in variants:
         W, H, tiles = encode_layer(im, repair=False)

@@ -19,6 +19,11 @@ CFLAGS = -g -O2 -Wall -Wextra -Werror $(MACHDEP) $(INCLUDE) -std=gnu11
 CXXFLAGS = -g -O2 -Wall -Wextra -Werror $(MACHDEP) $(INCLUDE) -std=gnu++17
 LDFLAGS = -g $(MACHDEP) -Wl,-Map,$(OUTPUT).elf.map
 LIBS := -lfat -lwiiuse -lbte -lasnd -logc -lm
+# make DEV=1: the developer achievement tests (pause menu > Achievements;
+# saves to sd:/sm63wii/devsave.dat instead of save.dat)
+ifeq ($(DEV),1)
+CFLAGS += -DSM63_DEV
+endif
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)

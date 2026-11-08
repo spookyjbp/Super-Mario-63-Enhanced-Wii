@@ -12,6 +12,8 @@
 #include "object_select.h"
 #include "water_places.h"
 #include "font_atlas_bin.h"
+#include "trophies_bin.h"
+#include "pause_layout.h"
 #include "text_layout.h"
 #include "sign_layout.h"
 #include "faint_layout.h"
@@ -37,7 +39,8 @@
 #define PICTURE_BYTES (1024u * 1024)
 #define OBJECT_BYTES (17u * 512 * 1024)   /* four packs of up to 2 MiB */
 #define PROMPT_BYTES (128u * 1024)
-#define ANIM_BYTES (320u * 1024)   /* one frame of an animated picture sign or of the faint's screens */
+#define ANIM_BYTES (320u * 1024)
+#define PAUSE_PARTS_BYTES (640u * 1024)   /* "PauseParts": 1024 x 304 RGB5A3 */   /* one frame of an animated picture sign or of the faint's screens */
 static CourseArtPack art;
 static unsigned char *mem2, *picture_mem, *prompt_mem, *anim_mem;
 static GXTexObj anim_tex;
@@ -49,7 +52,9 @@ static GXTexObj picture_tex;
 static ArtPack object_packs[OBJECT_ART_PACKS];
 static GXTexObj object_tex[OBJECT_ART_PACKS];
 static bool objects_ready;
-static GXTexObj water_tex, font_tex, prompt_tex;
+static GXTexObj water_tex, font_tex, prompt_tex, trophy_tex, parts_tex;
+static unsigned char *parts_mem;
+static bool parts_ready;
 static const CourseArtLayer *loaded_prompt;
 
 /* Decode the compressed object packs (art pack v3) into MEM2 once. */
@@ -210,16 +215,26 @@ bool course_render_init(void)
     /* Reserve MEM2 for one area's textures plus a picture page, once. */
     unsigned char *lo = (unsigned char *)(((uintptr_t)SYS_GetArena2Lo() + 31) & ~(uintptr_t)31);
     if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES)) return false;
-    if ((unsigned char *)SYS_GetArena2Hi() - lo < (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES + ANIM_BYTES))
+    if ((unsigned char *)SYS_GetArena2Hi() - lo <
+        (ptrdiff_t)(MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES + ANIM_BYTES + PAUSE_PARTS_BYTES))
         return false;
     mem2 = lo; picture_mem = lo + MEM2_RESERVE; prompt_mem = lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES;
     anim_mem = prompt_mem + PROMPT_BYTES;
-    SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES + ANIM_BYTES);
+    parts_mem = anim_mem + ANIM_BYTES;
+    SYS_SetArena2Lo(lo + MEM2_RESERVE + PICTURE_BYTES + OBJECT_BYTES + PROMPT_BYTES + ANIM_BYTES + PAUSE_PARTS_BYTES);
     objects_ready = load_objects(lo + MEM2_RESERVE + PICTURE_BYTES, OBJECT_BYTES);
     /* The original font 155 (tools/export_fonts.py): RGBA8 after a 32-byte header. */
     GX_InitTexObj(&font_tex, (void *)(font_atlas_bin + 32), FONT_ATLAS_W, FONT_ATLAS_H, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP,
                   GX_FALSE);
     GX_InitTexObjLOD(&font_tex, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
+    /* The four trophies (tools/export_trophies.py): one RGBA8 strip, cells side by side. */
+    {
+        const unsigned cell = (unsigned)trophies_bin[8] << 24 | (unsigned)trophies_bin[9] << 16 |
+                              (unsigned)trophies_bin[10] << 8 | trophies_bin[11];
+        GX_InitTexObj(&trophy_tex, (void *)(trophies_bin + 32), (u16)(cell * ACH_TIERS), (u16)cell, GX_TF_RGBA8,
+                      GX_CLAMP, GX_CLAMP, GX_FALSE);
+        GX_InitTexObjLOD(&trophy_tex, GX_LINEAR, GX_LINEAR, 0, 0, 0, GX_FALSE, GX_FALSE, GX_ANISO_1);
+    }
     /* Water textures repeat across a volume (GX_REPEAT); data lives in the DOL. */
     /* bitmap 2062 of the water blocks: non-smoothed, repeated */
     DCFlushRange((void *)water_tile, sizeof(water_tile));
@@ -416,6 +431,211 @@ static void draw_level_water(const CourseSession *s, float ox, float oy)
         }
     }
 }
+/* ---- The pause menu (795 / 794; pause_menu.c, tools/pause_art.py) ---- */
+static const CourseArtLayer *parts_layer;
+static bool load_parts(void)
+{
+    if (parts_ready) return true;
+    parts_layer = course_art_picture(&art, "PauseParts", 10);
+    if (!parts_layer || parts_layer->tile_count != 1 ||
+        !upload(&parts_layer->tiles[0], parts_mem, PAUSE_PARTS_BYTES, &parts_tex)) return false;
+    GX_InvalidateTexAll();
+    return parts_ready = true;
+}
+/* A part with its registration point at 794 (x, y), scaled about it (%). */
+static void draw_part(unsigned id, float x, float y, float dy, float scale, unsigned char alpha, float width)
+{
+    if (id >= PAUSE_PARTS || !alpha) return;
+    const PausePart *pp = &pause_parts[id];
+    const float k = scale / 100, sx = stage_x(225 + x, width), sy = (150 + y + dy) * HUD_K;
+    const float x0 = sx + pp->ox * k * HUD_K, y0 = sy + pp->oy * k * HUD_K;
+    const float w = pp->w / PAUSE_ZOOM * k * HUD_K, h = pp->h / PAUSE_ZOOM * k * HUD_K;
+    const float aw = (float)parts_layer->width, ah = (float)parts_layer->height;
+    graphics_sprite_alpha(&parts_tex, x0, y0, w, h, pp->x / aw, pp->y / ah, (pp->x + pp->w) / aw, (pp->y + pp->h) / ah,
+                          alpha);
+}
+/* One trophy (tier) in a size x size screen box; locked ones dimmed. */
+static void draw_trophy(unsigned tier, float x, float y, float size, bool lit, float a)
+{
+    const float u0 = (float)tier / ACH_TIERS, u1 = (float)(tier + 1) / ACH_TIERS;
+    const float xs[4] = {x, x + size, x + size, x}, ys[4] = {y, y, y + size, y + size};
+    const float on[4] = {1, 1, 1, a}, off[4] = {0.38f, 0.38f, 0.42f, a * 0.7f}, add[3] = {0, 0, 0};
+    graphics_quad_cxform(&trophy_tex, xs, ys, u0, 0, u1, 1, lit ? on : off, add);
+}
+static const unsigned char tier_rgb[ACH_TIERS][3] = {{222, 150, 95}, {205, 212, 222}, {255, 214, 70}, {150, 205, 255}};
+/* The controller's buttons in the menu: jump chooses, spin goes back. */
+static void menu_buttons(unsigned controller, const char **choose, const char **back)
+{
+    switch (controller) {
+    case CONTROLLER_CLASSIC: *choose = "b"; *back = "y"; return;
+    case CONTROLLER_WIIMOTE: *choose = "2"; *back = "1"; return;
+    default: *choose = "A"; *back = "B"; return;
+    }
+}
+/* The port's Achievements page: the summary, then PAUSE_LIST_ROWS achievements. */
+static void draw_achievement_page(const CourseSession *s, float dy, float a, float width)
+{
+    const Achievements *ach = s->ach;
+    const PauseMenu *m = &s->pause;
+    const unsigned char al = (unsigned char)(255 * a);
+    draw_part(PP_TITLE_ACHIEVEMENTS, 0, -124, dy, 100, al, width);
+    char line[96];
+    const AchSummary sum = ach ? ach_summary(ach) : (AchSummary){0, {0}, 0};
+    const float x0 = stage_x(225 - 205, width), x1 = stage_x(225 + 205, width);
+    const GXColor wt = {255, 255, 255, al};
+    snprintf(line, sizeof line, "%u / %u unlocked (%u%%)", sum.total, ACH_COUNT, sum.percent);
+    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, (150 - 100 + dy) * HUD_K, wt, ALIGN_LEFT, ~0u);
+    snprintf(line, sizeof line, "Bronze %u   Silver %u   Gold %u   Platinum %u", sum.per_tier[ACH_BRONZE],
+             sum.per_tier[ACH_SILVER], sum.per_tier[ACH_GOLD], sum.per_tier[ACH_PLATINUM]);
+    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, (150 - 100 + dy) * HUD_K, wt, ALIGN_RIGHT, ~0u);
+    const char *choose, *back;
+    menu_buttons(s->controller, &choose, &back);
+    (void)choose;
+    snprintf(line, sizeof line, "%u of %u      D-pad: scroll      %s: back", m->list_sel + 1u, ACH_COUNT, back);
+    draw_text_glow(FONT_HINT, line, strlen(line), x0, x1, (150 + 32 + dy) * HUD_K, wt, ALIGN_CENTRE, ~0u);
+    const float row_h = 38, top = 150 - 84 + dy;
+    for (unsigned r = 0; r < PAUSE_LIST_ROWS; ++r) {
+        const unsigned i = m->list_top + r;
+        if (i >= ACH_COUNT) break;
+        const AchDef *d = &ach_defs[i];
+        const bool lit = ach && ach_unlocked(ach, d->id), sel = s->pause.focus == PI_LIST && i == m->list_sel;
+        const float ry = (top + r * row_h) * HUD_K, rh = (row_h - 3) * HUD_K;
+        graphics_rect(x0, ry, x1 - x0, rh, sel ? (GXColor){30, 60, 120, (unsigned char)(200 * a)}
+                                               : (GXColor){0, 0, 0, (unsigned char)(120 * a)});
+        if (sel) {
+            graphics_rect(x0, ry, x1 - x0, 2, (GXColor){120, 180, 255, al});
+            graphics_rect(x0, ry + rh - 2, x1 - x0, 2, (GXColor){120, 180, 255, al});
+        }
+        const float icon = rh - 6;
+        draw_trophy(d->tier, x0 + 4, ry + 3, icon, lit, a);
+        const GXColor name = lit ? (GXColor){255, 255, 255, al} : (GXColor){170, 175, 185, al};
+        const float tx = x0 + icon + 14;
+        snprintf(line, sizeof line, "%u. %s", d->id, d->name);
+        draw_text(FONT_TALK, line, strlen(line), tx, x1 - 8, ry + 2, name, ALIGN_LEFT, ~0u);
+        const unsigned char *c = tier_rgb[d->tier];
+        draw_cstring(FONT_HINT, ach_tier_name(d->tier), tx, x1 - 8, ry + 4,
+                     (GXColor){c[0], c[1], c[2], lit ? al : (unsigned char)(al * 0.6f)}, ALIGN_RIGHT);
+        draw_text(FONT_HINT, d->description, strlen(d->description), tx, x1 - 8, ry + 30, name, ALIGN_LEFT, ~0u);
+    }
+}
+static void draw_pause(const CourseSession *s, float width)
+{
+    const PauseMenu *m = &s->pause;
+    if (!pause_active(m) || !load_parts()) return;
+    float dy, a;
+    pause_clip_look(m, &dy, &a);
+    const unsigned char al = (unsigned char)(255 * a);
+    static const char *const page_names[PAUSE_PAGES] = {"Pause@default", "Pause@starmap", "Pause@fludd", "Pause@options",
+                                                        "Pause@exit", "Pause@refresh", "Pause@refresh"};
+    const unsigned page = m->page < PAUSE_PAGES ? m->page : PAUSE_DEFAULT;
+    const CourseArtLayer *pic = course_art_picture(&art, page_names[page], strlen(page_names[page]));
+    if (load_picture(pic))
+        graphics_sprite_alpha(&picture_tex, stage_x(pic->ox, width), (pic->oy + dy) * HUD_K, (float)pic->width,
+                              (float)pic->height, 0, 0, 1, 1, al);
+    if (page != PAUSE_REFRESH) {
+        /* the four buttons; the port's Achievements (Back on its page) between them */
+        const unsigned sp = page == PAUSE_ACHIEVEMENTS ? PAUSE_REFRESH : page;
+        for (unsigned i = 0; i < 4; ++i) {
+            const PauseSlot *sl = &pause_slots[sp][i];
+            draw_part((unsigned)sl->kind, sl->x, sl->y, dy, m->scale[PI_SLOT0 + i], al, width);
+        }
+        draw_part(page == PAUSE_ACHIEVEMENTS ? PP_BTN_BACK : PP_BTN_ACHIEVEMENTS, 0, 99, dy, m->scale[PI_CENTRE] * 0.8f,
+                  al, width);
+    }
+    const Player *pl = &s->game.player;
+    char num[16];
+    switch (page) {
+    case PAUSE_DEFAULT: {   /* _root.Coins, TotalStars, TotalStarCoins (Arial 16, shadowed) and the spinning coin */
+        const unsigned shines = s->ach ? ach_popcount(s->ach->p.shines) : 0;
+        const unsigned coins = s->ach ? ach_popcount(s->ach->p.star_coins) : 0;
+        const unsigned v[3] = {s->progress.coins, shines, coins};
+        const float pos[3][2] = {{PAUSE_COUNT_COINS_X, PAUSE_COUNT_COINS_Y}, {PAUSE_COUNT_SHINES_X, PAUSE_COUNT_SHINES_Y},
+                                 {PAUSE_COUNT_STAR_COINS_X, PAUSE_COUNT_STAR_COINS_Y}};
+        for (unsigned i = 0; i < 3; ++i) {
+            snprintf(num, sizeof num, "%u", v[i]);
+            const float x = stage_x(225 + pos[i][0], width), y = (150 + pos[i][1] + dy) * HUD_K;
+            draw_cstring(FONT_SIGN, num, x + 2 * HUD_K, x + 200, y + 2 * HUD_K, (GXColor){0, 0, 0, (unsigned char)(al / 2)},
+                         ALIGN_LEFT);
+            draw_cstring(FONT_SIGN, num, x, x + 200, y, (GXColor){255, 255, 255, al}, ALIGN_LEFT);
+        }
+        static const unsigned char coin_order[16] = {PP_COIN_1, PP_COIN_2, PP_COIN_3, PP_COIN_4, PP_COIN_5, PP_COIN_6,
+                                                     PP_COIN_7, PP_COIN_8, PP_COIN_9, PP_COIN_10, PP_COIN_11, PP_COIN_12,
+                                                     PP_COIN_13, PP_COIN_14, PP_COIN_15, PP_COIN_16};
+        draw_part(coin_order[m->clock % 16], PAUSE_COIN_X, PAUSE_COIN_Y, dy, 100, al, width);
+        break;
+    }
+    case PAUSE_FLUDD: {   /* Fludd page: owned nozzles (frame 1) or locked (frame 2) */
+        const struct { PauseItem item; unsigned owned, locked; int nozzle; } noz[4] = {
+            {PI_NOZ_NONE, PP_NOZ_NONE, PP_NOZ_NONE, -1}, {PI_NOZ_HOVER, PP_NOZ_HOVER, PP_NOZ_HOVER_LOCKED, NOZZLE_HOVER},
+            {PI_NOZ_TURBO, PP_NOZ_TURBO, PP_NOZ_TURBO_LOCKED, NOZZLE_TURBO},
+            {PI_NOZ_ROCKET, PP_NOZ_ROCKET, PP_NOZ_ROCKET_LOCKED, NOZZLE_ROCKET}};
+        for (unsigned i = 0; i < 4; ++i) {
+            const bool own = noz[i].nozzle < 0 || (pl->nozzles >> noz[i].nozzle & 1);
+            float x, y;
+            pause_item_pos(page, noz[i].item, &x, &y);
+            draw_part(own ? noz[i].owned : noz[i].locked, x, y, dy, m->scale[noz[i].item], al, width);
+        }
+        break;
+    }
+    case PAUSE_OPTIONS: {   /* 769 / 773 / 784: hovered 100 %, others 75 % at half alpha */
+        const struct { PauseItem item; unsigned part; } opt[3] = {
+            {PI_QUALITY, PP_OPT_QUALITY}, {PI_MUTE, PP_OPT_MUTE}, {PI_SPEED, PP_OPT_SPEED}};
+        for (unsigned i = 0; i < 3; ++i) {
+            float x, y;
+            pause_item_pos(page, opt[i].item, &x, &y);
+            const unsigned char ia = (unsigned char)(al * m->alpha[opt[i].item] / 100);
+            draw_part(opt[i].part, x, y, dy, m->scale[opt[i].item], ia, width);
+            if (opt[i].item == PI_MUTE) {   /* 773 frames: 2 plain, 3 hovered, 4 the setting */
+                const bool hov = m->focus == PI_MUTE;
+                const unsigned on = m->muted ? PP_MUTE_ON_4 : hov ? PP_MUTE_ON_3 : PP_MUTE_ON_2;
+                const unsigned off = !m->muted ? PP_MUTE_OFF_4 : hov ? PP_MUTE_OFF_3 : PP_MUTE_OFF_2;
+                const float k = m->scale[PI_MUTE] / 100;
+                draw_part(on, x + PAUSE_MUTE_ON_X * k, y + PAUSE_MUTE_ON_Y * k, dy, m->scale[PI_MUTE], ia, width);
+                draw_part(off, x + PAUSE_MUTE_OFF_X * k, y + PAUSE_MUTE_OFF_Y * k, dy, m->scale[PI_MUTE], ia, width);
+            }
+        }
+        break;
+    }
+    case PAUSE_EXIT: {   /* 793 Exit Level: alpha 75 while TotalStars is 0; 788 Quit Game */
+        const unsigned shines = s->ach ? ach_popcount(s->ach->p.shines) : 0;
+        float x, y;
+        pause_item_pos(page, PI_EXIT_LEVEL, &x, &y);
+        draw_part(PP_EXIT_EXITLEVEL, x, y, dy, m->scale[PI_EXIT_LEVEL], shines ? al : (unsigned char)(al * 3 / 4), width);
+        pause_item_pos(page, PI_QUIT, &x, &y);
+        draw_part(PP_EXIT_QUIT, x, y, dy, m->scale[PI_QUIT], al, width);
+        break;
+    }
+    case PAUSE_ACHIEVEMENTS: draw_achievement_page(s, dy, a, width); break;
+    default: break;
+    }
+    unsigned char grey;
+    const float ta = pause_trans_look(m, &grey);   /* 661 over the panel */
+    if (ta > 0 && pic)
+        graphics_rect(stage_x(pic->ox, width), (pic->oy + dy) * HUD_K, (float)pic->width, (float)pic->height,
+                      (GXColor){grey, grey, grey, (unsigned char)(255 * ta * a)});
+}
+/* "Achievement Unlocked!": a dark card with a blue edge sliding in from the
+   right edge at the top right (inside the safe area), over everything. */
+static void draw_achievement_card(const CourseSession *s, float width)
+{
+    const float k = ach_notice_slide(&s->notice);
+    if (k <= 0 || s->notice.id < 1 || s->notice.id > ACH_COUNT) return;
+    const AchDef *d = &ach_defs[s->notice.id - 1];
+    const float w = 392, h = 80, margin = 0.05f * width, top = 0.06f * 480;
+    const float x = width - margin - w + (1 - k) * (w + margin + 8), y = top;
+    const unsigned char a = (unsigned char)(255 * (k < 1 ? k : 1));
+    graphics_rect(x, y, w, h, (GXColor){12, 16, 26, (unsigned char)(a * 0.85f)});
+    graphics_rect(x, y, w, 2, (GXColor){110, 170, 255, a});                                  /* top highlight */
+    graphics_rect(x, y + h - 1, w, 1, (GXColor){50, 80, 140, a});
+    graphics_rect(x, y, 3, h, (GXColor){90, 150, 255, a});
+    draw_trophy(d->tier, x + 10, y + 8, h - 16, true, a / 255.0f);
+    const float tx = x + h + 6, tx1 = x + w - 10;
+    draw_cstring(FONT_HINT, "Achievement Unlocked!", tx, tx1, y + 5, (GXColor){160, 200, 255, a}, ALIGN_LEFT);
+    draw_text(FONT_TALK, d->name, strlen(d->name), tx, tx1 + 40, y + 24, (GXColor){255, 255, 255, a}, ALIGN_LEFT, ~0u);
+    const unsigned char *c = tier_rgb[d->tier];
+    draw_cstring(FONT_HINT, ach_tier_name(d->tier), tx, tx1, y + 54, (GXColor){c[0], c[1], c[2], a}, ALIGN_LEFT);
+}
+
 void course_render(const CourseSession *s, float t)
 {
     const CourseRuntime *c = &s->runtime;
@@ -644,4 +864,7 @@ void course_render(const CourseSession *s, float t)
         draw_cstring(FONT_TALK, "Intro movie 2 and the castle are not in this port yet.", 20, width - 20, 240, white,
                      ALIGN_CENTRE);
     }
+    graphics_set_zoom(1);
+    draw_pause(s, width);
+    draw_achievement_card(s, width);
 }

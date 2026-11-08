@@ -18,6 +18,7 @@ typedef enum {
     SFX_DROWN, SFX_DRAIN, SFX_GOOMBA_DIE,  /* "mario-drown", "sound - Drain" (WaterHP), "Goomba-Die" */
     SFX_LETSGO, SFX_MMMM, SFX_HMM, SFX_IMTIRED, SFX_YAWN, SFX_SNORE1, SFX_SNORE2,   /* Idle / Sleep */
     MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT,
+    SFX_ACHIEVEMENT,                      /* assets/audio/achievement_ping.wav (project sound) */
     SFX_COUNT
 } SfxId;
 typedef struct { SfxId id; unsigned char volume; signed char pan; } SfxEvent; /* volume 0..100, pan -100..100 */
@@ -28,6 +29,9 @@ unsigned sfx_drain(SfxEvent out[SFX_QUEUE]);
 /* The FLUDD water loop (Char frame 1 `watersoundclip`, "fluddrepeat") while spraying. */
 void sfx_set_fludd_loop(bool on);
 bool sfx_fludd_loop(void);
+/* Pause menu Options "Mute Music" (_root.MuteBGMusic): StopBGsong() / PlayMusicAndIntro(). */
+void sfx_set_music_muted(bool muted);
+bool sfx_music_muted(void);
 /* Course music: _root[course + "MusicIntro"] then "Music" repeating; -1 = none. */
 void sfx_music(int intro, int repeat);
 bool sfx_music_take(int *intro, int *repeat);

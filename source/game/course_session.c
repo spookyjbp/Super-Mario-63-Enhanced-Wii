@@ -111,6 +111,7 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     const CourseArea *a = course_pack_area(pack, id);
     if (!a) return false;
     memset(s, 0, sizeof(*s));
+    pause_init(&s->pause, sfx_music_muted());
     s->pack = pack; s->view_width = view_width; s->warp_target = -1;
     s->zoom = 1; s->camera_zoom = s->zoom2 = s->zoom2_from = 100; s->talk_zoomed = false;
     course_camera_set_zoom(1);
@@ -210,6 +211,9 @@ static void check_exits(CourseSession *s, GameInput in)
                    Castle. Neither exists in this port yet: stop at a boundary. */
                 s->state = SESSION_COMPLETE;
                 s->game.player.vx = s->game.player.vy = 0;
+                /* Intro Movie 2 (1503) ends with _root.Star[39] = true; SaveFile() */
+                if (s->ach) ach_shine(s->ach, 39);
+                s->save_request = true;
             }
         }
     }
@@ -440,9 +444,55 @@ static void faint_fx_frame(CourseSession *s)
         if (s->lifelost >= 59) { s->lifelost = 0; revive(s); }
     }
 }
+/* The pause menu (pause_menu.c) and the achievement card run first; while
+   the menu is up the game stands still (_root.PauseGame). */
+static bool pause_and_notice(CourseSession *s, GameInput *in)
+{
+    Player *p = &s->game.player;
+    const bool busy = s->death || s->blackout || s->lifelost || s->starin || s->wipe_in || s->wipe_out ||
+                      s->state == SESSION_WARP || s->state == SESSION_COMPLETE;
+    const PauseContext pc = {!busy, p->has_fludd, p->nozzles, s->ach ? ach_popcount(s->ach->p.shines) : 0};
+#ifdef SM63_DEV
+    /* Developer build (make DEV=1; saves go to a separate file): on the
+       Achievements page, jump unlocks the selected one, the nozzle button
+       collects all 64 Shine Sprites, 64 Star Coins and the keys through the
+       game's own events, stomp clears the dev save's progress. */
+    if (s->ach && pause_active(&s->pause) && s->pause.page == PAUSE_ACHIEVEMENTS && !s->pause.trans) {
+        if (in->confirm_pressed && s->pause.focus == PI_LIST) ach_force(s->ach, s->pause.list_sel + 1u);
+        if (in->nozzle_next_pressed) {
+            for (unsigned i = 1; i <= ACH_SHINES; ++i) ach_shine(s->ach, i);
+            for (unsigned i = 1; i <= ACH_STAR_COINS; ++i) ach_star_coin(s->ach, i);
+            for (unsigned k = 1; k <= 3; ++k) ach_key(s->ach, k);
+            ach_milestone(s->ach, ACH_MS_ENTER_BOWSER_TRAP2); ach_milestone(s->ach, ACH_MS_ENDING);
+        }
+        if (in->pound_pressed) { ach_init(s->ach, NULL); s->ach->dirty = true; s->notice.id = 0; }
+        if (in->confirm_pressed || in->nozzle_next_pressed || in->pound_pressed) s->save_request = true;
+    }
+#endif
+    pause_step(&s->pause, in, &pc);
+    unsigned arg;
+    switch (pause_take_action(&s->pause, &arg)) {
+    case PAUSE_ACT_QUIT: s->game.quit = true; break;
+    case PAUSE_ACT_MUTE: sfx_set_music_muted(arg != 0); s->save_request = true; break;
+    case PAUSE_ACT_NOZZLE:   /* _root.Fluddpow = "" / "H" / "R" / "T" */
+        if (arg == 0xFF) p->has_fludd = false;
+        else if (p->nozzles >> arg & 1) { p->has_fludd = true; p->nozzle = (Nozzle)arg; }
+        break;
+    default: break;
+    }
+    ach_notice_step(&s->notice, s->ach);
+    in->pause_pressed = false;   /* the menu owns the key (game_step's old toggle must not see it) */
+    s->game.paused = pause_active(&s->pause);
+    if (s->game.paused) {        /* stand still: no interpolation between ticks */
+        p->previous_x = p->x; p->previous_y = p->y;
+        s->game.camera.previous_x = s->game.camera.x; s->game.camera.previous_y = s->game.camera.y;
+    }
+    return s->game.paused;
+}
 void course_session_step(CourseSession *s, GameInput in)
 {
     s->controller = in.controller;
+    if (pause_and_notice(s, &in)) return;
     course_session_zoom_step(s, in.zoom_axis, s->state == SESSION_TALK,
                              s->game.player.source_step, s->game.player.source_phase / 60.0f);
     course_camera_set_zoom(course_session_zoom(s));
