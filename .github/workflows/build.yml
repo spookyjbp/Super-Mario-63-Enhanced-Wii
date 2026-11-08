@@ -47,6 +47,15 @@ jobs:
           test -s dist/apps/super-mario-63-enhanced-wii/boot.dol
           test -s dist/apps/super-mario-63-enhanced-wii/meta.xml
           /opt/devkitpro/devkitPPC/bin/powerpc-eabi-readelf -h boot.elf
+      - name: MEM1 budget
+        run: |
+          # code, data and bss must leave room in MEM1 (24 MiB from 0x80000000)
+          # for the heap, the two framebuffers and the GX FIFO
+          /opt/devkitpro/devkitPPC/bin/powerpc-eabi-size -A boot.elf | grep -E "^\.(text|data|rodata|bss|sbss|sdata)" || true
+          end=$(/opt/devkitpro/devkitPPC/bin/powerpc-eabi-nm -n boot.elf | awk '$3=="_end"{print $1}')
+          used=$(( 0x$end - 0x80000000 ))
+          echo "MEM1 used by the program: $used bytes ($(( used / 1048576 )) MiB of 24)"
+          test "$used" -lt $(( 22 * 1048576 + 512 * 1024 ))
       - name: Upload Homebrew Channel application
         uses: actions/upload-artifact@v4
         with:
