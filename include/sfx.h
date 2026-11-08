@@ -22,6 +22,7 @@ typedef enum {
     SFX_OPENING,                          /* the opening's sound stream (9280, frames 158-341) */
     MUS_TITLE_INTRO, MUS_TITLE_LOOP,      /* TitleScreenTheme 0-10.576 s, then 2.58-10.576 s repeating */
     MUS_FILE_SELECT_INTRO, MUS_FILE_SELECT_REPEAT,
+    SFX_1UP, SFX_WATERFALL,               /* the Castle Grounds: 1 Up Code, Sound FX Clip */
     SFX_COUNT
 } SfxId;
 typedef struct { SfxId id; unsigned char volume; signed char pan; } SfxEvent; /* volume 0..100, pan -100..100 */
@@ -32,6 +33,10 @@ unsigned sfx_drain(SfxEvent out[SFX_QUEUE]);
 /* The FLUDD water loop (Char frame 1 `watersoundclip`, "fluddrepeat") while spraying. */
 void sfx_set_fludd_loop(bool on);
 bool sfx_fludd_loop(void);
+/* A place's looping sound (Sound FX Clip): id (SFX_COUNT: none), volume
+   0..100 and pan -100..100, set each frame by the session. */
+void sfx_set_ambient(SfxId id, float volume, float pan);
+void sfx_ambient(SfxId *id, float *volume, float *pan);
 /* Pause menu Options "Mute Music" (_root.MuteBGMusic): StopBGsong() / PlayMusicAndIntro(). */
 void sfx_set_music_muted(bool muted);
 bool sfx_music_muted(void);
@@ -47,7 +52,8 @@ void sfx_at(SfxId id, float x, float y, float cam_x, float cam_y, float falloff)
    jingle); at most SFX_SAME_MAX copies of one sound play together (the oldest
    copy is replaced); otherwise a free voice, else the oldest effect. */
 #define SFX_FIRST_VOICE 2
-#define SFX_LAST_VOICE 15
+#define SFX_LAST_VOICE 14
+#define SFX_AMBIENT_VOICE 15   /* a looping place sound (the Castle's waterfall) */
 #define SFX_RETRIGGER_TICKS 2
 #define SFX_SAME_MAX 2 /* two CoinJingles peak at 2 x 13383 < 32767: no clipping */
 typedef struct { bool busy; int id; unsigned started; } SfxVoice;

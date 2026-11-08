@@ -121,6 +121,95 @@ static void test_area_chain_and_completion(void)
     ticks((GameInput){.crouch_held = true, .vertical = 1}, 1);
     assert(s.state == SESSION_COMPLETE);
 }
+/* The Castle Grounds (user request 2026-11-08): entered from Intro Movie 2
+   and from the tutorial's last pipe once Star[39] is set; the Sling Star
+   flings Mario up to the roof; the doors and pipes to courses the port does
+   not have are closed; the left pipe goes back to 8-E1-2-2; the 1-Ups. */
+static void test_castle_grounds(void)
+{
+    static Achievements a;
+    ach_init(&a, NULL);
+    ach_shine(&a, 39);
+    /* the tutorial's last pipe with Star[39]: changecourse("righttransition2", "Castle", -1300, 100) */
+    assert(course_session_start(&s, &pack, "8-E1-2-2", 0, 0, 640));
+    s.ach = &a;
+    const CourseObject *pipe = named("Invisible Door", "doorplace", "C-Opening");
+    stand_at(pipe->x, pipe->y + 9);
+    ticks((GameInput){.crouch_held = true, .vertical = 1}, 1);
+    assert(s.state == SESSION_WARP);
+    for (int i = 0; i < 200 && s.state == SESSION_WARP; ++i) course_session_step(&s, (GameInput){0});
+    assert(s.state == SESSION_PLAY && course_string_equals(s.runtime.area->id, "Castle"));
+    assert(fabsf(course_cx(&s.runtime, s.game.player.x + PLAYER_WIDTH / 2) + 1300) < 1);
+    assert(s.area_text > 0 && s.area_text_kind == 1);
+    /* Intro Movie 2's StartChar("Castle", 80, 60) */
+    assert(course_session_start(&s, &pack, "Castle", 80, 60, 640));
+    s.ach = &a;
+    ticks((GameInput){0}, 60);
+    assert(s.game.player.grounded && s.state == SESSION_PLAY);
+    /* the door hint shows only before Star[39] */
+    assert(!hint_is("(Hint"));
+    /* the castle's doors: closed */
+    const CourseObject *door = named("Main Door Clip", "doorplace", "inCastle");
+    assert(door);
+    stand_at(door->x, door->y + 15);
+    ticks((GameInput){.vertical = -1}, 2);
+    assert(s.state == SESSION_PLAY && hint_is("(Closed for now"));
+    ticks((GameInput){0}, 200);
+    assert(!hint_is("(Closed"));
+    /* the green pipe to a course not in the port (8-E3-1): closed (it stands on
+       CastlePlatforms frame 1, the one below 63 stars) */
+    assert(s.runtime.platform_frame == 0);
+    const CourseObject *p821 = named("Invisible Door", "doorplace", "8-E3-1");
+    assert(p821);
+    stand_at(p821->x, p821->y - 20);
+    ticks((GameInput){.crouch_held = true, .vertical = 1}, 2);
+    assert(s.state == SESSION_PLAY && hint_is("(Closed for now"));
+    /* the Sling Star: Mario dropped into it is held, jump spins it, it flings him up */
+    const CourseObject *star = NULL;
+    for (unsigned i = 0; i < s.runtime.area->object_count; ++i)
+        if (course_string_equals(s.runtime.area->objects[i].type, "Sling Star BackGFX") &&
+            course_session_object_active(&s, &s.runtime.area->objects[i])) star = &s.runtime.area->objects[i];
+    assert(star && fabsf(star->y + 577) < 1);
+    ticks((GameInput){0}, 80);                         /* its 32 waiting frames */
+    course_place_player(&s.runtime, &s.game.player, star->x, star->y + 10);
+    s.game.player.vx = 0; s.game.player.vy = 0; s.game.player.grounded = false;
+    for (int i = 0; i < 20 && s.sling.state == SLING_NONE; ++i) course_session_step(&s, (GameInput){0});
+    assert(s.sling.state == SLING_HOLD);
+    ticks((GameInput){0}, 20);
+    assert(s.sling.state == SLING_HOLD);              /* held: no falling */
+    assert(fabsf(course_cy(&s.runtime, s.game.player.y + player_height(&s.game.player)) - star->y) < 3);
+    ticks((GameInput){.jump_held = true}, 4);
+    for (int i = 0; i < 60 && s.sling.state != SLING_FLING; ++i) course_session_step(&s, (GameInput){0});
+    assert(s.sling.state == SLING_FLING);
+    float top = 1e9f;
+    for (int i = 0; i < 200; ++i) {
+        course_session_step(&s, (GameInput){0});
+        top = fminf(top, course_cy(&s.runtime, s.game.player.y + player_height(&s.game.player)));
+    }
+    fflush(stdout); fprintf(stderr, "sling star: up to %.0f (the star at %.0f, the roof's 1-Ups at -964..-844)\n", top, star->y);
+    assert(top < star->y - 250);
+    /* without a press it lets Mario drop after its 32 frames */
+    ticks((GameInput){0}, 200);
+    course_place_player(&s.runtime, &s.game.player, star->x, star->y + 10);
+    s.game.player.vx = 0; s.game.player.vy = 0; s.game.player.grounded = false;
+    for (int i = 0; i < 20 && s.sling.state == SLING_NONE; ++i) course_session_step(&s, (GameInput){0});
+    assert(s.sling.state == SLING_HOLD);
+    for (int i = 0; i < 200 && s.sling.state == SLING_HOLD; ++i) course_session_step(&s, (GameInput){0});
+    assert(s.sling.state == SLING_NONE);
+    /* the 1-Ups are there */
+    unsigned oneups = 0;
+    for (unsigned i = 0; i < s.objects.count; ++i) oneups += s.objects.live[i].kind == LIVE_ONEUP;
+    assert(oneups == 3);
+    /* the left pipe (warp1, with Star[39]): back to 8-E1-2-2 at (964, -783) */
+    const CourseObject *w1 = named("Blank Movieclip", NULL, "warp1");
+    assert(w1);
+    course_place_player(&s.runtime, &s.game.player, w1->x, w1->y);
+    s.game.player.vx = s.game.player.vy = 0;
+    for (int i = 0; i < 300 && !(s.state == SESSION_PLAY && course_string_equals(s.runtime.area->id, "8-E1-2-2")); ++i)
+        course_session_step(&s, (GameInput){0});
+    assert(course_string_equals(s.runtime.area->id, "8-E1-2-2"));
+    s.ach = NULL;
+}
 /* Bug 1: reading a sign (Start looks at sign2 near the CamEdge) must not shake. */
 static void test_sign_camera_steady(void)
 {
@@ -885,6 +974,6 @@ int main(void)
     test_zoom_controls(); test_sign_messages_per_controller(); test_none_nozzle(); test_camera_moves_every_tick();
     test_message_box_frames(); test_rocket_once_per_jump(); test_faint(); test_wipes_and_background_water();
     test_camera_starts_inside_walls(); test_level_water_splash(); test_idle_and_sleep(); test_drowning(); test_fludd_exact(); test_fall_sound();
-    test_pause_menu(); test_achievement_card();
-    puts("24 course session (pause menu, achievement card, fall sound, FLUDD frame by frame, idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
+    test_pause_menu(); test_achievement_card(); test_castle_grounds();
+    puts("25 course session (Castle Grounds, pause menu, achievement card, fall sound, FLUDD frame by frame, idle/sleep, drowning, level water splash, camera inside walls on entry, wipes, background water, faint, Rocket once per jump, message box frames, tutorial flow, HUD, sign camera, movement, zoom, sign text, camera smoothing, None nozzle) test groups passed"); return 0;
 }

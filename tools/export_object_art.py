@@ -112,6 +112,10 @@ SPEC = [
     ('MED_SPLASH', 2609, list(range(0, 9)), 1, (0, 0, 1, 1), ()),
     ('RUN_SPLASH1', 2579, list(range(0, 17)), 1, (0, 0, 1, 1), ()),
     ('RUN_SPLASH2', 2587, list(range(0, 7)), 1, (0, 0, 1, 1), ()),
+    # the Castle Grounds' 1 Up Code (2209): the mushroom (1-Up Animation 2207 at
+    # (-0.45, 0)) and "collect" (frames 4-20 without the 'box')
+    ('ONEUP_IDLE', 2207, None, 1, (-0.45, 0, 1, 1), ()),
+    ('ONEUP_COLLECT', 2209, list(range(3, 20)), 1, (0, 0, 1, 1), (5,)),
     ('HUD_TALK_BOX', 186, [0], 1, (0, 0, 1, 1), (2, 4)),       # 'tm' Toad message cloud (text drawn by the port)
     ('HUD_TALK_Z', 184, None, 1, (143.45, 1, 1.5, 1.5), ()),   # its 'bz' Z prompt
     # Shine Sprite 977/976: only on 8-E1-2-2 frames reached once Star[39] is set,

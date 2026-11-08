@@ -132,7 +132,11 @@ class PictureSigns(unittest.TestCase):
         import re
         frames = ANIM['AreaText~']
         head = (ROOT / 'assets' / 'generated' / 'area_text_layout.h').read_text()
-        table = [int(v) for v in re.search(r'\{\n    ([\d, ]+)', head).group(1).split(', ')]
+        rows = re.findall(r'\n    \{([\d, ]+)\},', head)
+        self.assertEqual(len(rows), 2)                                  # the tutorial's name, the Castle's
+        table = [int(v) for v in rows[0].split(', ')]
+        castle = [int(v) for v in rows[1].split(', ')]
+        self.assertEqual(max(castle) + 1, len(ANIM['AreaText2~']))
         self.assertEqual(len(table), 94)
         self.assertEqual(len(set(table[11:84])), 1)                    # frames 12-84: the hold
         self.assertEqual(max(table) + 1, len(frames))

@@ -21,6 +21,9 @@ unsigned object_select(const LiveObject *l, unsigned controller, ObjectDraw o[OB
         o[0] = l->collected ? base(l, OBJ_COIN_COLLECT, f < 13 ? f : 13) : base(l, OBJ_COIN_SPIN, f % 16);
         o[0].alpha = l->alpha;
         return 1;
+    case LIVE_ONEUP:   /* 1-Up Animation (2207, 3 frames), then 2209 "collect" (its frames 4-20) */
+        o[0] = l->collected ? base(l, OBJ_ONEUP_COLLECT, f < 16 ? f : 16) : base(l, OBJ_ONEUP_IDLE, f % 3);
+        return 1;
     case LIVE_BLUE_COIN:
         o[0] = l->collected ? base(l, OBJ_BCOIN_COLLECT, f < 13 ? f : 13) : base(l, OBJ_BCOIN_SPIN, f % 8);
         return 1;

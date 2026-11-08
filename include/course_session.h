@@ -40,6 +40,13 @@ typedef struct {
     /* AreaTextClip (the area name): 0 none, else source frames since attached
        (frame 1 is held 9 frames, then 7514 frames 2-94: area_text_layout.h). */
     CourseString area_title; unsigned area_text;
+    unsigned char area_text_kind;   /* which name (area_text_layout.h area_text_layer): 0 the tutorial, 1 the Castle */
+    /* a closed door or pipe (Castle Grounds: not in the port yet): source frames its note shows */
+    unsigned closed_note;
+    /* The Castle's Sling Star (2162) Mario is in: its state (SLING_*), its
+       frame, the 'frame' clip's (Mario's SlingStar animation 1476) count and
+       go, and charClip.speed (built by jump / spin). */
+    struct { const CourseObject *star; int state; unsigned frame, count, idle; bool go; float speed; } sling;
     /* opening (8-E1-1 Start sign) and warps */
     unsigned opening_wait, opening_count;
     int warp_target;
@@ -132,6 +139,7 @@ static inline int course_prompt_frame(const CourseSession *s)
     return s->sign_frames >= 5 ? (int)s->sign_frames - 5 : -1;
 }
 enum { WIPE_RIGHT, WIPE_LEFT, WIPE_DOWN };
+enum { SLING_NONE, SLING_HOLD, SLING_SPIN, SLING_FLING };
 /* Frame (1-based) of "<dir>transition" that sets _root.warpframe. */
 static inline unsigned wipe_warp_frame(unsigned wipe) { return wipe == WIPE_DOWN ? 15u : 16u; }
 /* Frames shown of "<dir>transition2" (its last frame removes it). */

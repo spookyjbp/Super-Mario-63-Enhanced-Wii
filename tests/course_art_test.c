@@ -16,16 +16,20 @@ int main(void)
     const size_t n = fread(blob, 1, sizeof(blob), f); fclose(f);
     static CourseArtPack pack;
     assert(course_art_parse(blob, n, &pack) && pack.zoom == 1.6f);
-    const char *areas[] = {"8-E1-1", "8-E1-1-2", "8-E1-2", "8-E1-2-2"};
-    for (unsigned i = 0; i < 4; ++i) {
+    const char *areas[] = {"8-E1-1", "8-E1-1-2", "8-E1-2", "8-E1-2-2", "Castle"};
+    for (unsigned i = 0; i < 5; ++i) {
         assert(course_art_layer(&pack, areas[i], ART_LAYER_BACK) && course_art_layer(&pack, areas[i], ART_LAYER_FRONT));
-        assert(course_art_layer(&pack, areas[i], ART_LAYER_FAR) && course_art_layer(&pack, areas[i], ART_LAYER_CLOSE));
+        assert(course_art_layer(&pack, areas[i], ART_LAYER_FAR));
+        /* the Castle: CastleColoredBG as its Background, no CloseBackground */
+        assert(i == 4 ? course_art_layer(&pack, areas[i], ART_LAYER_BG) != NULL
+                      : course_art_layer(&pack, areas[i], ART_LAYER_CLOSE) != NULL);
         /* the area's textures fit the MEM2 area course_render.c reserves (32-byte aligned, as load_area) */
         size_t used = 0;
         for (unsigned k = 0; k < ART_LAYER_PICTURE; ++k) {
             const CourseArtLayer *l = course_art_layer(&pack, areas[i], (CourseArtKind)k);
             for (unsigned t = 0; l && t < l->tile_count; ++t) used = (used + l->tiles[t].size + 31) & ~(size_t)31;
         }
+        if (i == 4) printf("Castle Grounds textures: %.1f MB of %.1f\n", used / 1048576.0, COURSE_MEM2_RESERVE / 1048576.0);
         assert(used <= COURSE_MEM2_RESERVE);
     }
     assert(!course_art_layer(&pack, "8-E1-2-2", ART_LAYER_BG)); /* no Background set for 8-E1-2-2 */

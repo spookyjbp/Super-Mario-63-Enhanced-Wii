@@ -40,7 +40,7 @@
 
 #define MEM2_RESERVE COURSE_MEM2_RESERVE
 #define PICTURE_BYTES (1024u * 1024)
-#define OBJECT_BYTES (17u * 512 * 1024)   /* the packs' decoded textures (tests/test_object_art.py checks they fit) */
+#define OBJECT_BYTES (19u * 512 * 1024)   /* the packs' decoded textures (tests/test_object_art.py checks they fit) */
 #define PROMPT_BYTES (128u * 1024)
 #define ANIM_BYTES (320u * 1024)
 #define PAUSE_PARTS_BYTES (768u * 1024)   /* "PauseParts": up to 1024 x 384 RGB5A3 (tests/test_pause_art.py) */
@@ -985,7 +985,10 @@ void course_render(const CourseSession *s, float t)
         }
     }
     if (s->area_text)   /* AreaTextClip (area_text_art.py): the bar and text as the original draws them */
-        draw_fx("AreaText~", area_text_tile[course_area_text_frame(s->area_text) - 1], width);
+    {
+        const unsigned k = s->area_text_kind < AREA_TEXT_NAMES ? s->area_text_kind : 0;
+        draw_fx(area_text_layer[k], area_text_tile[k][course_area_text_frame(s->area_text) - 1], width);
+    }
     if (s->state == SESSION_SIGN && s->sign_picture && s->sign_phase == 1) {
         /* Stats.Picture: the page (one texel per screen pixel) at its stage position. */
         const CourseArtLayer *pic = course_art_controller_picture(&art, s->sign_text, s->controller);

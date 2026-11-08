@@ -63,6 +63,7 @@ static SaveData save;
 static CinemaData cin_file;
 static Cinema cin;
 
+static bool menus_wanted(void) { return fe_data != NULL; }
 static bool load_front(void)
 {
     if (!fe_data && !(fe_data = data_load("front_end.bin", &fe_size))) return false;
@@ -107,6 +108,18 @@ static void end_cinema(void)
     cin_data = NULL;
 }
 
+/* StartChar(course, x, y): the session with the save slot's achievements. */
+static bool start_course(CourseSession *session, const CoursePack *pack, Achievements *ach, const char *course,
+                         float x, float y)
+{
+    drop_front();   /* its MEM1 for the course (read again for the title) */
+    if (!load_art() || !course_session_start(session, pack, course, x, y, graphics_width())) return false;
+    session->ach = ach;
+    session->total_stars = ach_popcount(ach->p.shines);   /* _root.TotalStars */
+    pause_init(&session->pause, sfx_music_muted());
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     if (!graphics_init()) return EXIT_FAILURE;
@@ -129,6 +142,9 @@ int main(int argc, char **argv)
     const bool tutorial = course_pack_parse(course_8e1_bin, course_8e1_bin_size, &pack) &&
                           course_render_init(art_data, art_size);
     if (tutorial) audio_init(); /* after the course renderer's MEM2 reservation */
+    /* the course art is read again when a course starts (load_art): MEM1 for
+       the front end meanwhile */
+    if (tutorial && menus_wanted()) drop_art();
     /* The save file (SD card): the four files' progress and achievements, and
        Mute Music. A save from before achievements existed, or progress the
        file already proves, is awarded when the file is played. */
@@ -142,7 +158,7 @@ int main(int argc, char **argv)
     if (tutorial && !menus) {   /* no front end: straight into the tutorial with the last file */
         ach_init(&ach, save.slot[save.current].used ? &save.slot[save.current].progress : NULL);
         ach_evaluate_all(&ach);
-        in_course = course_session_start(&session, &pack, "8-E1-1", 0, 0, graphics_width());
+        in_course = load_art() && course_session_start(&session, &pack, "8-E1-1", 0, 0, graphics_width());
         session.ach = &ach; pause_init(&session.pause, save.music_muted);
     }
     unsigned since_write = 0;
@@ -205,19 +221,19 @@ int main(int argc, char **argv)
             if (ach_popcount(ach.p.shines) == 0 && begin_cinema("cinema_intro.bin")) {
                 in_cinema = true;
             } else {
-                in_course = load_art() &&
-                            course_session_start(&session, &pack, "8-E1-1", 0, 0, graphics_width());
-                session.ach = &ach; pause_init(&session.pause, sfx_music_muted());
+                /* a file with Shine Sprites: _root.CharXscale = -100;
+                   StartChar("Castle", -1100, 100, ...) (no tutorial: 8-E1-1) */
+                const bool castle = ach_popcount(ach.p.shines) > 0;
+                in_course = start_course(&session, &pack, &ach, castle ? "Castle" : "8-E1-1", castle ? -1100 : 0,
+                                         castle ? 100 : 0);
+                if (in_course && castle) session.game.player.facing_left = true;
                 if (!in_course && load_front()) { in_front = true; front_to_title(&front); }
             }
         }
         if (in_cinema && cin.done) {   /* the cutscene's StartChar */
             end_cinema();
             in_cinema = false;
-            in_course = !strcmp(cin.course, "8-E1-1") && load_art() &&
-                        course_session_start(&session, &pack, "8-E1-1", cin.end_x, cin.end_y, graphics_width());
-            if (in_course) { session.ach = &ach; pause_init(&session.pause, sfx_music_muted()); }
-            /* the Castle is not in the port yet: back to the title */
+            in_course = start_course(&session, &pack, &ach, cin.course, cin.end_x, cin.end_y);
             if (!in_course) { load_art(); in_front = load_front(); front_to_title(&front); }
         }
         if (in_course && session.state == SESSION_COMPLETE && !session.save_request) {
@@ -240,6 +256,7 @@ int main(int argc, char **argv)
             if (save_io_write(&save)) ach.dirty = false;
             session.save_request = false; since_write = 0;
         }
+        if (!in_course) sfx_set_ambient(SFX_COUNT, 0, 0);   /* the place's sound stays with the course */
         if (tutorial && in_cinema) audio_cinema_update(&cin);
         else if (tutorial) audio_update(in_course && session.game.paused);
         if (in_front) front_render(&front);

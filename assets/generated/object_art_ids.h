@@ -87,22 +87,24 @@ enum {
     OBJ_MED_SPLASH = 80, /* pack 4 */
     OBJ_RUN_SPLASH1 = 81, /* pack 4 */
     OBJ_RUN_SPLASH2 = 82, /* pack 4 */
-    OBJ_HUD_TALK_BOX = 83, /* pack 4 */
-    OBJ_HUD_TALK_Z = 84, /* pack 4 */
-    OBJ_SIGN_Z_0 = 85, /* pack 4 */
-    OBJ_SIGN_Z_1 = 86, /* pack 4 */
-    OBJ_SIGN_Z_2 = 87, /* pack 4 */
-    OBJ_TOAD_BZ_0 = 88, /* pack 4 */
-    OBJ_TOAD_BZ_1 = 89, /* pack 4 */
-    OBJ_TOAD_BZ_2 = 90, /* pack 4 */
-    OBJ_HUD_DIGITS = 91, /* pack 4 */
-    OBJ_CLIP_COUNT = 92
+    OBJ_ONEUP_IDLE = 83, /* pack 4 */
+    OBJ_ONEUP_COLLECT = 84, /* pack 4 */
+    OBJ_HUD_TALK_BOX = 85, /* pack 4 */
+    OBJ_HUD_TALK_Z = 86, /* pack 4 */
+    OBJ_SIGN_Z_0 = 87, /* pack 4 */
+    OBJ_SIGN_Z_1 = 88, /* pack 4 */
+    OBJ_SIGN_Z_2 = 89, /* pack 4 */
+    OBJ_TOAD_BZ_0 = 90, /* pack 4 */
+    OBJ_TOAD_BZ_1 = 91, /* pack 4 */
+    OBJ_TOAD_BZ_2 = 92, /* pack 4 */
+    OBJ_HUD_DIGITS = 93, /* pack 4 */
+    OBJ_CLIP_COUNT = 94
 };
 /* Toad head (2498) registration per TOAD_IDLE / TOAD_WALK frame, course px from
    the Toad Main Clip origin (the body placement plus the head matrix in it). */
 static const float toad_head_idle[][2] = {{-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -4.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}, {-0.50f, -5.50f}};
 static const float toad_head_walk[][2] = {{0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {-0.50f, -6.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {0.00f, -4.55f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}, {-0.50f, -7.05f}};
 static const unsigned char object_art_pack_of[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
 };
 #endif

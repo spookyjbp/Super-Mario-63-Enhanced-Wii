@@ -18,7 +18,7 @@ as the original does (assets/generated/water_places.h):
 Without a mask the strip is filled with its colour at its alpha (40, 128, 215
 at 50 % by default), as in 8-E1-1.
 """
-import base64, re, struct, subprocess
+import base64, math, re, struct, subprocess
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -128,7 +128,11 @@ def build(work, jar, swf_path, swf, areas, table, sprites, scripts):
                 continue
             m = e['matrix']
             if abs(m['sx'] - 1) > 1e-3 or m['r0'] or m['r1']:
-                raise ValueError(f'{a}: Water Code placed scaled or rotated')
+                # the Castle's little pool by the waterfall (WaterLength 100) is
+                # tilted 5.6 degrees: the port's strips are level, so it is
+                # drawn level (the same length and place)
+                if not (a == 'Castle' and abs(m['r1']) < 0.1 and abs(math.hypot(m['sx'], m['r1']) - 1) < 1e-2):
+                    raise ValueError(f'{a}: Water Code placed scaled or rotated')
             p, graphics = params(scripts, ident, d)
             block = -1
             for bd in masked.get(d, []):

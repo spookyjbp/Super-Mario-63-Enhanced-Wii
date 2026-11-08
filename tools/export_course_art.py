@@ -56,10 +56,22 @@ def star_tint(total_stars=0):
 
 
 def course_tables(dom):
+    """StartChar's layer names: `_root["8-E1-1FarBackground"] = "..."` and
+    `_root.CastleBackground = "..."`."""
     out = {}
     for key, value in re.findall(r'_root\["([^"]+)"\]\s*=\s*"([^"]*)";', dom):
         out[key] = value
+    for key, value in re.findall(r'_root\.(\w+)\s*=\s*"([^"]*)";', dom):
+        out.setdefault(key, value)
     return out
+
+
+# Castle Grounds pieces that stay in the layer art: the castle itself (its
+# flags' animation frozen), the pipes, doors, cannon and Sling Stars (drawn as
+# placed: the port moves Mario, not them).
+KEEP = {'Princess Peaches Castle Code', 'Castle Grounds Warpipe', 'Green WarpPipe', 'Main Door Clip',
+        'Cannon Platform', 'Cannon (main) Clip', 'Sling Star BackGFX', 'Sling Star FrontGFX',
+        'Rainbow Star'}   # its first frame: the Wing Cap it gives is not in the port yet
 
 
 def script_rules(script_dir):
@@ -192,7 +204,11 @@ def rgba8(image):
     return np.concatenate([ar, gb], -1).tobytes()
 
 
-TRUE_COLOUR = {'FarBackground'}   # layers stored as RGBA8 (tile size w * h * 4)
+TRUE_COLOUR = {'FarBackground'}
+# Layers drawn at fewer image px per course px than ZOOM, so the area fits the
+# MEM2 it is uploaded into (COURSE_MEM2_RESERVE): the Castle Grounds' BackGFX
+# and FrontGFX span 4000 x 1100 course px (31 MB at ZOOM).
+AREA_ZOOM = {('Castle', 'BackGFX'): 1.15, ('Castle', 'FrontGFX'): 1.15}   # layers stored as RGBA8 (tile size w * h * 4)
 
 
 def render(jar, swf_path, work, ids, zoom):
@@ -274,7 +290,8 @@ def export(source, jar, output, areas):
             if layer in ('BackGFX', 'FrontGFX'):
                 frame = 2 if layer == 'BackGFX' and sprites[ident]['frames'] > 2 else 0
                 stage = sprites[ident]['stage'][frame]
-                objs = [o for o in C.objects(a, layer) if o['frames'][0] <= frame < o['frames'][1]]
+                objs = [o for o in C.objects(a, layer) if o['frames'][0] <= frame < o['frames'][1]
+                        and not (a == 'Castle' and o['type'] in KEEP)]
                 strip = set()
                 for o in objs:
                     for d, e in stage.items():
@@ -297,8 +314,14 @@ def export(source, jar, output, areas):
     for a, layer, ident, link in layers:
         im = Image.open(C.sprite_dir(work / 'png', ident) / '1.png').convert('RGBA')
         ox, oy = origin(work, ident)
+        zoom = ZOOM
+        if (a, layer) in AREA_ZOOM:
+            k = AREA_ZOOM[(a, layer)] / ZOOM
+            w = max(1, round(im.width * k))
+            zoom = ZOOM * w / im.width
+            im = im.resize((w, max(1, round(im.height * k))), Image.LANCZOS)
         W, H, tiles = encode_layer(im, true_colour=layer in TRUE_COLOUR)
-        out += C.pack_string(a) + C.pack_string(layer) + struct.pack('>ffffII', ox, oy, PARALLAX[layer], ZOOM, W, H)
+        out += C.pack_string(a) + C.pack_string(layer) + struct.pack('>ffffII', ox, oy, PARALLAX[layer], zoom, W, H)
         out += struct.pack('>I', len(tiles))
         for tx, ty, tw, th, blob, size in tiles:
             out += struct.pack('>HHHHII', tx, ty, tw, th, size, len(blob)) + blob

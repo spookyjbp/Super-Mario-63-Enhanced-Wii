@@ -30,6 +30,7 @@ static void cheep_reset(CourseObjects *o, LiveObject *l);
 static LiveKind kind_of(CourseString t)
 {
     static const struct { const char *name; LiveKind kind; } table[] = {
+        {"1 Up Code", LIVE_ONEUP},
         {"Gold Coin Code", LIVE_COIN}, {"Blue Coin Code", LIVE_BLUE_COIN}, {"Coded Sign", LIVE_SIGN},
         {"Butterfly Code", LIVE_BUTTERFLY}, {"Goonie Code", LIVE_GOONIE}, {"Toad Main Clip", LIVE_TOAD},
         {"Falling Log Code (graphics)", LIVE_LOG}, {"YI Arrow Animation", LIVE_ARROW}, {"Goomba", LIVE_GOOMBA},
@@ -58,7 +59,7 @@ void course_objects_init(CourseObjects *o, const CourseArea *a, const CoursePick
         const CourseObject *src = &a->objects[i];
         const LiveKind kind = kind_of(src->type);
         if (kind == LIVE_NONE || !active_on(src, back_frame)) continue;
-        if ((kind == LIVE_COIN || kind == LIVE_BLUE_COIN) && taken && taken->area == a && i < COURSE_MAX_PICKUPS &&
+        if ((kind == LIVE_COIN || kind == LIVE_BLUE_COIN || kind == LIVE_ONEUP) && taken && taken->area == a && i < COURSE_MAX_PICKUPS &&
             taken->taken[i]) continue; /* coindata[coinnum] == 1 */
         LiveObject *l = &o->live[o->count++];
         *l = (LiveObject){.kind = kind, .src = src, .index = i, .x = src->x, .y = src->y, .home_x = src->x,
@@ -1352,6 +1353,22 @@ static void step_one(CourseObjects *o, LiveObject *l, CourseRuntime *c, Player *
             else { g->coins += 5; g->coincount += 5; g->hpcoins += 15; g->water_hp = 8; }
             heal(g);
             if (!l->bounce && taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
+        }
+        break;
+    }
+    case LIVE_ONEUP: {
+        /* 1 Up Code (2209): its 'box' (839 at 0.28 x 0.94) touched: "collect"
+           (frames 4-20, the mushroom rising with its light), CharLives += 1,
+           "1up", coindata[coinnum] = 1 (taken for good) */
+        if (l->collected) {
+            if (l->frame >= 17) l->alive = false;
+            break;
+        }
+        const float box[4] = {l->x - 7.4f, l->y - 7.5f, l->x + 7.4f, l->y + 7.5f};
+        if (overlap(box, body) || inside(fx, fy - 15, box)) {
+            l->collected = true; l->frame = 0;
+            sfx_play(SFX_1UP, 100, 0);
+            if (taken && l->index < COURSE_MAX_PICKUPS) { taken->area = c->area; taken->taken[l->index] = 1; }
         }
         break;
     }

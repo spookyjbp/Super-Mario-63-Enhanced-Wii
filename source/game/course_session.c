@@ -5,6 +5,7 @@
 #include "sfx.h"
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* `_root.changecourse(transition, area, b, c, d, e)` targets from each area's
    BackGFX frame-3 script: StartChar puts Char at local (d, e). */
@@ -21,6 +22,11 @@ static const WarpRule warps[] = {
     /* falling off the cloud: downtransition, back to 8-E1-2 above where Mario fell,
        X = 2000 + (Char._x - CamEdge._x) within 400..1800, Y = -450 */
     {"8-E1-2-2", "warp3", "8-E1-2", NAN, -450, WIPE_DOWN},
+    /* doorplace "C-Opening" once Star[39] is set: changecourse("righttransition2", "Castle", -1300, 100) */
+    {"8-E1-2-2", "C-Opening", "Castle", -1300, 100, WIPE_RIGHT},
+    /* CastleBackGFX frame 3: warp1 (with Star[39]) lefttransition to 8-E1-2-2 (964, -783);
+       warp2 (to K-1) is not in the port: closed */
+    {"Castle", "warp1", "8-E1-2-2", 964, -783, WIPE_LEFT},
 };
 /* Coded Sign "box" (SWF 986 first shape) and Invisible Door (SWF 2256). */
 static const float sign_box[4] = {-7.5f, -7.7f, 7.5f, 7.3f};
@@ -94,9 +100,19 @@ static void enter_area(CourseSession *s, const CourseArea *a, float cx, float cy
     s->camera_override = false;
     /* 8-E1-1 Ground: barrier frame while TotalStars == 0 and Char is left of the start sign. */
     s->runtime.platform_frame = 1;
+    /* CastlePlatforms: frame 1 (stop()), frame 3 once TotalStars >= 63 */
+    if (course_string_equals(a->id, "Castle")) s->runtime.platform_frame = s->total_stars >= 63 ? 2 : 0;
+    memset(&s->sling, 0, sizeof s->sling);
+    s->closed_note = 0;
+    if (course_string_equals(a->id, "Castle")) {
+        /* CastleBackGFX frame 1: AreaTextClipF("Castle Grounds:\r<i>Outside the Castle</i>", 35) */
+        s->area_title = (CourseString){"Castle Grounds:\nOutside the Castle", 34}; s->area_text = 1;
+        s->area_text_kind = 1;
+    }
     if (course_string_equals(a->id, "8-E1-1")) {
         /* 8-E1-1BackGFX frame 3: AreaTextClipF("Mushroom Kingdom\r<i>(Tutorial)</i>", 45) */
         s->area_title = (CourseString){"Mushroom Kingdom\n(Tutorial)", 27}; s->area_text = 1;
+        s->area_text_kind = 0;
         for (unsigned i = 0; i < a->object_count; ++i)
             if (param(&a->objects[i], "signmessage", "Start") && s->total_stars == 0 && cx < a->objects[i].x + 5) {
                 s->runtime.platform_frame = 0;
@@ -123,6 +139,8 @@ bool course_session_start(CourseSession *s, const CoursePack *pack, const char *
     /* StartChar(..., resetmusic = true): _root["8-E1-1MusicIntro"], then "8-E1-1Music". */
     if (course_string_equals(course_pack_area(pack, id)->id, "8-E1-1") || course_string_equals(course_pack_area(pack, id)->id, "8-E1-2-2"))
         sfx_music(MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT);
+    /* the Castle has no CastleMusic, and its BackGFX frame 1 calls StopBGsong() */
+    if (course_string_equals(course_pack_area(pack, id)->id, "Castle")) sfx_music(-1, -1);
     enter_area(s, a, cx, cy);
     return true;
 }
@@ -165,6 +183,7 @@ static void close_sign(CourseSession *s)
     s->sign = NULL; s->state = SESSION_PLAY; s->camera_override = false;
     s->game.player.reading_sign = false; /* frame 16: attack = false */
 }
+static bool star39(const CourseSession *s);
 static void update_hint(CourseSession *s)
 {
     const CourseArea *a = s->runtime.area;
@@ -178,10 +197,157 @@ static void update_hint(CourseSession *s)
             !course_session_object_active(s, o)) continue;
         /* "No Mario! Go Left and read that Sign!" only while the barrier stands. */
         if (mess.length > 9 && !memcmp(mess.text, "<b>No Mario", 11) && s->runtime.platform_frame != 0) continue;
+        /* the Castle's door hint: only while TotalStars <= 0 and Star[39] is false */
+        if (course_string_equals(a->id, "Castle") && (s->total_stars > 0 || star39(s))) continue;
         float b[4];
         course_object_bounds(o, COURSE_BLANK_U0, COURSE_BLANK_V0, COURSE_BLANK_U1, COURSE_BLANK_V1, b);
         if (inside(b, bx, by)) s->hint = mess;
     }
+    if (s->closed_note) s->hint = (CourseString){"(Closed for now: not in this port yet)", 38};
+}
+static bool star39(const CourseSession *s) { return s->ach && (s->ach->p.shines >> 38 & 1); }
+static int warp_named(const char *from, const char *name)
+{
+    for (unsigned w = 0; w < sizeof(warps) / sizeof(warps[0]); ++w)
+        if (!strcmp(warps[w].from, from) && !strcmp(warps[w].warp, name)) return (int)w;
+    return -1;
+}
+static void start_warp(CourseSession *s, int w, float fx)
+{
+    if (w < 0) return;
+    s->state = SESSION_WARP; s->warp_target = w;
+    s->wipe = warps[w].wipe; s->wipe_in = 1; s->wipe_out = 0;
+    s->warp_x = isnan(warps[w].x) ? fminf(1800, fmaxf(400, 2000 + fx)) : warps[w].x;
+    s->game.player.vx = s->game.player.vy = 0;
+}
+/* ---- The Castle's Sling Star (2162; Castle BackGFX frame 1: otherstar
+   "ss1", xblast 0, yblast -27) and Mario's SlingStar animation (1476) ----
+   The star waits 32 frames (frame 3), then takes Mario when his body is in
+   its box in the air, not rising faster than 7 px a frame, with no attack or
+   a spin or dive: CameraZoom 50, Mario eased to its middle
+   (`Char._x += (X - Char._x) / 5`), held (1476 frames 1-4, then frame 5
+   waiting). Jump or spin there (KeySPACE / KeySPIN: speed += 15, speed *=
+   0.8) with speed over 10 within 25 frames spins the star (its frames 4-15:
+   CameraZoom 75, 50 on 10) and flings Mario on its frame 16 (yspeed =
+   yblast, xspeed = xblast; 1476 frames 21-28 take half the gravity away;
+   attack until its frame 46). Otherwise after 32 frames (34 with Down
+   held twice as fast) 1476 drops him (frame 11: attack = false). The port
+   shows Mario's spin pose while he is in the star. */
+static float string_float(CourseString v)
+{
+    char buf[32];
+    const size_t n = v.length < sizeof buf - 1 ? v.length : sizeof buf - 1;
+    memcpy(buf, v.text, n); buf[n] = 0;
+    return strtof(buf, NULL);
+}
+#define SLING_BOX_U0 -14.44f   /* 'box' (839 at 0.56 x 1.25, (0.4, 0.1)) */
+#define SLING_BOX_V0 -9.9f
+#define SLING_BOX_U1 15.24f
+#define SLING_BOX_V1 10.1f
+static void sling_input(CourseSession *s, GameInput *in)
+{
+    Player *p = &s->game.player;
+    if (s->sling.state == SLING_HOLD || s->sling.state == SLING_SPIN) {
+        const GameInput keep = *in;
+        *in = (GameInput){0};
+        in->jump_held = keep.jump_held; in->spin_held = keep.spin_held; in->crouch_held = keep.crouch_held;
+        in->jump_pressed = in->spin_pressed = false;
+        p->spin_time = 0.05f;          /* the spin pose, no gravity */
+        in->jump_held = false;
+        s->sling.idle = keep.jump_held || keep.spin_held ? 1u : 0u;   /* KeySPACE() || KeySPIN() this frame */
+        if (keep.crouch_held) s->sling.idle |= 2u;                    /* KeyDOWN() */
+    } else if (s->sling.state == SLING_FLING) {
+        in->horizontal = 0; in->jump_pressed = in->spin_pressed = in->pound_pressed = false;   /* attack */
+        if (s->sling.frame >= 21 && s->sling.frame <= 28) p->vy -= 800.0f * GAME_DT;           /* yspeed -= gravity / 2 */
+    }
+}
+static void sling_frame(CourseSession *s, GameInput in)
+{
+    (void)in;
+    Player *p = &s->game.player;
+    const CourseArea *a = s->runtime.area;
+    if (!course_string_equals(a->id, "Castle")) { s->sling.state = SLING_NONE; return; }
+    if (s->sling.state == SLING_NONE) {
+        if (s->sling.count < 33) { ++s->sling.count; return; }   /* the star's frame 3 count */
+        const float bx = feet_x(s), by = feet_y(s) - 17;
+        const bool attack_ok = p->action == ACTION_NONE || p->action == ACTION_DIVE || p->spin_time > 0;
+        if (p->grounded || !(p->vy / 44 > -7) || !attack_ok) return;
+        for (unsigned i = 0; i < a->object_count; ++i) {
+            const CourseObject *o = &a->objects[i];
+            if (!course_string_equals(o->type, "Sling Star BackGFX") || !course_session_object_active(s, o)) continue;
+            float b[4];
+            course_object_bounds(o, SLING_BOX_U0, SLING_BOX_V0, SLING_BOX_U1, SLING_BOX_V1, b);
+            if (!inside(b, bx, by)) continue;
+            s->sling = (__typeof__(s->sling)){o, SLING_HOLD, 1, 0, 0, true, 0};
+            s->camera_zoom = 50;                               /* savecamzoom; CameraZoom = 50 */
+            p->action = ACTION_NONE; p->dashing = false;
+            return;
+        }
+        return;
+    }
+    const CourseObject *o = s->sling.star;
+    const float fx = feet_x(s), fy = feet_y(s);
+    if (s->sling.state == SLING_HOLD || s->sling.state == SLING_SPIN) {   /* Char eased to the star */
+        p->x += (o->x - fx) / 5 * COURSE_SCALE;
+        p->y += (o->y - fy) / 5 * COURSE_SCALE;
+    }
+    if (s->sling.state == SLING_HOLD) {
+        /* 1476: frames 1-4 play, frame 5 waits counting */
+        if (s->sling.frame < 5) { ++s->sling.frame; return; }
+        if (s->sling.go) {
+            if (s->sling.idle & 1u) { s->sling.speed += 15; s->sling.speed *= 0.8f; }
+            if (s->sling.idle & 2u) s->sling.count += 2;
+            if (++s->sling.count > 32) s->sling.go = false;
+        }
+        if (fabsf(s->sling.speed) > 10 && s->sling.count <= 25) {   /* the star plays on: frame 4 */
+            s->sling.state = SLING_SPIN; s->sling.frame = 4;
+            s->camera_zoom = 75;
+            return;
+        }
+        if (!s->sling.go) {   /* 1476 frames 6-11: frame 11, attack = false */
+            if (++s->sling.frame >= 11) { s->sling.state = SLING_NONE; s->sling.count = 0; s->camera_zoom = 100; }
+        }
+        return;
+    }
+    if (s->sling.state == SLING_SPIN) {
+        if (++s->sling.frame == 10) s->camera_zoom = 50;
+        if (s->sling.frame >= 16) {   /* fling */
+            CourseString v;
+            float xb = 0, yb = -27;
+            if (course_object_param(o, "xblast", &v)) xb = string_float(v);
+            if (course_object_param(o, "yblast", &v)) yb = string_float(v);
+            s->sling.state = SLING_FLING; s->sling.frame = 20;     /* 1476 "fling" */
+            p->vy = yb * 44; p->vx = xb * 44; p->spin_time = 0; p->grounded = false;
+            p->jump_cut = true;      /* yspeed is set: no short-hop cut of it */
+        }
+        return;
+    }
+    /* SLING_FLING: the star plays to its frame 25 (CameraZoom back) and 30, 1476 to 46 */
+    ++s->sling.frame;
+    if (s->sling.frame == 29) s->camera_zoom = 100;
+    if (s->sling.frame >= 46 || p->grounded) { s->sling.state = SLING_NONE; s->sling.count = 0; }
+}
+/* Sound FX Clip (the Castle's waterfall): sound "waterfall", range 15/100,
+   maxvolume 100: distancevolume = 100 - max(100 - maxvolume, min(100,
+   distance from the camera * range)); panX = clamp((camX - x) / -2, +/-100);
+   it loops while distancevolume >= 1. */
+static void ambient_step(CourseSession *s)
+{
+    const CourseArea *a = s->runtime.area;
+    SfxId id = SFX_COUNT;
+    float best = 0, pan = 0;
+    for (unsigned i = 0; i < a->object_count; ++i) {
+        const CourseObject *o = &a->objects[i];
+        if (!course_string_equals(o->type, "Sound FX Clip") || !course_session_object_active(s, o)) continue;
+        float d = hypotf(s->game.camera.cx - o->x, s->game.camera.cy - o->y) * 0.15f;
+        d = fmaxf(0, fminf(100, d));
+        const float vol = 100 - d;
+        if (vol >= 1 && vol > best) {
+            best = vol; id = SFX_WATERFALL;
+            pan = fmaxf(-100, fminf(100, (s->game.camera.cx - o->x) / -2));
+        }
+    }
+    sfx_set_ambient(id, best, pan);
 }
 static void check_exits(CourseSession *s, GameInput in)
 {
@@ -195,18 +361,15 @@ static void check_exits(CourseSession *s, GameInput in)
             for (unsigned w = 0; w < sizeof(warps) / sizeof(warps[0]); ++w) {
                 if (!course_string_equals(a->id, warps[w].from) || !course_string_equals(o->name, warps[w].warp)) continue;
                 course_object_bounds(o, COURSE_BLANK_U0, COURSE_BLANK_V0, COURSE_BLANK_U1, COURSE_BLANK_V1, b);
-                if (inside(b, fx, fy)) {
-                    s->state = SESSION_WARP; s->warp_target = (int)w;
-                    s->wipe = warps[w].wipe; s->wipe_in = 1; s->wipe_out = 0;
-                    s->warp_x = isnan(warps[w].x) ? fminf(1800, fmaxf(400, 2000 + fx)) : warps[w].x;
-                    s->game.player.vx = s->game.player.vy = 0;
-                }
+                if (inside(b, fx, fy) && (!course_string_equals(a->id, "Castle") || star39(s))) start_warp(s, (int)w, fx);
             }
         }
         if (course_string_equals(o->type, "Invisible Door") && param(o, "doorplace", "C-Opening")) {
             const float sx = o->a;
             const float box[4] = {o->x + door_box[0] * sx, o->y + door_box[1], o->x + door_box[2] * sx, o->y + door_box[3]};
-            if (inside(box, fx, fy) && in.crouch_held && s->game.player.grounded) {
+            if (inside(box, fx, fy) && in.crouch_held && s->game.player.grounded && star39(s)) {
+                start_warp(s, warp_named("8-E1-2-2", "C-Opening"), fx);
+            } else if (inside(box, fx, fy) && in.crouch_held && s->game.player.grounded) {
                 /* doorplace "C-Opening" with Star[39] false: bgsong.stop() and
                    gotoAndStop("Intro2"): main.c plays Intro Movie 2 (cinema.h) */
                 s->state = SESSION_COMPLETE;
@@ -215,6 +378,34 @@ static void check_exits(CourseSession *s, GameInput in)
                 if (s->ach) ach_shine(s->ach, 39);
                 s->save_request = true;
             }
+        }
+    }
+}
+/* The Castle Grounds' doors (Up, which there opens the door instead of
+   jumping) and warp pipes (Down) lead to courses the port does not have yet:
+   closed (user decision 2026-11-08), with a note. Before the move. */
+static void closed_doors(CourseSession *s, GameInput *in)
+{
+    const CourseArea *a = s->runtime.area;
+    if (!course_string_equals(a->id, "Castle") || !s->game.player.grounded) return;
+    const float fx = feet_x(s), fy = feet_y(s);
+    for (unsigned i = 0; i < a->object_count; ++i) {
+        const CourseObject *o = &a->objects[i];
+        if (!course_session_object_active(s, o)) continue;
+        const bool pipe = course_string_equals(o->type, "Invisible Door") && param(o, "walk", "warppipe");
+        const bool door = course_string_equals(o->type, "Main Door Clip");
+        if (!pipe && !door) continue;
+        float b[4];
+        if (door) course_object_bounds(o, -8, -15.5f, 8, 15.5f, b);
+        else { b[0] = o->x + door_box[0] * o->a; b[1] = o->y + door_box[1];
+               b[2] = o->x + door_box[2] * o->a; b[3] = o->y + door_box[3];
+               if (b[0] > b[2]) { const float t = b[0]; b[0] = b[2]; b[2] = t; } }
+        if (!inside(b, fx, door ? fy - 10 : fy)) continue;
+        if (door && in->vertical < -0.5f) {
+            s->closed_note = 64;
+            in->vertical = 0; in->jump_pressed = in->jump_held = false;
+        } else if (pipe && in->crouch_held) {
+            s->closed_note = 64;
         }
     }
 }
@@ -521,7 +712,11 @@ void course_session_step(CourseSession *s, GameInput in)
         if (s->wipe_in > wipe_warp_frame(s->wipe)) {
             const WarpRule *w = &warps[s->warp_target];
             const CourseArea *next = course_pack_area(s->pack, w->to);
+            const bool from_castle = course_string_equals(s->runtime.area->id, "Castle");
             if (next) enter_area(s, next, s->warp_x, w->y);
+            /* into the Castle: StopBGsong(); out of it: changecourse(..., true) starts the area's music */
+            if (next && course_string_equals(next->id, "Castle")) sfx_music(-1, -1);
+            else if (next && from_castle) sfx_music(MUS_CASTLE_INTRO, MUS_CASTLE_REPEAT);
             s->warp_target = -1; s->wipe_in = 0; s->wipe_out = 1;
             s->state = SESSION_PLAY;
         }
@@ -598,8 +793,13 @@ void course_session_step(CourseSession *s, GameInput in)
             if (p->source_step) { fx_step(s); drown_events(s); }
             break;
         }
+        sling_input(s, &in);
+        closed_doors(s, &in);
         game_step(&s->game, &s->world, in, s->view_width);
-        if (p->source_step) { fx_step(s); water_hp_step(s); }
+        if (p->source_step) { fx_step(s); water_hp_step(s); sling_frame(s, in); }
+        if (s->sling.state == SLING_HOLD || s->sling.state == SLING_SPIN) p->vx = p->vy = 0;
+        if (p->source_step && s->closed_note) --s->closed_note;
+        if (p->source_step) ambient_step(s);
         if (p->splashed) {   /* Med-Splash at Mario's feet */
             p->splashed = false;
             add_fx(s, COURSE_FX_SPLASH, course_cx(&s->runtime, p->x + PLAYER_WIDTH / 2),

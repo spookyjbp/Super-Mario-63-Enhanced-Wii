@@ -74,3 +74,8 @@ int sfx_pick_voice(const SfxVoice v[16], SfxId id, unsigned now)
     if (same >= SFX_SAME_MAX) return oldest_same;                     /* cap stacked copies */
     return free_voice >= 0 ? free_voice : oldest;
 }
+
+static SfxId ambient_id = SFX_COUNT;
+static float ambient_volume, ambient_pan;
+void sfx_set_ambient(SfxId id, float volume, float pan) { ambient_id = id; ambient_volume = volume; ambient_pan = pan; }
+void sfx_ambient(SfxId *id, float *volume, float *pan) { *id = ambient_id; *volume = ambient_volume; *pan = ambient_pan; }

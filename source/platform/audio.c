@@ -80,6 +80,21 @@ void audio_update(bool paused)
         if (fludd) start(FLUDD_VOICE, SFX_FLUDD_LOOP, 67, 0, true); /* MarioVolume / 1.5 */
         else ASND_StopVoice(FLUDD_VOICE);
     }
+    {   /* the place's looping sound: started when it becomes audible, its volume and pan each frame */
+        static int ambient_on = -1;
+        SfxId id; float vol, pan;
+        sfx_ambient(&id, &vol, &pan);
+        const int want = id < SFX_COUNT && vol >= 1 && !paused ? (int)id : -1;
+        int l, r;
+        volumes((unsigned)(vol > 100 ? 100 : vol), (int)pan, &l, &r);
+        if (want != ambient_on) {
+            ambient_on = want;
+            if (want >= 0) start(SFX_AMBIENT_VOICE, (unsigned)want, (unsigned)vol, (int)pan, true);
+            else ASND_StopVoice(SFX_AMBIENT_VOICE);
+        } else if (want >= 0) {
+            ASND_ChangeVolumeVoice(SFX_AMBIENT_VOICE, l, r);
+        }
+    }
     SfxEvent events[SFX_QUEUE];
     const unsigned n = sfx_drain(events);
     ++tick;
@@ -119,6 +134,7 @@ size_t audio_cinema_begin(const CinemaData *d, unsigned char *mem, size_t size)
     if (!ready || !d) return 0;
     ASND_StopVoice(MUSIC_VOICE);
     ASND_StopVoice(FLUDD_VOICE);
+    ASND_StopVoice(SFX_AMBIENT_VOICE);
     fludd_on = intro_playing = false;
     /* which sounds are effects (decoded now) and which music (streamed) */
     bool effect[CIN_MAX_SOUNDS] = {false};

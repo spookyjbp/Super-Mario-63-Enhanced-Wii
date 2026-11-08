@@ -36,6 +36,8 @@ SOUNDS = [
     # 8 s phrase, and the title's frames 82-337), and the file select song
     '>9280', 'TitleScreenTheme@0:10.576', 'TitleScreenTheme@2.58:10.576',
     'FileSelectSong-Intro', 'FileSelectSong-Repeat',
+    # the Castle Grounds: the 1-Up mushrooms, the waterfall (Sound FX Clip)
+    '1up', 'waterfall',
 ]
 # '+' sounds are the project's own WAV files in assets/audio/ (the achievement
 # notification sound, chosen by the project owner): mono, resampled to

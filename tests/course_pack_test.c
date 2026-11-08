@@ -29,7 +29,7 @@ static bool param_is(const CourseObject *o,const char *key,const char *value)
 
 static void test_areas_and_counts(void)
 {
-    assert(course_pack_parse(blob,blob_size,&pack) && pack.area_count==4);
+    assert(course_pack_parse(blob,blob_size,&pack) && pack.area_count==5);   /* the tutorial's four and Castle */
     const char *ids[]={"8-E1-1","8-E1-1-2","8-E1-2","8-E1-2-2"};
     const unsigned objects[]={56,44,62,98},water[]={3,1,1,0},coins[]={18,13,24,33},goombas[]={3,3,2,2};
     for(unsigned i=0;i<4;++i) {
@@ -39,6 +39,11 @@ static void test_areas_and_counts(void)
         assert(course_area_mask(a,COURSE_PLATFORMS,0) && course_area_mask(a,COURSE_CAMEDGE,0));
     }
     assert(!course_pack_area(&pack,"8-E1-3"));
+    /* the Castle Grounds: 75 objects, the three Water Code strips, its Sling Stars and 1-Ups */
+    const CourseArea *castle=course_pack_area(&pack,"Castle");
+    assert(castle && castle->object_count==75 && castle->water_count==3);
+    assert(count(castle,"1 Up Code")==3 && count(castle,"Sling Star BackGFX")==7 && count(castle,"Main Door Clip")==3);
+    assert(course_area_mask(castle,COURSE_PLATFORMS,0) && course_area_mask(castle,COURSE_CAMEDGE,0));
     const CourseArea *last=course_pack_area(&pack,"8-E1-2-2");
     const CourseObject *shine=find(last,"Shine Sprite Clip",NULL);
     assert(shine && param_is(shine,"starnum","39") && shine->x==730.2f && shine->y==-813.5f);

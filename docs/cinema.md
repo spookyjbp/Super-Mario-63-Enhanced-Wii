@@ -66,8 +66,8 @@ The cutscene's file replaces the front end's and the course art's files in
 MEM1 while it plays (they are read again afterwards); its textures, draws and
 sounds use the course renderer's MEM2 area (no course is shown meanwhile).
 
+Intro Movie 2 ends in the Castle Grounds (docs/castle.md).
+
 ## Not done
 
-- The Castle (Intro Movie 2's `StartChar("Castle", 80, 60)`) is the next step;
-  until it is in, the end of Intro Movie 2 returns to the title.
 - Not tested in Dolphin or on a Wii yet.
