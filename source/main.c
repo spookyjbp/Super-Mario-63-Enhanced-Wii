@@ -13,6 +13,7 @@
 #include "data_files.h"
 #include "font_metrics.h"
 #include <string.h>
+#include <stdio.h>
 #include "sfx.h"
 
 #include <ogc/lwp_watchdog.h>
@@ -32,26 +33,47 @@ static void on_reset(u32 irq, void *context)
 static void on_power(void) { power_requested = true; }
 static void on_remote_power(s32 channel) { (void)channel; power_requested = true; }
 
-/* The data files are missing: say where they belong, until START / reset. */
-static int missing_data(void)
+/* A data file could not be used: say which, where the game looked and why,
+   until START / reset. */
+static int missing_data(const char *file, bool found_folder, bool exists)
 {
     if (!course_render_init_text()) return EXIT_FAILURE;
+    char what[256], where[256];
+    if (!found_folder) {
+        snprintf(what, sizeof what, "The game's data folder was not found.");
+        snprintf(where, sizeof where, "Looked for apps/" DATA_APP "/data on the SD card and USB drive%s.",
+                 data_mount() ? "" : " (no SD card or USB drive could be read)");
+    } else {
+        snprintf(what, sizeof what, exists ? "The data file %s could not be loaded (not enough memory?)."
+                                           : "The data file %s is missing.", file);
+        snprintf(where, sizeof where, "Data folder: %s", data_folder());
+    }
     while (!exit_requested && !power_requested && SYS_MainLoop()) {
         const GameInput in = input_poll();
         if (in.pause_pressed) break;
         const float w = graphics_width();
         graphics_rect(0, 0, w, 480, (GXColor){0, 0, 0, 255});
-        course_render_text(FONT_SIGN, "The game's data files were not found.", 40, w - 40, 150, (GXColor){255, 255, 255, 255},
-                           ALIGN_CENTRE, true);
+        course_render_text(FONT_SIGN, what, 40, w - 40, 130, (GXColor){255, 255, 255, 255}, ALIGN_CENTRE, true);
+        course_render_text(FONT_HINT, where, 40, w - 40, 200, (GXColor){255, 220, 120, 255}, ALIGN_CENTRE, true);
         course_render_text(FONT_HINT,
                            "Copy the whole apps/" DATA_APP " folder, with its data folder,\rto the SD card, "
-                           "then start the game from the Homebrew Channel.\r\rPress START to leave.",
-                           40, w - 40, 220, (GXColor){220, 220, 220, 255}, ALIGN_CENTRE, true);
+                           "then start the game from the Homebrew Channel.\r(Dolphin: Config > Wii > SD card inserted, "
+                           "and its SD sync folder holds apps/" DATA_APP "/data.)\r\rPress START to leave.",
+                           40, w - 40, 250, (GXColor){220, 220, 220, 255}, ALIGN_CENTRE, true);
         graphics_present();
     }
     graphics_shutdown();
     input_shutdown();
     return EXIT_SUCCESS;
+}
+static bool data_exists(const char *name)
+{
+    char path[320];
+    if (!data_folder()) return false;
+    snprintf(path, sizeof path, "%s/%s", data_folder(), name);
+    FILE *f = fopen(path, "rb");
+    if (f) fclose(f);
+    return f != NULL;
 }
 
 /* The data files in MEM1 (data_files.h): the front end's and the course
@@ -63,7 +85,6 @@ static SaveData save;
 static CinemaData cin_file;
 static Cinema cin;
 
-static bool menus_wanted(void) { return fe_data != NULL; }
 static bool load_front(void)
 {
     if (!fe_data && !(fe_data = data_load("front_end.bin", &fe_size))) return false;
@@ -136,15 +157,18 @@ int main(int argc, char **argv)
     static CoursePack pack;
     static CourseSession session;
     /* The art packs are data files next to boot.dol (data_files.h). */
-    art_data = data_init(argc, argv) ? data_load("course_8e1_art.bin", &art_size) : NULL;
-    fe_data = art_data ? data_load("front_end.bin", &fe_size) : NULL;
-    if (!art_data || !fe_data) return missing_data();
+    /* One at a time (MEM1): the course art for the renderer's setup, then,
+       with it let go (load_art reads it again for a course), the front end. */
+    if (!data_init(argc, argv)) return missing_data("", false, false);
+    static const char *const needed[] = {"course_8e1_art.bin", "front_end.bin", "cinema_intro.bin", "cinema_intro2.bin"};
+    for (unsigned i = 0; i < sizeof needed / sizeof needed[0]; ++i)
+        if (!data_exists(needed[i])) return missing_data(needed[i], true, false);
+    if (!(art_data = data_load("course_8e1_art.bin", &art_size))) return missing_data("course_8e1_art.bin", true, true);
     const bool tutorial = course_pack_parse(course_8e1_bin, course_8e1_bin_size, &pack) &&
                           course_render_init(art_data, art_size);
     if (tutorial) audio_init(); /* after the course renderer's MEM2 reservation */
-    /* the course art is read again when a course starts (load_art): MEM1 for
-       the front end meanwhile */
-    if (tutorial && menus_wanted()) drop_art();
+    drop_art();
+    if (!(fe_data = data_load("front_end.bin", &fe_size))) return missing_data("front_end.bin", true, true);
     /* The save file (SD card): the four files' progress and achievements, and
        Mute Music. A save from before achievements existed, or progress the
        file already proves, is awarded when the file is played. */
